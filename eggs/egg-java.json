@@ -1,0 +1,72 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-08-22T03:08:00+00:00",
+    "name": "Java (Maven / Gradle / Spring)",
+    "author": "contact@potenfyr.com",
+    "description": "Enterprise Java runtime supporting OpenJDK, Maven, Gradle, and executable JARs.",
+    "features": ["pid_limit"],
+    "docker_images": {
+        "Universal Runtime": "ghcr.io/potenfyr-studios/prog-language-eggs:latest"
+    },
+    "file_denylist": [],
+    "startup": "bash run.sh",
+    "config": {
+        "files": "{\".env\":{\"parser\":\"file\",\"find\":{\"PORT=\":\"PORT={{server.build.default.port}}\",\"SERVER_PORT=\":\"SERVER_PORT={{server.build.default.port}}\"}}}",
+        "startup": "{\"done\":[\"Started \",\"Tomcat started on port\",\"Netty started on port\",\"Server started\",\"Listening on\",\"Ready on\"],\"user_interaction\":[],\"strip_ansi\":false}",
+        "stop": "^C",
+        "logs": "{}"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\ncd /mnt/server || exit 1\n[ -n \"${GIT_REPO:-}\" ] && git clone --branch \"${GIT_BRANCH:-main}\" --depth 1 \"${GIT_REPO}\" . || true\nchown -R 988:988 /mnt/server 2>/dev/null || chown -R 1000:1000 /mnt/server 2>/dev/null || true",
+            "container": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Server Jar / Main File",
+            "description": "Executable JAR file or main class to run (e.g. server.jar, app.jar).",
+            "env_variable": "MAIN_FILE",
+            "default_value": "server.jar",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Java Flags & Memory",
+            "description": "JVM memory and GC arguments (e.g. '-Xmx2048M -XX:+UseG1GC').",
+            "env_variable": "EXTRA_ARGS",
+            "default_value": "-Xmx1024M",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Repository",
+            "description": "Git repository to clone on initial install.",
+            "env_variable": "GIT_REPO",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Assigned Port",
+            "description": "Primary network port allocated by the panel.",
+            "env_variable": "SERVER_PORT",
+            "default_value": "{{server.build.default.port}}",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|numeric",
+            "field_type": "text"
+        }
+    ]
+}

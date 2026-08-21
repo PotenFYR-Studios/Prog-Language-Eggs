@@ -1,0 +1,11 @@
+.git
+.github
+.gitignore
+.gitattributes
+README.md
+LICENSE
+egg-*.json
+eggs/
+templates/
+scratch/
+*.md

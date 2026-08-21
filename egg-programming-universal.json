@@ -1,0 +1,273 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-08-22T03:08:00+00:00",
+    "name": "Universal Programming Languages & Toolchains",
+    "author": "contact@potenfyr.com",
+    "description": "One egg for 50+ programming languages with package managers, auto-detection, memory tuning, and Dev Watch mode.",
+    "features": [
+        "pid_limit"
+    ],
+    "docker_images": {
+        "Universal (50+ Languages)": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "Node.js / Bun / TypeScript": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "Python / uv / FastAPI": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "Go / Golang": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "Rust / Cargo": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "Java / OpenJDK": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "C / C++": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        ".NET / C# / F#": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "PHP / Composer": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "Ruby / Bundler": "ghcr.io/potenfyr-studios/prog-language-eggs:latest"
+    },
+    "file_denylist": [],
+    "startup": "bash run.sh",
+    "config": {
+        "files": "{\".env\":{\"parser\":\"file\",\"find\":{\"PORT=\":\"PORT={{server.build.default.port}}\",\"SERVER_PORT=\":\"SERVER_PORT={{server.build.default.port}}\"}},\"config.json\":{\"parser\":\"json\",\"find\":{\"port\":\"{{server.build.default.port}}\"}}}",
+        "startup": "{\"done\":[\"listening on\",\"started on\",\"Server started\",\"Listening on\",\"Ready on\",\"running at\",\"HTTP server listening\",\"Application started\",\"Serving at\",\"online\",\"Now listening on\"],\"user_interaction\":[\"Select choice\",\"[1-12]\",\"Press ENTER\"],\"strip_ansi\":false}",
+        "stop": "^C",
+        "logs": "{}"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Universal Installation Script\ncd /mnt/server || exit 1\n\nDEBUG=\"${DEBUG:-0}\"\n[ \"${DEBUG}\" = \"1\" ] && set -x\n\nGIT_REPO=\"${GIT_REPO:-}\"\nGIT_BRANCH=\"${GIT_BRANCH:-main}\"\nGIT_AUTH_TOKEN=\"${GIT_AUTH_TOKEN:-}\"\nSTARTER_TEMPLATE=\"${STARTER_TEMPLATE:-}\"\nAUTO_INSTALL_DEPS=\"${AUTO_INSTALL_DEPS:-1}\"\nEXTRA_URLS=\"${EXTRA_URLS:-}\"\n\nif [ -n \"${GIT_REPO}\" ]; then\n    AUTH_REPO_URL=\"${GIT_REPO}\"\n    if [ -n \"${GIT_AUTH_TOKEN}\" ] && [[ \"${GIT_REPO}\" =~ ^https:// ]]; then\n        AUTH_REPO_URL=\"https://${GIT_AUTH_TOKEN}@${GIT_REPO#https://}\"\n    fi\n    if [ -d \".git\" ]; then\n        git fetch origin \"${GIT_BRANCH}\" 2>/dev/null || true\n        git reset --hard \"origin/${GIT_BRANCH}\" 2>/dev/null || git pull || true\n    else\n        git clone --branch \"${GIT_BRANCH}\" --depth 1 \"${AUTH_REPO_URL}\" . || git clone --depth 1 \"${AUTH_REPO_URL}\" . || true\n    fi\nfi\n\nif [ -n \"${EXTRA_URLS}\" ]; then\n    IFS=$'\\n'\n    for line in ${EXTRA_URLS}; do\n        [ -z \"${line}\" ] && continue\n        dest=\"\"\n        url=\"${line}\"\n        case \"${line}\" in *\\|*) dest=\"${line%%|*}\"; url=\"${line#*|}\" ;; esac\n        filename=$(basename \"${url}\" | sed 's/[?].*//')\n        target=\"${filename}\"\n        [ -n \"${dest}\" ] && mkdir -p \"${dest}\" && target=\"${dest}/${filename}\"\n        curl -fsSL --retry 2 -o \"${target}\" \"${url}\" || true\n    done\nfi\n\nif [ \"${AUTO_INSTALL_DEPS}\" = \"1\" ]; then\n    if [ -f \"package.json\" ]; then\n        npm install --no-audit --no-fund 2>/dev/null || true\n    fi\n    if [ -f \"requirements.txt\" ]; then\n        pip3 install -r requirements.txt 2>/dev/null || true\n    fi\nfi\n\nchown -R 988:988 /mnt/server 2>/dev/null || chown -R 1000:1000 /mnt/server 2>/dev/null || true\necho \"[install][OK] Initial setup complete.\"",
+            "container": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Target Language",
+            "description": "Target language or 'auto' for intelligent file auto-detection.",
+            "env_variable": "LANGUAGE",
+            "default_value": "auto",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:40",
+            "field_type": "text"
+        },
+        {
+            "name": "Execution Runner",
+            "description": "Runner or engine to use (e.g. auto, node, bun, tsx, uvicorn, cargo, go).",
+            "env_variable": "RUNNER",
+            "default_value": "auto",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:40",
+            "field_type": "text"
+        },
+        {
+            "name": "Main Entry Point File",
+            "description": "The main script or file to execute (leave 'auto' for smart detection).",
+            "env_variable": "MAIN_FILE",
+            "default_value": "auto",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Package Manager",
+            "description": "Package manager for dependency resolution (e.g. auto, npm, pnpm, yarn, bun, pip, cargo).",
+            "env_variable": "PACKAGE_MANAGER",
+            "default_value": "auto",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Memory Auto Tune",
+            "description": "Auto-tune GC & memory limits to prevent container OOM (1 = Enabled, 0 = Disabled).",
+            "env_variable": "MEMORY_AUTO_TUNE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Dev Watch Mode",
+            "description": "Enable watch and hot-reload mode during development (1 = Enabled, 0 = Disabled).",
+            "env_variable": "DEV_MODE",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Auto Install Dependencies",
+            "description": "Automatically install missing dependencies on container boot (1 = Enabled, 0 = Disabled).",
+            "env_variable": "AUTO_INSTALL_DEPS",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Pre-Run Command",
+            "description": "Command to execute before starting the main process (e.g. database migrations).",
+            "env_variable": "PRE_RUN_COMMAND",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Post-Run Command",
+            "description": "Command to execute when application stops or shuts down.",
+            "env_variable": "POST_RUN_COMMAND",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Build Command",
+            "description": "Optional build or compilation command (e.g. 'npm run build', 'cargo build --release').",
+            "env_variable": "BUILD_COMMAND",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Clean Build Cache",
+            "description": "Purge compiler caches after build to save disk space (1 = Enabled, 0 = Disabled).",
+            "env_variable": "CLEAN_BUILD_CACHE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Custom Command",
+            "description": "Custom command to override the default runner entirely.",
+            "env_variable": "CUSTOM_COMMAND",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:500",
+            "field_type": "text"
+        },
+        {
+            "name": "Extra Arguments",
+            "description": "Extra CLI arguments passed to the runner or executable.",
+            "env_variable": "EXTRA_ARGS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Starter Project Template",
+            "description": "Starter project template if workspace is empty (e.g. nodejs, bun, python, golang, rust).",
+            "env_variable": "STARTER_TEMPLATE",
+            "default_value": "empty",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Auto .env Injector",
+            "description": "Ensure .env has correct PORT and HOST=0.0.0.0 bindings (1 = Enabled, 0 = Disabled).",
+            "env_variable": "AUTO_ENV_INJECT",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Repository URL",
+            "description": "Git repository URL to clone and sync on startup.",
+            "env_variable": "GIT_REPO",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Branch",
+            "description": "Target branch to clone or track from the Git repository.",
+            "env_variable": "GIT_BRANCH",
+            "default_value": "main",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Auth Token",
+            "description": "Personal Access Token for private Git repositories.",
+            "env_variable": "GIT_AUTH_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Extra Download URLs",
+            "description": "Additional files or archives to download on boot (URL or dest|URL).",
+            "env_variable": "EXTRA_URLS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Auto Restart",
+            "description": "Automatically restart process on unexpected crash (1 = Enabled, 0 = Disabled).",
+            "env_variable": "AUTO_RESTART",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Restart Delay",
+            "description": "Delay in seconds before attempting to auto-restart.",
+            "env_variable": "RESTART_DELAY",
+            "default_value": "3",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric|min:1|max:60",
+            "field_type": "text"
+        },
+        {
+            "name": "Assigned Server Port",
+            "description": "Primary network port allocated by the panel.",
+            "env_variable": "SERVER_PORT",
+            "default_value": "{{server.build.default.port}}",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|numeric",
+            "field_type": "text"
+        },
+        {
+            "name": "Debug Output",
+            "description": "Enable verbose script debug output (1 = Enabled, 0 = Disabled).",
+            "env_variable": "DEBUG",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        }
+    ]
+}

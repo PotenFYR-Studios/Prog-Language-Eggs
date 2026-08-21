@@ -1,0 +1,16 @@
+{
+  "name": "potenfyr-typescript-template",
+  "version": "1.0.0",
+  "description": "PotenFYR Universal Programming Language Eggs TypeScript Starter",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2"
+  }
+}
