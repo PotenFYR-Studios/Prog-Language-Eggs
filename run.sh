@@ -12,8 +12,6 @@
 #    - Standalone Docker & Kubernetes
 # =============================================================================
 
-set -uo pipefail
-
 # --- Visual formatting ---
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
@@ -44,7 +42,14 @@ if [ ! -d "${WORK_DIR}" ]; then
     fi
 fi
 
-cd "${WORK_DIR}" 2>/dev/null || fail "Cannot enter directory: ${WORK_DIR}"
+cd "${WORK_DIR}" 2>/dev/null || true
+
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
+export PATH="${WORK_DIR}/.local/bin:${WORK_DIR}/bin:${WORK_DIR}/node_modules/.bin:${PATH}"
+export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:${PATH}"
+export PATH="/root/.cargo/bin:/opt/cargo/bin:${WORK_DIR}/.cargo/bin:${PATH}"
+export PATH="/opt/go/bin:${WORK_DIR}/go/bin:${PATH}"
+export PATH="/opt/dotnet:${WORK_DIR}/.dotnet:${PATH}"
 
 CONF_FILE="${WORK_DIR}/.multi-prog.conf"
 
@@ -133,7 +138,7 @@ if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ "${LANGUAGE}" 
         read -r -t 15 -p "$(echo -e "${C_YELLOW}${C_BOLD}Select choice [1-12] (Default 1): ${C_RESET}")" CHOICE 2>/dev/null || CHOICE="1"
         CHOICE="${CHOICE:-1}"
     else
-        log "Non-interactive environment detected (Feather / PufferPanel / Daemon). Defaulting to Node.js starter."
+        log "Non-interactive environment detected. Defaulting to Node.js starter."
         CHOICE="1"
     fi
 
@@ -455,7 +460,7 @@ run_procfile() {
 
     handle_supervisor_signal() {
         log "Stopping all supervised processes..."
-        for pid in "${pids[@]:-}"; do
+        for pid in "${pids[@]}"; do
             [ -n "${pid}" ] && kill -TERM "${pid}" 2>/dev/null || true
         done
         wait 2>/dev/null || true
@@ -687,7 +692,7 @@ fi
 # -----------------------------------------------------------------------------
 if [ -n "${BUILD_COMMAND}" ]; then
     log "Executing BUILD_COMMAND: ${BUILD_COMMAND}..."
-    eval "${BUILD_COMMAND}"
+    eval "${BUILD_COMMAND}" || true
     ok "Build command completed"
 fi
 
@@ -944,7 +949,7 @@ construct_run_cmd() {
             ;;
 
         java|jdk|openjdk)
-            local jvm_flags="${JAVA_AUTO_MEM_FLAGS:-} ${JAVA_AUTO_GC:-} ${EXTRA_ARGS}"
+            local jvm_flags="${JAVA_AUTO_MEM_FLAGS} ${JAVA_AUTO_GC} ${EXTRA_ARGS}"
             JAR_FOUND=$(ls *.jar 2>/dev/null | head -n1 || true)
             if [ -n "${JAR_FOUND}" ]; then
                 echo "java ${jvm_flags} -jar ${JAR_FOUND}"
