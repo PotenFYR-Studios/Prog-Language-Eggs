@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
     "name": "Universal Programming Languages & Toolchains",
-    "author": "contact@potenfyr.com",
+    "author": "support@potenfyr.in",
     "description": "One egg for 50+ programming languages with package managers, auto-detection, memory tuning, and Dev Watch mode.",
     "features": [
         "pid_limit"

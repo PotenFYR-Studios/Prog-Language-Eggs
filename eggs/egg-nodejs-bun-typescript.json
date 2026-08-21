@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
     "name": "Node.js, Bun & TypeScript",
-    "author": "contact@potenfyr.com",
+    "author": "support@potenfyr.in",
     "description": "High-performance JavaScript and TypeScript runtime supporting Node.js, Bun, Deno, ts-node, and tsx.",
     "features": ["pid_limit"],
     "docker_images": {

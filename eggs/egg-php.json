@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
     "name": "PHP & Composer",
-    "author": "contact@potenfyr.com",
+    "author": "support@potenfyr.in",
     "description": "PHP CLI and built-in web server runtime with Composer dependency management.",
     "features": ["pid_limit"],
     "docker_images": {

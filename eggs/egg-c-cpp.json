@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
     "name": "C & C++ Native Apps",
-    "author": "contact@potenfyr.com",
+    "author": "support@potenfyr.in",
     "description": "High-performance native runtime supporting GCC, G++, Clang, Make, and CMake.",
     "features": ["pid_limit"],
     "docker_images": {

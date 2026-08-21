@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
     "name": "Python & FastAPI / Flask",
-    "author": "contact@potenfyr.com",
+    "author": "support@potenfyr.in",
     "description": "Universal Python runtime supporting pip, poetry, uv, pipenv, uvicorn, and gunicorn.",
     "features": ["pid_limit"],
     "docker_images": {
