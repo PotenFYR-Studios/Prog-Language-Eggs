@@ -14,7 +14,7 @@
 FROM ubuntu:22.04
 
 LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
-LABEL org.opencontainers.image.source="https://github.com/PotenFYR-Studios/Prog-Language-Eggs"
+LABEL org.opencontainers.image.source="https://github.com/potenfyr-studios/prog-language-eggs"
 LABEL org.opencontainers.image.description="Universal container for 50+ programming languages across Pterodactyl, Pelican, Feather Panel, and PufferPanel"
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -30,7 +30,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 ARG TARGETARCH
 
-# 1. Base tools, compilers, interpreters & libraries
+# 1. Base tools, compilers, interpreters, libraries & dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
@@ -42,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bzip2 \
         zip \
         git \
+        gnupg \
         build-essential \
         gcc \
         g++ \
@@ -77,11 +78,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         perl \
         tcl \
         swi-prolog \
-        openjdk-21-jre-headless \
+        default-jre-headless \
         golang-go \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install Node.js (LTS), NPM, PNPM, Yarn, Bun, Deno, TS-Node, TSX, PM2
+# 2. Install Node.js (LTS 20.x), NPM, PNPM, Yarn, TypeScript, TS-Node, TSX, PM2
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g --no-fund --no-audit npm pnpm yarn typescript ts-node tsx nodemon pm2 \
@@ -89,12 +90,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 # 3. Install Bun
 RUN (curl -fsSL https://bun.sh/install | bash || true) \
-    && ([ -f /root/.bun/bin/bun ] && mv /root/.bun/bin/bun /usr/local/bin/bun && ln -sf /usr/local/bin/bun /usr/local/bin/bunx || true) \
+    && if [ -f /root/.bun/bin/bun ]; then \
+         mv /root/.bun/bin/bun /usr/local/bin/bun && ln -sf /usr/local/bin/bun /usr/local/bin/bunx; \
+       fi \
     && rm -rf /root/.bun
 
 # 4. Install Deno
 RUN (curl -fsSL https://deno.land/install.sh | sh || true) \
-    && ([ -f /root/.deno/bin/deno ] && mv /root/.deno/bin/deno /usr/local/bin/deno || true) \
+    && if [ -f /root/.deno/bin/deno ]; then \
+         mv /root/.deno/bin/deno /usr/local/bin/deno; \
+       fi \
     && rm -rf /root/.deno
 
 # 5. Install Rust & Cargo Toolchain
@@ -104,8 +109,8 @@ RUN export RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo \
 
 # 6. Install Python Astral uv & Composer (PHP)
 RUN (curl -LsSf https://astral.sh/uv/install.sh | sh || true) \
-    && ([ -f /root/.local/bin/uv ] && mv /root/.local/bin/uv /usr/local/bin/uv || [ -f /root/.cargo/bin/uv ] && mv /root/.cargo/bin/uv /usr/local/bin/uv || true) \
-    && ([ -f /root/.local/bin/uvx ] && mv /root/.local/bin/uvx /usr/local/bin/uvx || [ -f /root/.cargo/bin/uvx ] && mv /root/.cargo/bin/uvx /usr/local/bin/uvx || true) \
+    && (if [ -f /root/.local/bin/uv ]; then mv /root/.local/bin/uv /usr/local/bin/uv; elif [ -f /root/.cargo/bin/uv ]; then mv /root/.cargo/bin/uv /usr/local/bin/uv; fi) \
+    && (if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; elif [ -f /root/.cargo/bin/uvx ]; then mv /root/.cargo/bin/uvx /usr/local/bin/uvx; fi) \
     && (curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer || true) \
     && rm -rf /root/.local
 
