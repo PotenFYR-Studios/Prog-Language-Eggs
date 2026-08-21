@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
     "name": "Go (Golang)",
-    "author": "contact@potenfyr.com",
+    "author": "support@potenfyr.in",
     "description": "High performance Go runtime supporting go run, go build, and pre-compiled binaries.",
     "features": ["pid_limit"],
     "docker_images": {

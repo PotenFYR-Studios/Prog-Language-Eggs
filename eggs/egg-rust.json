@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
     "name": "Rust & Cargo",
-    "author": "contact@potenfyr.com",
+    "author": "support@potenfyr.in",
     "description": "Blazing-fast Rust runtime with Cargo package manager and native release compilation.",
     "features": ["pid_limit"],
     "docker_images": {

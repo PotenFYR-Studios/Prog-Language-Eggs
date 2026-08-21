@@ -8,7 +8,7 @@
 
 FROM ubuntu:22.04
 
-LABEL author="PotenFYR Studios" maintainer="contact@potenfyr.com"
+LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
 LABEL org.opencontainers.image.source="https://github.com/PotenFYR-Studios/Prog-Language-Eggs"
 LABEL org.opencontainers.image.description="Universal Pterodactyl & Pelican egg container for 50+ programming languages"
 
