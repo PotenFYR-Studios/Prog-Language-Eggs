@@ -12,9 +12,7 @@
 #    - Standalone Docker & Kubernetes (Helm / Pods)
 # =============================================================================
 
-set -uo pipefail
-
-# --- Color Definitions ---
+# --- Visual Colors ---
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
 C_CYAN='\033[36m'
@@ -33,26 +31,20 @@ ok()    { printf "${C_GREEN}${C_BOLD}prog-egg@universal~${C_RESET} ${C_GREEN}${C
 # -----------------------------------------------------------------------------
 # 1. Universal Working Directory Resolution
 # -----------------------------------------------------------------------------
-if [ -n "${WORK_DIR:-}" ] && [ -d "${WORK_DIR}" ]; then
-    ACTIVE_WORK_DIR="${WORK_DIR}"
-elif [ -n "${P_SERVER_UUID:-}" ] && [ -d "/home/container" ]; then
+if [ -d "/home/container" ]; then
+    cd /home/container 2>/dev/null || true
     ACTIVE_WORK_DIR="/home/container"
-elif [ -n "${FEATHER_SERVER_ID:-}" ] && [ -d "/app" ]; then
+elif [ -d "/app" ]; then
+    cd /app 2>/dev/null || true
     ACTIVE_WORK_DIR="/app"
-elif [ -n "${PUFFER_PORT:-}" ] && [ -d "/server" ]; then
-    ACTIVE_WORK_DIR="/server"
-elif [ -d "/home/container" ] && [ "$(pwd)" = "/home/container" -o "$(pwd)" = "/" ]; then
-    ACTIVE_WORK_DIR="/home/container"
-elif [ -d "/app" ] && [ "$(pwd)" = "/app" ]; then
-    ACTIVE_WORK_DIR="/app"
-elif [ -d "/server" ] && [ "$(pwd)" = "/server" ]; then
+elif [ -d "/server" ]; then
+    cd /server 2>/dev/null || true
     ACTIVE_WORK_DIR="/server"
 else
     ACTIVE_WORK_DIR="${PWD}"
 fi
 
 export WORK_DIR="${ACTIVE_WORK_DIR}"
-cd "${ACTIVE_WORK_DIR}" 2>/dev/null || { error "Cannot enter working directory: ${ACTIVE_WORK_DIR}"; exit 1; }
 
 # -----------------------------------------------------------------------------
 # 2. Universal Port & Host Resolution
@@ -71,18 +63,35 @@ export BIND_ADDRESS="0.0.0.0"
 # 3. Detect Host Panel Environment
 # -----------------------------------------------------------------------------
 PANEL_TYPE="Docker / Standalone"
-if [ -n "${P_SERVER_UUID:-}" ] || [ -d "/home/container" -a -f "/entrypoint.sh" ]; then
+if [ -n "${P_SERVER_UUID:-}" ] || [ -d "/home/container" ]; then
     PANEL_TYPE="Pterodactyl / Pelican"
 elif [ -n "${FEATHER_PORT:-}" ] || [ -n "${FEATHER_SERVER_ID:-}" ]; then
     PANEL_TYPE="Feather Panel"
-elif [ -n "${PUFFER_PORT:-}" ] || [ -d "/server" -a "${ACTIVE_WORK_DIR}" = "/server" ]; then
+elif [ -n "${PUFFER_PORT:-}" ] || [ -d "/server" ]; then
     PANEL_TYPE="PufferPanel"
 elif [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
     PANEL_TYPE="Kubernetes"
 fi
 
 # -----------------------------------------------------------------------------
-# 4. Persisted Settings (.multi-prog.conf)
+# 4. System PATH Configuration
+# -----------------------------------------------------------------------------
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
+export PATH="${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${PATH}"
+export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:${PATH}"
+export PATH="/root/.cargo/bin:/opt/cargo/bin:${ACTIVE_WORK_DIR}/.cargo/bin:${PATH}"
+export PATH="/opt/go/bin:${ACTIVE_WORK_DIR}/go/bin:${PATH}"
+export PATH="/opt/dotnet:${ACTIVE_WORK_DIR}/.dotnet:${PATH}"
+
+export GOPATH="${GOPATH:-${ACTIVE_WORK_DIR}/go}"
+export CARGO_HOME="${CARGO_HOME:-${ACTIVE_WORK_DIR}/.cargo}"
+export RUSTUP_HOME="${RUSTUP_HOME:-/opt/rustup}"
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export PYTHONUNBUFFERED=1
+export TZ="${TZ:-UTC}"
+
+# -----------------------------------------------------------------------------
+# 5. Persisted Settings (.multi-prog.conf)
 # -----------------------------------------------------------------------------
 CONF_FILE="${ACTIVE_WORK_DIR}/.multi-prog.conf"
 
@@ -98,16 +107,9 @@ apply_conf() {
     local key="$1" val
     val=$(read_conf "${key}") || return 0
     if [ -z "${!key-}" ]; then
-        printf -v "${key}" '%s' "${val}"
-        export "${key}"
+        eval "export ${key}=\"${val}\"" 2>/dev/null || true
     fi
 }
-
-TZ=${TZ:-UTC}
-export TZ
-
-INTERNAL_IP=$(ip route get 1 2>/dev/null | awk '{print $(NF-2);exit}' || echo "127.0.0.1")
-export INTERNAL_IP
 
 for _key in LANGUAGE RUNNER MAIN_FILE PACKAGE_MANAGER BUILD_COMMAND \
             AUTO_INSTALL_DEPS AUTO_RESTART GIT_REPO GIT_BRANCH \
@@ -119,30 +121,19 @@ done
 unset _key
 
 # -----------------------------------------------------------------------------
-# 5. System PATH Configuration
-# -----------------------------------------------------------------------------
-export PATH="${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${PATH}"
-export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:${PATH}"
-export PATH="/root/.cargo/bin:/opt/cargo/bin:${ACTIVE_WORK_DIR}/.cargo/bin:${PATH}"
-export PATH="/opt/go/bin:${ACTIVE_WORK_DIR}/go/bin:${PATH}"
-export PATH="/opt/dotnet:${ACTIVE_WORK_DIR}/.dotnet:${PATH}"
-
-for _dir in /opt/runtimes/node-*/bin /opt/runtimes/java-*/bin; do
-    [ -d "${_dir}" ] && export PATH="${_dir}:${PATH}"
-done
-unset _dir
-
-export GOPATH="${GOPATH:-${ACTIVE_WORK_DIR}/go}"
-export CARGO_HOME="${CARGO_HOME:-${ACTIVE_WORK_DIR}/.cargo}"
-export RUSTUP_HOME="${RUSTUP_HOME:-/opt/rustup}"
-export DOTNET_CLI_TELEMETRY_OPTOUT=1
-export PYTHONUNBUFFERED=1
-
-# -----------------------------------------------------------------------------
 # 6. Automatic Memory Tuning & OOM Protection Engine
 # -----------------------------------------------------------------------------
 MEMORY_AUTO_TUNE="${MEMORY_AUTO_TUNE:-1}"
-TOTAL_MEM_MB="${SERVER_MEMORY:-${MEMORY:-${FEATHER_MEMORY:-${MAX_RAM:-0}}}}"
+TOTAL_MEM_MB=0
+
+# Safely extract numeric memory limit
+if [ -n "${SERVER_MEMORY:-}" ] && [[ "${SERVER_MEMORY}" =~ ^[0-9]+$ ]]; then
+    TOTAL_MEM_MB="${SERVER_MEMORY}"
+elif [ -n "${MEMORY:-}" ] && [[ "${MEMORY}" =~ ^[0-9]+$ ]]; then
+    TOTAL_MEM_MB="${MEMORY}"
+elif [ -n "${FEATHER_MEMORY:-}" ] && [[ "${FEATHER_MEMORY}" =~ ^[0-9]+$ ]]; then
+    TOTAL_MEM_MB="${FEATHER_MEMORY}"
+fi
 
 if [ "${TOTAL_MEM_MB}" -le 0 ]; then
     if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
@@ -207,12 +198,6 @@ EOF
     fi
 fi
 
-# --- Debug Mode ---
-if [ "${DEBUG:-0}" = "1" ]; then
-    warn "DEBUG mode active. Environment configuration:"
-    env | grep -E '^(LANGUAGE|RUNNER|MAIN_FILE|PACKAGE_MANAGER|BUILD_|AUTO_|GIT_|CUSTOM_|EXTRA_|DEBUG|TZ|INTERNAL_IP|SERVER_PORT|PORT|FEATHER_|PUFFER_|DEV_MODE|MEMORY_AUTO_TUNE|GOMEMLIMIT|NODE_OPTIONS)' | sort
-fi
-
 # --- Dynamic Toolchain Check ---
 REQ_LANG="${LANGUAGE:-auto}"
 REQ_VER="${RUNTIME_VERSION:-latest}"
@@ -225,9 +210,6 @@ fi
 
 # --- Banner ---
 print_banner() {
-    local dev_badge="Production"
-    [ "${DEV_MODE:-0}" = "1" ] && dev_badge="Dev Watch Mode (Hot Reload)"
-
     printf "${C_CYAN}${C_BOLD}"
     cat << "EOF"
 .______   .______        ______    _______      .___  ___.  __    __   __      .___________. __  
@@ -251,21 +233,27 @@ EOF
 
 print_banner
 
-# --- Execute STARTUP Command ---
-STARTUP_CMD="${STARTUP:-bash run.sh}"
+# -----------------------------------------------------------------------------
+# 8. Execute Startup Command
+# -----------------------------------------------------------------------------
+RAW_STARTUP="${STARTUP:-bash run.sh}"
 
-ENTRYPOINT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "/usr/local/bin")"
-
-# If startup command refers to run.sh but run.sh is not in current working dir, resolve to system/entrypoint path
-if [ ! -f "run.sh" ]; then
-    if [ -f "${ENTRYPOINT_DIR}/run.sh" ]; then
-        STARTUP_CMD=$(echo "${STARTUP_CMD}" | sed -E "s|\\brun\\.sh\\b|\"${ENTRYPOINT_DIR}/run.sh\"|g")
-    elif [ -f "/usr/local/bin/run.sh" ]; then
-        STARTUP_CMD=$(echo "${STARTUP_CMD}" | sed -E 's/\brun\.sh\b/\/usr\/local\/bin\/run\.sh/g')
-    fi
+# If startup command is just /entrypoint.sh or empty, default to run.sh
+if [ "${RAW_STARTUP}" = "/entrypoint.sh" ] || [ "${RAW_STARTUP}" = "/bin/bash /entrypoint.sh" ] || [ -z "${RAW_STARTUP}" ]; then
+    RAW_STARTUP="bash run.sh"
 fi
 
-MODIFIED_STARTUP=$(echo -e "${STARTUP_CMD}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
+# Replace Pterodactyl variable interpolation {{VAR}} with ${VAR}
+MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
+
+# If startup refers to run.sh but run.sh is not in current folder, fallback to system run.sh
+if [[ "${MODIFIED_STARTUP}" == *"run.sh"* ]] && [ ! -f "run.sh" ]; then
+    if [ -f "/usr/local/bin/run.sh" ]; then
+        MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/usr\/local\/bin\/run\.sh/g')
+    elif [ -f "/run.sh" ]; then
+        MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/run\.sh/g')
+    fi
+fi
 
 log "Executing startup command: ${MODIFIED_STARTUP}"
 printf "\n"

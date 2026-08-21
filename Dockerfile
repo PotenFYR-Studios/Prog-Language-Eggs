@@ -121,24 +121,28 @@ RUN groupadd -g 988 container 2>/dev/null || true \
     && chmod -R 777 /opt/runtimes /home/container /server /app /mnt/server /tmp
 
 # 8. Copy runtime helper scripts
+COPY entrypoint.sh /entrypoint.sh
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY run.sh /run.sh
 COPY run.sh /usr/local/bin/run.sh
+COPY install.sh /install.sh
 COPY install.sh /usr/local/bin/install.sh
 COPY install-runtime.sh /usr/local/bin/install-runtime.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh \
-             /usr/local/bin/run.sh \
-             /usr/local/bin/install.sh \
-             /usr/local/bin/install-runtime.sh \
-    && ln -sf /usr/local/bin/entrypoint.sh /entrypoint.sh \
-    && ln -sf /usr/local/bin/run.sh /run.sh
+RUN sed -i 's/\r$//' /entrypoint.sh /run.sh /install.sh /usr/local/bin/*.sh \
+    && chmod +x /entrypoint.sh \
+                /run.sh \
+                /install.sh \
+                /usr/local/bin/entrypoint.sh \
+                /usr/local/bin/run.sh \
+                /usr/local/bin/install.sh \
+                /usr/local/bin/install-runtime.sh
 
 # 9. Path configuration
-ENV PATH="/opt/cargo/bin:/opt/go/bin:/opt/runtimes/bin:/home/container/.local/bin:/home/container/bin:/home/container/node_modules/.bin:${PATH}"
+ENV PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/cargo/bin:/opt/go/bin:/opt/runtimes/bin:/home/container/.local/bin:/home/container/bin:/home/container/node_modules/.bin:${PATH}"
 
 USER container
 ENV USER=container HOME=/home/container
 WORKDIR /home/container
 
-ENTRYPOINT ["/bin/bash", "/usr/local/bin/entrypoint.sh"]
-CMD ["bash", "run.sh"]
+CMD ["/bin/bash", "/entrypoint.sh"]
