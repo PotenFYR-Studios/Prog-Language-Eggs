@@ -1,0 +1,10 @@
+{
+  "name": "potenfyr-nodejs-template",
+  "version": "1.0.0",
+  "description": "PotenFYR Universal Programming Language Eggs Node.js Starter",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {}
+}

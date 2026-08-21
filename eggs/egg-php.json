@@ -1,0 +1,62 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-08-22T03:08:00+00:00",
+    "name": "PHP & Composer",
+    "author": "contact@potenfyr.com",
+    "description": "PHP CLI and built-in web server runtime with Composer dependency management.",
+    "features": ["pid_limit"],
+    "docker_images": {
+        "Universal Runtime": "ghcr.io/potenfyr-studios/prog-language-eggs:latest"
+    },
+    "file_denylist": [],
+    "startup": "bash run.sh",
+    "config": {
+        "files": "{\".env\":{\"parser\":\"file\",\"find\":{\"PORT=\":\"PORT={{server.build.default.port}}\",\"SERVER_PORT=\":\"SERVER_PORT={{server.build.default.port}}\"}}}",
+        "startup": "{\"done\":[\"Development Server\",\"started\",\"listening on\",\"Server running\"],\"user_interaction\":[],\"strip_ansi\":false}",
+        "stop": "^C",
+        "logs": "{}"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\ncd /mnt/server || exit 1\n[ -n \"${GIT_REPO:-}\" ] && git clone --branch \"${GIT_BRANCH:-main}\" --depth 1 \"${GIT_REPO}\" . || true\n[ -f \"composer.json\" ] && composer install --no-dev 2>/dev/null || true\nchown -R 988:988 /mnt/server 2>/dev/null || chown -R 1000:1000 /mnt/server 2>/dev/null || true",
+            "container": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Main PHP File",
+            "description": "PHP file to serve (e.g. index.php, server.php, public/index.php).",
+            "env_variable": "MAIN_FILE",
+            "default_value": "index.php",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Repository",
+            "description": "Git repository to clone on initial install.",
+            "env_variable": "GIT_REPO",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Assigned Port",
+            "description": "Primary network port allocated by the panel.",
+            "env_variable": "SERVER_PORT",
+            "default_value": "{{server.build.default.port}}",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|numeric",
+            "field_type": "text"
+        }
+    ]
+}
