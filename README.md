@@ -1,6 +1,6 @@
 # Prog-Language-Eggs
 
-> One egg. Every programming language. Every runtime. Installs, updates, compiles and runs **50+ programming languages** — from Node.js, Bun, TypeScript, Python, and Java to Go, Rust, C/C++, .NET, PHP, Zig, Swift, and beyond — with **automatic memory tuning (OOM protection)**, **Procfile multi-process supervision**, **native Dev Watch Mode**, **static SPA hosting**, and **Git auto-sync**.
+> One egg. Every programming language. Every runtime. Every panel. Installs, updates, compiles and runs **50+ programming languages** across **Pterodactyl**, **Pelican**, **Feather Panel**, **PufferPanel**, **Jexactyl**, **Wisp**, and **Standalone Docker / Kubernetes**.
 
 ```
 .______   .______        ______    _______      .___  ___.  __    __   __      .___________. __  
@@ -14,7 +14,7 @@
 
 [![CI Build](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions/workflows/docker-image.yml/badge.svg)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)
 [![Docker Image](https://img.shields.io/badge/ghcr.io-prog--language--eggs-blue?logo=docker)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs)
-[![Platform](https://img.shields.io/badge/Platform-Pterodactyl%20%7C%20Pelican-orange)](https://pterodactyl.io)
+[![Platform](https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-orange)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 [![Architecture](https://img.shields.io/badge/Arch-linux%2Famd64%20%7C%20linux%2Farm64-success)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -22,42 +22,47 @@
 
 ## Table of Contents
 1. [Features](#features)
-2. [Supported Languages & Toolchains (50+ Matrix)](#supported-languages--toolchains)
-3. [Advanced Capabilities](#advanced-capabilities)
-   - [Automatic Memory Tuning & OOM Protection](#1-automatic-memory-tuning--oom-protection)
-   - [Native Dev Watch & Hot-Reload Mode](#2-native-dev-watch--hot-reload-mode)
-   - [Procfile Multi-Process Supervision](#3-procfile-multi-process-supervision)
-   - [Zero-Config Static Frontend / SPA Hosting](#4-zero-config-static-frontend--spa-hosting)
-   - [Pre-Run & Post-Run Lifecycle Hooks](#5-pre-run--post-run-lifecycle-hooks)
-   - [Automatic .env Network Binding](#6-automatic-env-network-binding)
-   - [Storage Efficiency & Build Cache Pruning](#7-storage-efficiency--build-cache-pruning)
-4. [Repository Layout](#repository-layout)
-5. [Quick Setup Guide](#quick-setup-guide)
-6. [Docker Images (GHCR)](#docker-images-ghcr)
-7. [How It Works](#how-it-works)
-8. [Egg Variables Reference](#egg-variables-reference)
-9. [Code Examples & Walkthroughs](#code-examples--walkthroughs)
-10. [Interactive Console Wizard](#interactive-console-wizard)
-11. [Git Synchronization](#git-synchronization)
-12. [Troubleshooting & FAQ](#troubleshooting--faq)
-13. [License](#license)
+2. [Universal Multi-Panel Support](#universal-multi-panel-support)
+3. [Supported Languages & Toolchains (50+ Matrix)](#supported-languages--toolchains)
+4. [Advanced Capabilities](#advanced-capabilities)
+5. [Repository Layout](#repository-layout)
+6. [Quick Setup Guide](#quick-setup-guide)
+7. [Docker Images (GHCR)](#docker-images-ghcr)
+8. [How It Works](#how-it-works)
+9. [Egg Variables Reference](#egg-variables-reference)
+10. [Code Examples & Walkthroughs](#code-examples--walkthroughs)
+11. [Troubleshooting & FAQ](#troubleshooting--faq)
+12. [License](#license)
 
 ---
 
 ## Features
 
-- 🌐 **Universal Polyglot Engine**: Execute over 50+ programming languages from a single egg without changing Docker images.
-- 🧠 **Smart Memory Tuning (OOM Protection)**: Automatically computes and applies optimal memory ceilings (`--max-old-space-size`, `GOMEMLIMIT`, `-Xmx`, `DOTNET_GCHeapHardLimit`, `MALLOC_TRIM_THRESHOLD_`) to prevent Pterodactyl Wings hard-kills.
-- ⚡ **Modern Package Managers & Toolchains**: Preconfigured with `npm`, `pnpm`, `yarn`, `bun`, `deno`, `pip`, `uv`, `poetry`, `pipenv`, `cargo`, `go mod`, `maven`, `gradle`, `composer`, `gem`, `dotnet`, `mix`, and more.
-- 🚀 **Multi-Runner TypeScript Engine**: Zero-configuration execution for TypeScript via `ts-node`, `tsx`, `bun run`, or compiled `tsc -> node`.
-- 🔄 **Procfile Multi-Process Supervision**: Run web servers, Discord bots, and background queue workers concurrently inside one container with unified colored logging.
-- 🔥 **Native Dev Watch Mode (`DEV_MODE=1`)**: Auto-reloads your application on code changes for instant developer feedback.
-- 📱 **Static Frontend & SPA Hosting**: Drop your React, Vue, Svelte, or static HTML build in — the egg spins up a high-performance HTTP server with SPA fallback routing.
-- 🔍 **Intelligent Auto-Detection**: Automatically identifies project languages, entry points (`index.js`, `main.py`, `main.go`, `src/main.rs`, `Program.cs`, etc.), and package managers on boot.
-- 🧙 **Interactive First-Run Wizard**: Start with a completely empty directory — the launcher interactively prompts you for your language choice and bootstraps a production-ready starter template.
+- 🌐 **Universal Multi-Panel Compatibility**: Zero-configuration compatibility across **Pterodactyl**, **Pelican**, **Feather Panel**, **PufferPanel**, **Jexactyl**, **Wisp**, and **Docker/Kubernetes**.
+- 🧠 **Smart Memory Tuning (OOM Protection)**: Automatically computes safe memory ceilings (`--max-old-space-size`, `GOMEMLIMIT`, `-Xmx`, `DOTNET_GCHeapHardLimit`, `MALLOC_TRIM_THRESHOLD_`) to prevent host panel hard-kills.
+- ⚡ **50+ Languages & Modern Toolchains**: Preconfigured with `npm`, `pnpm`, `yarn`, `bun`, `deno`, `pip`, `uv`, `poetry`, `pipenv`, `cargo`, `go mod`, `maven`, `gradle`, `composer`, `gem`, `dotnet`, `mix`, and more.
+- 🔄 **Procfile Multi-Process Supervision**: Run web servers, bots, and background workers concurrently in a single container with colored log streams.
+- 🔥 **Native Dev Watch Mode (`DEV_MODE=1`)**: Hot-reloads your application on code changes for instant developer feedback.
+- 📱 **Static Frontend & SPA Hosting**: Automatic static web server with client-side SPA routing fallback for React, Vue, Vite, and HTML.
+- 🧙 **Interactive First-Run Wizard**: Start with an empty directory — the launcher interactively prompts you for your language choice and bootstraps a starter template (with non-interactive fallback for automated panel provisioning).
 - 🔄 **Git Synchronization**: Automated Git repository cloning and live auto-pull on container boot (`GIT_REPO`, `GIT_BRANCH`, and private token support).
-- 🧹 **Storage Efficiency**: Automatically prunes compiler caches (`.npm/_cacache`, `/tmp/*`, `.cargo/registry/cache`) after builds to save host disk space.
 - 💻 **Cross-Platform Multi-Arch**: Full native support for both `linux/amd64` (Intel/AMD) and `linux/arm64` (Apple Silicon, Ampere, Raspberry Pi).
+
+---
+
+## Universal Multi-Panel Support
+
+The container dynamically adapts to any panel environment:
+
+| Panel / Platform | Working Directory | Port Variable Unified | Memory Variable Unified |
+|---|---|---|---|
+| **Pterodactyl Panel** | `/home/container` | `SERVER_PORT` / `PORT` | `SERVER_MEMORY` |
+| **Pelican Panel** | `/home/container` | `SERVER_PORT` / `PORT` | `SERVER_MEMORY` |
+| **Feather Panel** | `/app` or `/home/container` | `FEATHER_PORT` / `PORT` | `FEATHER_MEMORY` / `MEMORY` |
+| **PufferPanel** | `/server` | `PORT` / `PUFFER_PORT` | `MEMORY` / `MAX_RAM` |
+| **Jexactyl / Wisp** | `/home/container` | `SERVER_PORT` / `PORT` | `SERVER_MEMORY` |
+| **Standalone Docker** | `/home/container` or `$PWD` | `PORT` / `HTTP_PORT` | Cgroup v1/v2 limits |
+| **Kubernetes** | `/home/container` or `/app` | `PORT` / `HTTP_PORT` | Cgroup v1/v2 limits |
 
 ---
 
@@ -122,57 +127,11 @@
 
 ---
 
-## Advanced Capabilities
-
-### 1. Automatic Memory Tuning & OOM Protection
-Default container environments are susceptible to being abruptly killed by Pterodactyl Wings when runtimes exceed container memory limits. With `MEMORY_AUTO_TUNE=1` (default), the egg calculates an 85% safe target and configures runtimes accordingly:
-- **Node.js**: Automatically sets `--max-old-space-size` to 85% of allocated RAM.
-- **Go**: Sets `GOMEMLIMIT` to trigger garbage collection before container OOM.
-- **Java**: Injects optimal `-Xmx` heap size and auto-selects **ZGC** (for ≥4GB) or **G1GC** (for ≥1GB).
-- **.NET**: Limits the GC Heap via `DOTNET_GCHeapHardLimit`.
-- **Python**: Injects `MALLOC_TRIM_THRESHOLD_=100000` to immediately return free heap pages to Linux.
-
-### 2. Native Dev Watch & Hot-Reload Mode
-Set `DEV_MODE=1` in your panel variables:
-- **Node.js**: Runs with `node --watch` (native Node 18+) or `nodemon`.
-- **Bun**: Runs with `bun --watch` or `bun --hot`.
-- **TypeScript**: Runs with `tsx watch`.
-- **Python**: Runs with `uvicorn --reload` or `watchfiles`.
-- **Deno**: Runs with `deno --watch`.
-
-### 3. Procfile Multi-Process Supervision
-Need to run a web server AND a background queue worker or Discord bot concurrently? Simply create a `Procfile` in your server directory:
-
-```yaml
-web: node server.js
-worker: python worker.py
-bot: bun run src/bot.ts
-```
-
-The egg automatically spawns all processes, aggregates their logs with distinct colored prefixes `[web]`, `[worker]`, `[bot]`, and coordinates graceful termination across all child processes.
-
-### 4. Zero-Config Static Frontend / SPA Hosting
-Have a frontend website, dashboard, or SPA (React, Vue, Vite, Next static export)?
-Upload your `index.html` or `dist/` folder: the egg automatically detects it and boots a high-speed web server bound to your assigned panel port with client-side SPA routing support.
-
-### 5. Pre-Run & Post-Run Lifecycle Hooks
-Execute database migrations or pre-boot tasks seamlessly:
-- **`PRE_RUN_COMMAND`**: e.g. `npx prisma migrate deploy` or `python manage.py migrate`
-- **`POST_RUN_COMMAND`**: e.g. cleanup routines or log rotation
-
-### 6. Automatic .env Network Binding
-To prevent common port binding errors, the egg automatically inspects your `.env` and ensures `PORT`, `SERVER_PORT`, `HOST=0.0.0.0`, and `BIND_ADDRESS=0.0.0.0` match your allocated Pterodactyl port.
-
-### 7. Storage Efficiency & Build Cache Pruning
-With `CLEAN_BUILD_CACHE=1`, compiler temporary directories (`.npm/_cacache`, `/tmp/*`, `.cargo/registry/cache`) are automatically pruned after compilation, preventing disk bloat on host servers.
-
----
-
 ## Repository Layout
 
 ```
 Prog-Language-Eggs/
-├── egg-programming-universal.json       ← Flagship Universal Egg (Import into Pterodactyl / Pelican)
+├── egg-programming-universal.json       ← Flagship Universal Egg (Import into Pterodactyl / Pelican / Feather)
 ├── eggs/                                 ← Modular Dedicated Eggs per Category
 │   ├── egg-nodejs-bun-typescript.json
 │   ├── egg-python.json
@@ -184,17 +143,10 @@ Prog-Language-Eggs/
 │   ├── egg-dotnet.json
 │   └── egg-ruby.json
 ├── templates/                            ← Starter Project Templates
-│   ├── nodejs/
-│   ├── bun/
-│   ├── typescript/
-│   ├── python/
-│   ├── golang/
-│   ├── rust/
-│   └── php/
 ├── Dockerfile                            ← Universal Multi-Arch Runtime Container
-├── entrypoint.sh                         ← Container Entrypoint (Settings load, Environment, Banner)
+├── entrypoint.sh                         ← Multi-Panel Entrypoint (Settings, Environment, Banner)
 ├── run.sh                                ← Universal Launcher & Project Auto-Detector
-├── install.sh                            ← Pterodactyl Container Installer Script
+├── install.sh                            ← Multi-Panel Installer Script
 ├── install-runtime.sh                    ← Dynamic On-Demand Toolchain Downloader
 ├── .github/workflows/docker-image.yml    ← Automated CI/CD Multi-Arch Build Workflow
 └── README.md                             ← Comprehensive Documentation
@@ -204,24 +156,15 @@ Prog-Language-Eggs/
 
 ## Quick Setup Guide
 
-### 1. Import the Egg
+### 1. Import the Egg (Pterodactyl, Pelican, Feather Panel)
 1. Download [egg-programming-universal.json](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/main/egg-programming-universal.json).
-2. Open your Pterodactyl / Pelican Admin Panel.
-3. Navigate to **Nests** → Select your Nest (e.g. *Generic* or *Programming Languages*).
-4. Click **Import Egg**, choose `egg-programming-universal.json`, and click **Save**.
+2. Open your Panel Admin Area (**Nests** / **Templates**).
+3. Click **Import Egg**, select `egg-programming-universal.json`, and click **Save**.
 
 ### 2. Create a Server
-1. In the Admin Panel, go to **Servers** → **Create New**.
-2. Under **Nest & Egg**, select **Universal Programming Languages & Toolchains**.
-3. Set your memory and CPU allocations (512 MB – 8 GB+).
-4. Under **Docker Image**, select `Universal (50+ Languages)`.
-5. Set your variables (or leave defaults for auto-detection).
-6. Click **Create Server**.
-
-### 3. Launch & Console
-- Start the server from the panel console.
-- If your directory is empty, the interactive wizard will ask you which starter template you want.
-- If your files are already uploaded or cloned via Git, the engine will automatically detect your language, tune memory, install dependencies, compile if needed, and start your application!
+1. Create a server using the imported egg.
+2. Under **Docker Image**, select `Universal (50+ Languages)`.
+3. Launch the server from your panel console.
 
 ---
 
@@ -239,29 +182,29 @@ ghcr.io/potenfyr-studios/prog-language-eggs:latest
 
 | Variable Name | Env Variable | Default | Editable | Description |
 |---|---|---|---|---|
-| **Target Language** | `LANGUAGE` | `auto` | 👤 Yes | Target language or `auto` for smart file detection. |
-| **Execution Runner** | `RUNNER` | `auto` | 👤 Yes | Specific runner (`node`, `bun`, `deno`, `ts-node`, `tsx`, `tsc`, `uvicorn`, `cargo`, `go`, etc.). |
-| **Main Entry File** | `MAIN_FILE` | `auto` | 👤 Yes | Entrypoint file (`index.js`, `main.py`, `main.go`, `src/main.rs`, `Program.cs`, etc.). |
-| **Package Manager** | `PACKAGE_MANAGER` | `auto` | 👤 Yes | Package manager (`npm`, `pnpm`, `yarn`, `bun`, `pip`, `poetry`, `uv`, `cargo`, `composer`, etc.). |
-| **Memory Auto Tune** | `MEMORY_AUTO_TUNE` | `1` | 👤 Yes | Automatically tunes GC & memory limits to prevent container OOM (`1` = On). |
-| **Dev Watch Mode** | `DEV_MODE` | `0` | 👤 Yes | Enable auto-reload on file changes during development (`1` = On). |
-| **Pre-Run Command** | `PRE_RUN_COMMAND` | `""` | 👤 Yes | Hook command executed before starting (e.g. database migrations). |
-| **Post-Run Command** | `POST_RUN_COMMAND` | `""` | 👤 Yes | Hook command executed when application stops or shuts down. |
-| **Clean Build Cache** | `CLEAN_BUILD_CACHE` | `1` | 👤 Yes | Cleans temporary build artifacts after compilation to save disk space. |
-| **Auto .env Inject** | `AUTO_ENV_INJECT` | `1` | 👤 Yes | Injects correct PORT and HOST=0.0.0.0 into .env automatically. |
-| **Auto Install Deps** | `AUTO_INSTALL_DEPS` | `1` | 👤 Yes | Auto-install missing dependencies on startup (`1` = On, `0` = Off). |
-| **Build Command** | `BUILD_COMMAND` | `""` | 👤 Yes | Custom build command before running (e.g. `npm run build`, `cargo build --release`). |
-| **Custom Command** | `CUSTOM_COMMAND` | `""` | 👤 Yes | Full custom launch command overriding default runner entirely. |
-| **Extra Arguments** | `EXTRA_ARGS` | `""` | 👤 Yes | Extra CLI arguments passed directly to the binary/runner. |
-| **Starter Template** | `STARTER_TEMPLATE` | `empty` | 👤 Yes | Starter project template (`nodejs`, `bun`, `typescript`, `python`, `golang`, `rust`, `php`, `static`). |
+| **Target Language** | `LANGUAGE` | `auto` | 👤 Yes | Target language or 'auto' for intelligent file auto-detection. |
+| **Execution Runner** | `RUNNER` | `auto` | 👤 Yes | Runner or engine to use (e.g. auto, node, bun, tsx, uvicorn, cargo, go). |
+| **Main Entry File** | `MAIN_FILE` | `auto` | 👤 Yes | The main script or file to execute (leave 'auto' for smart detection). |
+| **Package Manager** | `PACKAGE_MANAGER` | `auto` | 👤 Yes | Package manager for dependency resolution (e.g. auto, npm, pnpm, yarn, bun, pip, cargo). |
+| **Memory Auto Tune** | `MEMORY_AUTO_TUNE` | `1` | 👤 Yes | Auto-tune GC & memory limits to prevent container OOM (1 = Enabled, 0 = Disabled). |
+| **Dev Watch Mode** | `DEV_MODE` | `0` | 👤 Yes | Enable watch and hot-reload mode during development (1 = Enabled, 0 = Disabled). |
+| **Pre-Run Command** | `PRE_RUN_COMMAND` | `""` | 👤 Yes | Command to execute before starting the main process (e.g. database migrations). |
+| **Post-Run Command** | `POST_RUN_COMMAND` | `""` | 👤 Yes | Command to execute when application stops or shuts down. |
+| **Clean Build Cache** | `CLEAN_BUILD_CACHE` | `1` | 👤 Yes | Purge compiler caches after build to save disk space (1 = Enabled, 0 = Disabled). |
+| **Auto .env Inject** | `AUTO_ENV_INJECT` | `1` | 👤 Yes | Ensure .env has correct PORT and HOST=0.0.0.0 bindings (1 = Enabled, 0 = Disabled). |
+| **Auto Install Deps** | `AUTO_INSTALL_DEPS` | `1` | 👤 Yes | Automatically install missing dependencies on container boot (1 = Enabled, 0 = Disabled). |
+| **Build Command** | `BUILD_COMMAND` | `""` | 👤 Yes | Optional build or compilation command (e.g. 'npm run build', 'cargo build --release'). |
+| **Custom Command** | `CUSTOM_COMMAND` | `""` | 👤 Yes | Custom command to override the default runner entirely. |
+| **Extra Arguments** | `EXTRA_ARGS` | `""` | 👤 Yes | Extra CLI arguments passed to the runner or executable. |
+| **Starter Template** | `STARTER_TEMPLATE` | `empty` | 👤 Yes | Starter project template if workspace is empty (e.g. nodejs, bun, python, golang, rust). |
 | **Git Repository** | `GIT_REPO` | `""` | 👤 Yes | Git repository URL to clone and sync on startup. |
-| **Git Branch** | `GIT_BRANCH` | `main` | 👤 Yes | Git branch to clone or track. |
-| **Git Auth Token** | `GIT_AUTH_TOKEN` | `""` | 👤 Yes | Personal Access Token (PAT) for private Git repositories. |
-| **Extra URLs** | `EXTRA_URLS` | `""` | 👤 Yes | Newline-separated list of URLs or `dest\|url` to download. |
-| **Auto Restart** | `AUTO_RESTART` | `0` | 👤 Yes | Auto-restart application if it crashes (`1` = On, `0` = Off). |
-| **Restart Delay** | `RESTART_DELAY` | `3` | 👤 Yes | Cooldown in seconds before auto-restarting. |
+| **Git Branch** | `GIT_BRANCH` | `main` | 👤 Yes | Target branch to clone or track from the Git repository. |
+| **Git Auth Token** | `GIT_AUTH_TOKEN` | `""` | 👤 Yes | Personal Access Token for private Git repositories. |
+| **Extra URLs** | `EXTRA_URLS` | `""` | 👤 Yes | Additional files or archives to download on boot (URL or dest\|URL). |
+| **Auto Restart** | `AUTO_RESTART` | `0` | 👤 Yes | Automatically restart process on unexpected crash (1 = Enabled, 0 = Disabled). |
+| **Restart Delay** | `RESTART_DELAY` | `3` | 👤 Yes | Delay in seconds before attempting to auto-restart. |
 | **Assigned Port** | `SERVER_PORT` | `{{server.build.default.port}}` | 🔒 Admin | Primary network port allocated by the panel. |
-| **Debug Mode** | `DEBUG` | `0` | 👤 Yes | Enable verbose script debugging (`1` = On). |
+| **Debug Mode** | `DEBUG` | `0` | 👤 Yes | Enable verbose script debug output (1 = Enabled, 0 = Disabled). |
 
 ---
 
@@ -269,4 +212,4 @@ ghcr.io/potenfyr-studios/prog-language-eggs:latest
 
 This project is open-source under the **MIT License**.
 
-Developed with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)**.
+Developed with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)** (support@potenfyr.in).

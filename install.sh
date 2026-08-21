@@ -3,13 +3,29 @@
 #  Universal Programming Language Eggs - Container Installation Script
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
-#  Runs inside the universal container image as root, with the server files
-#  mounted at /mnt/server.
+#  Universal Panel Support:
+#    - Pterodactyl Panel (/mnt/server)
+#    - Pelican Panel (/mnt/server)
+#    - Feather Panel (/app or /mnt/server)
+#    - PufferPanel (/server)
+#    - Standalone Docker / Kubernetes ($PWD)
 # =============================================================================
 
 set -uo pipefail
 
-cd /mnt/server || exit 1
+# Determine install mount directory across all panel types
+INSTALL_DIR="/mnt/server"
+if [ ! -d "${INSTALL_DIR}" ]; then
+    if [ -d "/server" ]; then
+        INSTALL_DIR="/server"
+    elif [ -d "/app" ]; then
+        INSTALL_DIR="/app"
+    else
+        INSTALL_DIR="${PWD}"
+    fi
+fi
+
+cd "${INSTALL_DIR}" || exit 1
 
 # --- Visual formatting ---
 C_RESET='\033[0m'
@@ -82,7 +98,7 @@ if [ "${FILE_COUNT}" -eq 0 ] && [ -n "${STARTER_TEMPLATE}" ] && [ "${STARTER_TEM
 EOF
             cat << 'EOF' > index.js
 const http = require('http');
-const port = process.env.SERVER_PORT || process.env.PORT || 8080;
+const port = process.env.SERVER_PORT || process.env.PORT || process.env.FEATHER_PORT || 8080;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -102,7 +118,7 @@ EOF
 
         bun)
             cat << 'EOF' > index.ts
-const port = Number(process.env.SERVER_PORT || process.env.PORT || 8080);
+const port = Number(process.env.SERVER_PORT || process.env.PORT || process.env.FEATHER_PORT || 8080);
 
 console.log(`[PotenFYR] Bun HTTP server listening on port ${port}`);
 
@@ -160,7 +176,7 @@ EOF
             cat << 'EOF' > src/index.ts
 import * as http from 'http';
 
-const port = process.env.SERVER_PORT || process.env.PORT || 8080;
+const port = process.env.SERVER_PORT || process.env.PORT || process.env.FEATHER_PORT || 8080;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -188,7 +204,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 from datetime import datetime
 
-PORT = int(os.environ.get("SERVER_PORT", os.environ.get("PORT", 8080)))
+PORT = int(os.environ.get("SERVER_PORT", os.environ.get("PORT", os.environ.get("FEATHER_PORT", 8080))))
 
 class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -240,6 +256,9 @@ func main() {
 		port = os.Getenv("PORT")
 	}
 	if port == "" {
+		port = os.Getenv("FEATHER_PORT")
+	}
+	if port == "" {
 		port = "8080"
 	}
 
@@ -278,7 +297,10 @@ use std::io::Write;
 use std::net::TcpListener;
 
 fn main() {
-    let port = env::var("SERVER_PORT").unwrap_or_else(|_| env::var("PORT").unwrap_or_else(|_| "8080".to_string()));
+    let port = env::var("SERVER_PORT")
+        .or_else(|_| env::var("PORT"))
+        .or_else(|_| env::var("FEATHER_PORT"))
+        .unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{}", port);
     let listener = TcpListener::bind(&addr).expect("Could not bind port");
     println!("[PotenFYR] Rust server listening on http://{}", addr);
@@ -314,7 +336,7 @@ if [ -n "${EXTRA_URLS}" ]; then
         case "${line}" in
             *\|*)
                 dest="${line%%|*}"
-                url="${line#*|}"
+                url="${line#*|}\"
                 ;;
         esac
         
@@ -375,7 +397,7 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
     ok "Dependencies pre-installed"
 fi
 
-# Ensure correct file permissions for container user
-chown -R 988:988 /mnt/server 2>/dev/null || chown -R 1000:1000 /mnt/server 2>/dev/null || true
+# Ensure permissive directory permissions for any panel user ID
+chmod -R 777 "${INSTALL_DIR}" 2>/dev/null || true
 
-ok "Installation completed successfully!"
+ok "Installation completed successfully on ${INSTALL_DIR}!"

@@ -3,16 +3,13 @@
 #  Universal Programming Language Eggs - Universal Launcher
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
-#  Features:
-#    - Project & Language Auto-Detection (50+ Languages)
-#    - Procfile Multi-Process Supervision (Run Web + Worker + Bot concurrently)
-#    - Zero-Config Static Frontend / SPA Web Server Fallback
-#    - Native Watch & Hot-Reload Development Mode (DEV_MODE=1)
-#    - Automatic Memory Tuning & OOM Protection Injection
-#    - Pre-Run & Post-Run Lifecycle Hooks (e.g. DB migrations)
-#    - Automated Dependency Management (npm, bun, pip, cargo, go, maven, etc.)
-#    - Storage Optimization & Build Cache Pruning (CLEAN_BUILD_CACHE=1)
-#    - Graceful Shutdown & Child Process Signal Management
+#  Universal Panel Compatibility:
+#    - Pterodactyl Panel (Wings)
+#    - Pelican Panel
+#    - Feather Panel (feather-panel / renoki-co)
+#    - PufferPanel
+#    - Jexactyl / Wisp
+#    - Standalone Docker & Kubernetes
 # =============================================================================
 
 set -uo pipefail
@@ -33,9 +30,21 @@ ok()   { printf "${C_GREEN}${C_BOLD}[run][OK]${C_RESET} %s\n" "$*"; }
 warn() { printf "${C_YELLOW}${C_BOLD}[run][warn]${C_RESET} %s\n" "$*"; }
 fail() { printf "${C_RED}${C_BOLD}[run][ERROR]${C_RESET} %s\n" "$*"; exit 1; }
 
-cd /home/container || fail "Cannot enter /home/container directory"
+# Determine active working directory across panels
+WORK_DIR="${WORK_DIR:-/home/container}"
+if [ ! -d "${WORK_DIR}" ]; then
+    if [ -d "/server" ]; then
+        WORK_DIR="/server"
+    elif [ -d "/app" ]; then
+        WORK_DIR="/app"
+    else
+        WORK_DIR="${PWD}"
+    fi
+fi
 
-CONF_FILE="/home/container/.multi-prog.conf"
+cd "${WORK_DIR}" || fail "Cannot enter directory: ${WORK_DIR}"
+
+CONF_FILE="${WORK_DIR}/.multi-prog.conf"
 
 save_conf() {
     local key="$1" val="$2"
@@ -64,7 +73,7 @@ GIT_REPO="${GIT_REPO:-}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_AUTH_TOKEN="${GIT_AUTH_TOKEN:-}"
 STARTER_TEMPLATE="${STARTER_TEMPLATE:-}"
-SERVER_PORT="${SERVER_PORT:-${PORT:-8080}}"
+SERVER_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-8080}}}}}"
 DEBUG="${DEBUG:-0}"
 
 [ "${DEBUG}" = "1" ] && set -x
@@ -96,30 +105,36 @@ if [ -n "${GIT_REPO}" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 2. Interactive Wizard (for empty / new workspaces)
+# 2. Interactive Setup Wizard (Interactive TTY vs Non-Interactive)
 # -----------------------------------------------------------------------------
 FILE_COUNT=$(find . -maxdepth 1 -not -name '.*' | wc -l)
 
 if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ "${LANGUAGE}" = "auto" ]; then
-    printf "\n${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
-    printf "${C_CYAN}${C_BOLD}  Empty workspace detected! Choose a language to scaffold a starter project:${C_RESET}\n"
-    printf "${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
-    printf "  ${C_BOLD}1)${C_RESET} Node.js / Express (JavaScript HTTP Server)\n"
-    printf "  ${C_BOLD}2)${C_RESET} Bun (Fast TypeScript / JavaScript Server)\n"
-    printf "  ${C_BOLD}3)${C_RESET} TypeScript (Node.js + ts-node / tsx)\n"
-    printf "  ${C_BOLD}4)${C_RESET} Python (FastAPI / Flask HTTP Server)\n"
-    printf "  ${C_BOLD}5)${C_RESET} Java (Maven / Spring Boot / Spark)\n"
-    printf "  ${C_BOLD}6)${C_RESET} Go / Golang (High Performance HTTP Server)\n"
-    printf "  ${C_BOLD}7)${C_RESET} Rust (Axum / Actix Web Server)\n"
-    printf "  ${C_BOLD}8)${C_RESET} C / C++ (High Performance Native Server)\n"
-    printf "  ${C_BOLD}9)${C_RESET} PHP (Built-in Web Server)\n"
-    printf "  ${C_BOLD}10)${C_RESET} .NET / C# (ASP.NET Core Web API)\n"
-    printf "  ${C_BOLD}11)${C_RESET} Ruby (Sinatra / Puma Server)\n"
-    printf "  ${C_BOLD}12)${C_RESET} Static HTML / React / Frontend Website\n"
-    printf "\n"
+    # Check if standard input is an interactive terminal
+    if [ -t 0 ] || [ -e /dev/tty ]; then
+        printf "\n${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
+        printf "${C_CYAN}${C_BOLD}  Empty workspace detected! Choose a language to scaffold a starter project:${C_RESET}\n"
+        printf "${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
+        printf "  ${C_BOLD}1)${C_RESET} Node.js / Express (JavaScript HTTP Server)\n"
+        printf "  ${C_BOLD}2)${C_RESET} Bun (Fast TypeScript / JavaScript Server)\n"
+        printf "  ${C_BOLD}3)${C_RESET} TypeScript (Node.js + ts-node / tsx)\n"
+        printf "  ${C_BOLD}4)${C_RESET} Python (FastAPI / Flask HTTP Server)\n"
+        printf "  ${C_BOLD}5)${C_RESET} Java (Maven / Spring Boot / Spark)\n"
+        printf "  ${C_BOLD}6)${C_RESET} Go / Golang (High Performance HTTP Server)\n"
+        printf "  ${C_BOLD}7)${C_RESET} Rust (Axum / Actix Web Server)\n"
+        printf "  ${C_BOLD}8)${C_RESET} C / C++ (High Performance Native Server)\n"
+        printf "  ${C_BOLD}9)${C_RESET} PHP (Built-in Web Server)\n"
+        printf "  ${C_BOLD}10)${C_RESET} .NET / C# (ASP.NET Core Web API)\n"
+        printf "  ${C_BOLD}11)${C_RESET} Ruby (Sinatra / Puma Server)\n"
+        printf "  ${C_BOLD}12)${C_RESET} Static HTML / React / Frontend Website\n"
+        printf "\n"
 
-    read -r -p "$(echo -e "${C_YELLOW}${C_BOLD}Select choice [1-12] (Default 1): ${C_RESET}")" CHOICE < /dev/tty || CHOICE="1"
-    CHOICE="${CHOICE:-1}"
+        read -r -t 30 -p "$(echo -e "${C_YELLOW}${C_BOLD}Select choice [1-12] (Default 1): ${C_RESET}")" CHOICE < /dev/tty || CHOICE="1"
+        CHOICE="${CHOICE:-1}"
+    else
+        log "Non-interactive environment detected (Feather / PufferPanel / Daemon). Defaulting to Node.js starter."
+        CHOICE="1"
+    fi
 
     case "${CHOICE}" in
         1) STARTER_TEMPLATE="nodejs" ;;
@@ -158,7 +173,7 @@ if [ -n "${STARTER_TEMPLATE}" ] && [ "${STARTER_TEMPLATE}" != "empty" ]; then
 EOF
             cat << 'EOF' > index.js
 const http = require('http');
-const port = process.env.SERVER_PORT || process.env.PORT || 8080;
+const port = process.env.SERVER_PORT || process.env.PORT || process.env.FEATHER_PORT || 8080;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -180,7 +195,7 @@ EOF
 
         bun)
             cat << 'EOF' > index.ts
-const port = Number(process.env.SERVER_PORT || process.env.PORT || 8080);
+const port = Number(process.env.SERVER_PORT || process.env.PORT || process.env.FEATHER_PORT || 8080);
 
 console.log(`[PotenFYR] Bun HTTP server listening on port ${port}`);
 
@@ -241,7 +256,7 @@ EOF
             cat << 'EOF' > src/index.ts
 import * as http from 'http';
 
-const port = process.env.SERVER_PORT || process.env.PORT || 8080;
+const port = process.env.SERVER_PORT || process.env.PORT || process.env.FEATHER_PORT || 8080;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -272,7 +287,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 from datetime import datetime
 
-PORT = int(os.environ.get("SERVER_PORT", os.environ.get("PORT", 8080)))
+PORT = int(os.environ.get("SERVER_PORT", os.environ.get("PORT", os.environ.get("FEATHER_PORT", 8080))))
 
 class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -326,6 +341,9 @@ func main() {
 		port = os.Getenv("PORT")
 	}
 	if port == "" {
+		port = os.Getenv("FEATHER_PORT")
+	}
+	if port == "" {
 		port = "8080"
 	}
 
@@ -366,7 +384,10 @@ use std::io::Write;
 use std::net::TcpListener;
 
 fn main() {
-    let port = env::var("SERVER_PORT").unwrap_or_else(|_| env::var("PORT").unwrap_or_else(|_| "8080".to_string()));
+    let port = env::var("SERVER_PORT")
+        .or_else(|_| env::var("PORT"))
+        .or_else(|_| env::var("FEATHER_PORT"))
+        .unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{}", port);
     let listener = TcpListener::bind(&addr).expect("Could not bind port");
     println!("[PotenFYR] Rust server listening on http://{}", addr);
@@ -462,7 +483,6 @@ run_procfile() {
         names+=("${name}")
     done < "${procfile}"
 
-    # Wait for all background processes
     wait "${pids[@]}" 2>/dev/null
     exit 0
 }
@@ -480,7 +500,6 @@ detect_language() {
         return
     fi
 
-    # Static Website / SPA detection
     if [ -f "index.html" ] || [ -f "dist/index.html" ] || [ -f "build/index.html" ] || [ -f "public/index.html" ]; then
         if [ ! -f "package.json" ] && [ ! -f "main.py" ] && [ ! -f "main.go" ] && [ ! -f "Cargo.toml" ] && [ ! -f "pom.xml" ]; then
             echo "static"; return
@@ -664,7 +683,6 @@ if [ -n "${BUILD_COMMAND}" ]; then
     ok "Build command completed"
 fi
 
-# Clean build caches to preserve disk space
 if [ "${CLEAN_BUILD_CACHE}" = "1" ]; then
     rm -rf /tmp/* /root/.cache ~/.npm/_cacache 2>/dev/null || true
 fi
@@ -742,20 +760,17 @@ resolve_main_file() {
 RESOLVED_MAIN=$(resolve_main_file)
 
 construct_run_cmd() {
-    # 1. Custom Command Override
     if [ -n "${CUSTOM_COMMAND}" ]; then
         echo "${CUSTOM_COMMAND}"
         return
     fi
 
-    # 2. Static Web Server Fallback
     if [ "${DETECTED_LANG}" = "static" ]; then
         local static_dir="."
         [ -d "dist" ] && static_dir="dist"
         [ -d "build" ] && static_dir="build"
         [ -d "public" ] && static_dir="public"
         
-        # Use Python http.server or bun / npx serve
         if command -v bun >/dev/null 2>&1; then
             echo "bun x serve -p ${SERVER_PORT} -s ${static_dir}"
         else
@@ -764,7 +779,6 @@ construct_run_cmd() {
         return
     fi
 
-    # 3. Per-Language Dispatch with Dev Watch Mode & Auto Memory Flags
     case "${DETECTED_LANG}" in
         nodejs|javascript|js)
             local watch_flag=""

@@ -2,15 +2,20 @@
 #  Universal Programming Language Eggs - Universal Runtime Container
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
-#  One Image. 50+ Programming Languages. All Package Managers & Toolchains.
-#  Multi-arch support: linux/amd64 and linux/arm64
+#  Universal Panel Compatibility:
+#    - Pterodactyl Panel (Wings)
+#    - Pelican Panel
+#    - Feather Panel (feather-panel / renoki-co)
+#    - PufferPanel
+#    - Jexactyl / Wisp
+#    - Standalone Docker & Kubernetes
 # =============================================================================
 
 FROM ubuntu:22.04
 
 LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
 LABEL org.opencontainers.image.source="https://github.com/PotenFYR-Studios/Prog-Language-Eggs"
-LABEL org.opencontainers.image.description="Universal Pterodactyl & Pelican egg container for 50+ programming languages"
+LABEL org.opencontainers.image.description="Universal container for 50+ programming languages across Pterodactyl, Pelican, Feather Panel, and PufferPanel"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -105,11 +110,11 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
     && rm -rf /root/.local
 
-# 7. Create container user and runtime directory structure
-RUN groupadd -g 988 container || true \
-    && useradd -d /home/container -m -u 988 -g 988 container || true \
-    && mkdir -p /opt/runtimes /home/container \
-    && chmod -R 777 /opt/runtimes /home/container
+# 7. Create multi-panel working directories and user compatibility
+RUN groupadd -g 988 container 2>/dev/null || true \
+    && useradd -d /home/container -m -u 988 -g 988 container 2>/dev/null || true \
+    && mkdir -p /opt/runtimes /home/container /server /app /mnt/server \
+    && chmod -R 777 /opt/runtimes /home/container /server /app /mnt/server /tmp
 
 # 8. Copy runtime helper scripts
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
