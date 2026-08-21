@@ -25,7 +25,7 @@ if [ ! -d "${INSTALL_DIR}" ]; then
     fi
 fi
 
-cd "${INSTALL_DIR}" || exit 1
+cd "${INSTALL_DIR}" 2>/dev/null || { mkdir -p "${INSTALL_DIR}" && cd "${INSTALL_DIR}"; }
 
 # --- Visual formatting ---
 C_RESET='\033[0m'
@@ -49,7 +49,7 @@ GIT_AUTH_TOKEN="${GIT_AUTH_TOKEN:-}"
 STARTER_TEMPLATE="${STARTER_TEMPLATE:-}"
 AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
 EXTRA_URLS="${EXTRA_URLS:-}"
-USER_AGENT="ProgLanguageEggsInstall/1.0 (PotenFYR Studios; https://github.com/PotenFYR-Studios/Prog-Language-Eggs)"
+USER_AGENT="ProgLanguageEggsInstall/1.0 (PotenFYR Studios; support@potenfyr.in)"
 
 # -----------------------------------------------------------------------------
 # 1. Git Repository Clone
@@ -80,7 +80,7 @@ fi
 # -----------------------------------------------------------------------------
 # 2. Starter Template Scaffolding
 # -----------------------------------------------------------------------------
-FILE_COUNT=$(find . -maxdepth 1 -not -name '.*' | wc -l)
+FILE_COUNT=$(find . -maxdepth 1 -not -name '.*' 2>/dev/null | wc -l)
 if [ "${FILE_COUNT}" -eq 0 ] && [ -n "${STARTER_TEMPLATE}" ] && [ "${STARTER_TEMPLATE}" != "empty" ]; then
     log "Generating starter template: '${STARTER_TEMPLATE}'..."
     case "${STARTER_TEMPLATE}" in
@@ -336,7 +336,7 @@ if [ -n "${EXTRA_URLS}" ]; then
         case "${line}" in
             *\|*)
                 dest="${line%%|*}"
-                url="${line#*|}\"
+                url="${line#*|}"
                 ;;
         esac
         
@@ -373,13 +373,13 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
     log "Pre-installing dependencies..."
     if [ -f "package.json" ]; then
         if [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
-            bun install
+            bun install || true
         elif [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
-            pnpm install
+            pnpm install || true
         elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
-            yarn install
+            yarn install || true
         else
-            npm install --no-audit --no-fund
+            npm install --no-audit --no-fund 2>/dev/null || true
         fi
     fi
     if [ -f "requirements.txt" ]; then
