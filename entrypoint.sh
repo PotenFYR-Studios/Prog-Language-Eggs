@@ -33,23 +33,29 @@ ok()    { printf "${C_GREEN}${C_BOLD}prog-egg@universal~${C_RESET} ${C_GREEN}${C
 # -----------------------------------------------------------------------------
 # 1. Universal Working Directory Resolution
 # -----------------------------------------------------------------------------
-# Supports Pterodactyl/Pelican (/home/container), PufferPanel (/server),
-# Feather Panel / Docker (/app), or current directory
-if [ -d "/home/container" ]; then
-    WORK_DIR="/home/container"
-elif [ -d "/server" ]; then
-    WORK_DIR="/server"
-elif [ -d "/app" ]; then
-    WORK_DIR="/app"
+if [ -n "${WORK_DIR:-}" ] && [ -d "${WORK_DIR}" ]; then
+    ACTIVE_WORK_DIR="${WORK_DIR}"
+elif [ -n "${P_SERVER_UUID:-}" ] && [ -d "/home/container" ]; then
+    ACTIVE_WORK_DIR="/home/container"
+elif [ -n "${FEATHER_SERVER_ID:-}" ] && [ -d "/app" ]; then
+    ACTIVE_WORK_DIR="/app"
+elif [ -n "${PUFFER_PORT:-}" ] && [ -d "/server" ]; then
+    ACTIVE_WORK_DIR="/server"
+elif [ -d "/home/container" ] && [ "$(pwd)" = "/home/container" -o "$(pwd)" = "/" ]; then
+    ACTIVE_WORK_DIR="/home/container"
+elif [ -d "/app" ] && [ "$(pwd)" = "/app" ]; then
+    ACTIVE_WORK_DIR="/app"
+elif [ -d "/server" ] && [ "$(pwd)" = "/server" ]; then
+    ACTIVE_WORK_DIR="/server"
 else
-    WORK_DIR="${PWD}"
+    ACTIVE_WORK_DIR="${PWD}"
 fi
 
-export WORK_DIR
-cd "${WORK_DIR}" 2>/dev/null || { error "Cannot enter working directory: ${WORK_DIR}"; exit 1; }
+export WORK_DIR="${ACTIVE_WORK_DIR}"
+cd "${ACTIVE_WORK_DIR}" 2>/dev/null || { error "Cannot enter working directory: ${ACTIVE_WORK_DIR}"; exit 1; }
 
 # -----------------------------------------------------------------------------
-# 2. Universal Port & Host Resolution (Pterodactyl, Feather, PufferPanel, Docker)
+# 2. Universal Port & Host Resolution
 # -----------------------------------------------------------------------------
 ACTIVE_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-${ALLOCATED_PORT:-${HTTP_PORT:-8080}}}}}}"
 export PORT="${ACTIVE_PORT}"
@@ -64,12 +70,12 @@ export BIND_ADDRESS="0.0.0.0"
 # -----------------------------------------------------------------------------
 # 3. Detect Host Panel Environment
 # -----------------------------------------------------------------------------
-PANEL_TYPE="Generic / Docker"
-if [ -n "${P_SERVER_UUID:-}" ] || [ -d "/home/container" ]; then
+PANEL_TYPE="Docker / Standalone"
+if [ -n "${P_SERVER_UUID:-}" ] || [ -d "/home/container" -a -f "/entrypoint.sh" ]; then
     PANEL_TYPE="Pterodactyl / Pelican"
 elif [ -n "${FEATHER_PORT:-}" ] || [ -n "${FEATHER_SERVER_ID:-}" ]; then
     PANEL_TYPE="Feather Panel"
-elif [ -n "${PUFFER_PORT:-}" ] || [ -d "/server" ]; then
+elif [ -n "${PUFFER_PORT:-}" ] || [ -d "/server" -a "${ACTIVE_WORK_DIR}" = "/server" ]; then
     PANEL_TYPE="PufferPanel"
 elif [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
     PANEL_TYPE="Kubernetes"
@@ -78,7 +84,7 @@ fi
 # -----------------------------------------------------------------------------
 # 4. Persisted Settings (.multi-prog.conf)
 # -----------------------------------------------------------------------------
-CONF_FILE="${WORK_DIR}/.multi-prog.conf"
+CONF_FILE="${ACTIVE_WORK_DIR}/.multi-prog.conf"
 
 read_conf() {
     [ -f "${CONF_FILE}" ] || return 1
@@ -115,19 +121,19 @@ unset _key
 # -----------------------------------------------------------------------------
 # 5. System PATH Configuration
 # -----------------------------------------------------------------------------
-export PATH="${WORK_DIR}/.local/bin:${WORK_DIR}/bin:${WORK_DIR}/node_modules/.bin:${PATH}"
+export PATH="${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${PATH}"
 export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:${PATH}"
-export PATH="/root/.cargo/bin:/opt/cargo/bin:${WORK_DIR}/.cargo/bin:${PATH}"
-export PATH="/opt/go/bin:${WORK_DIR}/go/bin:${PATH}"
-export PATH="/opt/dotnet:${WORK_DIR}/.dotnet:${PATH}"
+export PATH="/root/.cargo/bin:/opt/cargo/bin:${ACTIVE_WORK_DIR}/.cargo/bin:${PATH}"
+export PATH="/opt/go/bin:${ACTIVE_WORK_DIR}/go/bin:${PATH}"
+export PATH="/opt/dotnet:${ACTIVE_WORK_DIR}/.dotnet:${PATH}"
 
 for _dir in /opt/runtimes/node-*/bin /opt/runtimes/java-*/bin; do
     [ -d "${_dir}" ] && export PATH="${_dir}:${PATH}"
 done
 unset _dir
 
-export GOPATH="${GOPATH:-${WORK_DIR}/go}"
-export CARGO_HOME="${CARGO_HOME:-${WORK_DIR}/.cargo}"
+export GOPATH="${GOPATH:-${ACTIVE_WORK_DIR}/go}"
+export CARGO_HOME="${CARGO_HOME:-${ACTIVE_WORK_DIR}/.cargo}"
 export RUSTUP_HOME="${RUSTUP_HOME:-/opt/rustup}"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export PYTHONUNBUFFERED=1
@@ -239,7 +245,7 @@ EOF
     printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_BLUE}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Host Platform" "${PANEL_TYPE}"
     printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_MAGENTA}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Auto Memory Tune" "${AUTO_TUNE_INFO}"
     printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_GREEN}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Assigned Port" "${ACTIVE_PORT}"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_DIM}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Working Dir" "${WORK_DIR}"
+    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_DIM}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Working Dir" "${ACTIVE_WORK_DIR}"
     printf " ${C_DIM}└──────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 }
 
@@ -247,6 +253,18 @@ print_banner
 
 # --- Execute STARTUP Command ---
 STARTUP_CMD="${STARTUP:-bash run.sh}"
+
+ENTRYPOINT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "/usr/local/bin")"
+
+# If startup command refers to run.sh but run.sh is not in current working dir, resolve to system/entrypoint path
+if [ ! -f "run.sh" ]; then
+    if [ -f "${ENTRYPOINT_DIR}/run.sh" ]; then
+        STARTUP_CMD=$(echo "${STARTUP_CMD}" | sed -E "s|\\brun\\.sh\\b|\"${ENTRYPOINT_DIR}/run.sh\"|g")
+    elif [ -f "/usr/local/bin/run.sh" ]; then
+        STARTUP_CMD=$(echo "${STARTUP_CMD}" | sed -E 's/\brun\.sh\b/\/usr\/local\/bin\/run\.sh/g')
+    fi
+fi
+
 MODIFIED_STARTUP=$(echo -e "${STARTUP_CMD}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
 log "Executing startup command: ${MODIFIED_STARTUP}"

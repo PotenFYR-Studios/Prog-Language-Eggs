@@ -31,9 +31,11 @@ warn() { printf "${C_YELLOW}${C_BOLD}[run][warn]${C_RESET} %s\n" "$*"; }
 fail() { printf "${C_RED}${C_BOLD}[run][ERROR]${C_RESET} %s\n" "$*"; exit 1; }
 
 # Determine active working directory across panels
-WORK_DIR="${WORK_DIR:-/home/container}"
+WORK_DIR="${WORK_DIR:-${PWD}}"
 if [ ! -d "${WORK_DIR}" ]; then
-    if [ -d "/server" ]; then
+    if [ -d "/home/container" ]; then
+        WORK_DIR="/home/container"
+    elif [ -d "/server" ]; then
         WORK_DIR="/server"
     elif [ -d "/app" ]; then
         WORK_DIR="/app"
@@ -42,7 +44,7 @@ if [ ! -d "${WORK_DIR}" ]; then
     fi
 fi
 
-cd "${WORK_DIR}" || fail "Cannot enter directory: ${WORK_DIR}"
+cd "${WORK_DIR}" 2>/dev/null || fail "Cannot enter directory: ${WORK_DIR}"
 
 CONF_FILE="${WORK_DIR}/.multi-prog.conf"
 
@@ -51,7 +53,7 @@ save_conf() {
     grep -v "^${key}=" "${CONF_FILE}" 2>/dev/null > "${CONF_FILE}.tmp" || true
     printf '%s=%s\n' "${key}" "${val}" >> "${CONF_FILE}.tmp"
     mv "${CONF_FILE}.tmp" "${CONF_FILE}"
-    chmod 600 "${CONF_FILE}"
+    chmod 600 "${CONF_FILE}" 2>/dev/null || true
 }
 
 # --- Variables with defaults ---
@@ -73,7 +75,7 @@ GIT_REPO="${GIT_REPO:-}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_AUTH_TOKEN="${GIT_AUTH_TOKEN:-}"
 STARTER_TEMPLATE="${STARTER_TEMPLATE:-}"
-SERVER_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-8080}}}}}"
+SERVER_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-8080}}}}"
 DEBUG="${DEBUG:-0}"
 
 [ "${DEBUG}" = "1" ] && set -x
@@ -107,10 +109,9 @@ fi
 # -----------------------------------------------------------------------------
 # 2. Interactive Setup Wizard (Interactive TTY vs Non-Interactive)
 # -----------------------------------------------------------------------------
-FILE_COUNT=$(find . -maxdepth 1 -not -name '.*' | wc -l)
+FILE_COUNT=$(find . -maxdepth 1 -not -name '.*' -not -name 'run.sh' -not -name 'entrypoint.sh' -not -name 'install.sh' -not -name 'install-runtime.sh' 2>/dev/null | wc -l)
 
 if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ "${LANGUAGE}" = "auto" ]; then
-    # Check if standard input is an interactive terminal
     if [ -t 0 ] || [ -e /dev/tty ]; then
         printf "\n${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
         printf "${C_CYAN}${C_BOLD}  Empty workspace detected! Choose a language to scaffold a starter project:${C_RESET}\n"
@@ -129,7 +130,7 @@ if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ "${LANGUAGE}" 
         printf "  ${C_BOLD}12)${C_RESET} Static HTML / React / Frontend Website\n"
         printf "\n"
 
-        read -r -t 30 -p "$(echo -e "${C_YELLOW}${C_BOLD}Select choice [1-12] (Default 1): ${C_RESET}")" CHOICE < /dev/tty || CHOICE="1"
+        read -r -t 15 -p "$(echo -e "${C_YELLOW}${C_BOLD}Select choice [1-12] (Default 1): ${C_RESET}")" CHOICE 2>/dev/null || CHOICE="1"
         CHOICE="${CHOICE:-1}"
     else
         log "Non-interactive environment detected (Feather / PufferPanel / Daemon). Defaulting to Node.js starter."
@@ -454,8 +455,8 @@ run_procfile() {
 
     handle_supervisor_signal() {
         log "Stopping all supervised processes..."
-        for pid in "${pids[@]}"; do
-            kill -TERM "${pid}" 2>/dev/null || true
+        for pid in "${pids[@]:-}"; do
+            [ -n "${pid}" ] && kill -TERM "${pid}" 2>/dev/null || true
         done
         wait 2>/dev/null || true
         ok "All supervised processes stopped cleanly"
@@ -483,7 +484,9 @@ run_procfile() {
         names+=("${name}")
     done < "${procfile}"
 
-    wait "${pids[@]}" 2>/dev/null
+    if [ ${#pids[@]} -gt 0 ]; then
+        wait "${pids[@]}" 2>/dev/null || true
+    fi
     exit 0
 }
 
@@ -563,9 +566,14 @@ detect_language() {
     if ls *.js 1>/dev/null 2>&1; then
         echo "nodejs"; return
     fi
-    if ls *.sh 1>/dev/null 2>&1; then
-        echo "bash"; return
-    fi
+
+    # User shell scripts (skip system egg runner scripts)
+    for sh_file in $(ls *.sh 2>/dev/null || true); do
+        case "${sh_file}" in
+            entrypoint.sh|run.sh|install.sh|install-runtime.sh) ;;
+            *) echo "bash"; return ;;
+        esac
+    done
 
     echo "nodejs"
 }
@@ -578,7 +586,7 @@ log "Target Language / Runtime: ${C_BOLD}${DETECTED_LANG}${C_RESET}"
 # -----------------------------------------------------------------------------
 if [ -n "${PRE_RUN_COMMAND}" ]; then
     log "Executing PRE_RUN_COMMAND: ${PRE_RUN_COMMAND}..."
-    eval "${PRE_RUN_COMMAND}"
+    eval "${PRE_RUN_COMMAND}" || warn "Pre-run command finished with non-zero status"
     ok "Pre-run command finished"
 fi
 
@@ -592,16 +600,16 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
             if [ -f "package.json" ]; then
                 if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
                     log "Installing via pnpm..."
-                    pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+                    pnpm install --frozen-lockfile 2>/dev/null || pnpm install || true
                 elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
                     log "Installing via yarn..."
-                    yarn install --frozen-lockfile 2>/dev/null || yarn install
+                    yarn install --frozen-lockfile 2>/dev/null || yarn install || true
                 elif [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
                     log "Installing via bun..."
-                    bun install
+                    bun install || true
                 else
                     log "Installing via npm..."
-                    npm install --no-audit --no-fund
+                    npm install --no-audit --no-fund 2>/dev/null || true
                 fi
             fi
             ;;
@@ -609,20 +617,20 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
         typescript|ts)
             if [ -f "package.json" ]; then
                 if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
-                    pnpm install
+                    pnpm install || true
                 elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
-                    yarn install
+                    yarn install || true
                 elif [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
-                    bun install
+                    bun install || true
                 else
-                    npm install --no-audit --no-fund
+                    npm install --no-audit --no-fund 2>/dev/null || true
                 fi
             fi
             ;;
 
         bun)
             if [ -f "package.json" ]; then
-                bun install
+                bun install || true
             fi
             ;;
 
@@ -630,14 +638,14 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
             if [ -f "requirements.txt" ]; then
                 log "Installing Python packages from requirements.txt..."
                 if command -v uv >/dev/null 2>&1; then
-                    uv pip install -r requirements.txt --system 2>/dev/null || pip3 install -r requirements.txt
+                    uv pip install -r requirements.txt --system 2>/dev/null || pip3 install -r requirements.txt || true
                 else
-                    pip3 install -r requirements.txt --no-warn-script-location 2>/dev/null || pip install -r requirements.txt
+                    pip3 install -r requirements.txt --no-warn-script-location 2>/dev/null || pip install -r requirements.txt || true
                 fi
             elif [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
-                poetry install --no-interaction
+                poetry install --no-interaction 2>/dev/null || true
             elif [ -f "Pipfile" ] && command -v pipenv >/dev/null 2>&1; then
-                pipenv install --deploy 2>/dev/null || pipenv install
+                pipenv install --deploy 2>/dev/null || pipenv install || true
             fi
             ;;
 
@@ -655,19 +663,19 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
 
         php)
             if [ -f "composer.json" ] && command -v composer >/dev/null 2>&1; then
-                composer install --no-interaction --prefer-dist --optimize-autoloader || composer install
+                composer install --no-interaction --prefer-dist --optimize-autoloader 2>/dev/null || composer install || true
             fi
             ;;
 
         ruby)
             if [ -f "Gemfile" ] && command -v bundle >/dev/null 2>&1; then
-                bundle install || true
+                bundle install 2>/dev/null || true
             fi
             ;;
 
         dotnet)
             if ls *.csproj 1>/dev/null 2>&1 || ls *.sln 1>/dev/null 2>&1; then
-                dotnet restore || true
+                dotnet restore 2>/dev/null || true
             fi
             ;;
     esac
@@ -751,13 +759,75 @@ resolve_main_file() {
             done
             echo "index.html"
             ;;
+        bash|sh)
+            for f in start.sh run.sh main.sh server.sh app.sh; do
+                [ -f "$f" ] && echo "$f" && return
+            done
+            local sh_candidate
+            sh_candidate=$(ls *.sh 2>/dev/null | grep -vE '^(entrypoint|run|install|install-runtime)\.sh$' | head -n1 || true)
+            [ -n "${sh_candidate}" ] && echo "${sh_candidate}" && return
+            echo "start.sh"
+            ;;
         *)
-            echo "main"
+            echo "index.js"
             ;;
     esac
 }
 
 RESOLVED_MAIN=$(resolve_main_file)
+
+# Ensure fallback entrypoint exists so initial container run does not crash
+if [ ! -f "${RESOLVED_MAIN}" ] && [ "${DETECTED_LANG}" != "static" ] && [ -z "${CUSTOM_COMMAND}" ]; then
+    mkdir -p "$(dirname "${RESOLVED_MAIN}")" 2>/dev/null || true
+    case "${DETECTED_LANG}" in
+        nodejs|javascript|js)
+            cat << 'EOF' > "${RESOLVED_MAIN}"
+const http = require('http');
+const port = process.env.SERVER_PORT || process.env.PORT || 8080;
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'online',
+    message: 'Hello from PotenFYR Universal Programming Language Eggs!',
+    runtime: `Node.js ${process.version}`,
+    timestamp: new Date().toISOString()
+  }, null, 2));
+});
+server.listen(port, '0.0.0.0', () => {
+  console.log(`[PotenFYR] Node.js server listening on port ${port}`);
+});
+EOF
+            ok "Initialized entrypoint: ${RESOLVED_MAIN}"
+            ;;
+
+        python|py)
+            cat << 'EOF' > "${RESOLVED_MAIN}"
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+from datetime import datetime
+
+PORT = int(os.environ.get("SERVER_PORT", os.environ.get("PORT", 8080)))
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "online",
+            "message": "Hello from PotenFYR Python Egg!",
+            "runtime": f"Python {os.sys.version.split()[0]}",
+            "timestamp": datetime.utcnow().isoformat()
+        }, indent=2).encode())
+
+print(f"[PotenFYR] Python HTTP server listening on port {PORT}")
+HTTPServer(('0.0.0.0', PORT), Handler).serve_forever()
+EOF
+            ok "Initialized entrypoint: ${RESOLVED_MAIN}"
+            ;;
+    esac
+fi
 
 construct_run_cmd() {
     if [ -n "${CUSTOM_COMMAND}" ]; then
@@ -1044,7 +1114,11 @@ construct_run_cmd() {
             ;;
 
         bash|sh)
-            echo "bash ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+            if [ -n "${RESOLVED_MAIN}" ] && [ -f "${RESOLVED_MAIN}" ]; then
+                echo "bash ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+            else
+                echo "node index.js ${EXTRA_ARGS}"
+            fi
             ;;
 
         powershell|pwsh)
