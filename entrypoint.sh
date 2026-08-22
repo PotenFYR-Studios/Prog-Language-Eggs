@@ -297,30 +297,42 @@ fi
 # -----------------------------------------------------------------------------
 # 10. Execute Startup Command
 # -----------------------------------------------------------------------------
-RAW_STARTUP="${STARTUP:-bash run.sh}"
+# -----------------------------------------------------------------------------
+# 10. Execute Startup Command & Clean User Workspace
+# -----------------------------------------------------------------------------
+# Clean up any leftover launcher script files so user directory only contains project files
+if [ -f "./run.sh" ] && grep -q "PotenFYR Studios" "./run.sh" 2>/dev/null; then
+    rm -f "./run.sh" 2>/dev/null || true
+fi
+if [ -f "./install-runtime.sh" ] && grep -q "PotenFYR Studios" "./install-runtime.sh" 2>/dev/null; then
+    rm -f "./install-runtime.sh" 2>/dev/null || true
+fi
+
+RAW_STARTUP="${STARTUP:-bash /usr/local/bin/run.sh}"
 
 # If startup command is just /entrypoint.sh or empty, default to run.sh
 if [ "${RAW_STARTUP}" = "/entrypoint.sh" ] || [ "${RAW_STARTUP}" = "/bin/bash /entrypoint.sh" ] || [ -z "${RAW_STARTUP}" ]; then
-    RAW_STARTUP="bash run.sh"
+    RAW_STARTUP="bash /usr/local/bin/run.sh"
 fi
 
 # Replace Pterodactyl variable interpolation {{VAR}} with ${VAR}
 MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
-# If startup refers to run.sh but run.sh is not in current folder, fallback or download
+# If startup refers to run.sh, point to system image run.sh
+LAUNCHER_SCRIPT="/usr/local/bin/run.sh"
+[ ! -f "${LAUNCHER_SCRIPT}" ] && [ -f "/run.sh" ] && LAUNCHER_SCRIPT="/run.sh"
+
 case "${MODIFIED_STARTUP}" in
     *run.sh*)
-        if [ ! -f "run.sh" ]; then
-            if [ -f "/usr/local/bin/run.sh" ]; then
-                MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/usr\/local\/bin\/run\.sh/g')
-            elif [ -f "/run.sh" ]; then
-                MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/run\.sh/g')
-            else
-                log "Downloading latest launcher scripts..."
-                curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/run.sh -o run.sh 2>/dev/null || true
-                curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o install-runtime.sh 2>/dev/null || true
-                chmod +x run.sh install-runtime.sh 2>/dev/null || true
+        if [ -f "${LAUNCHER_SCRIPT}" ]; then
+            MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/'"$(echo "${LAUNCHER_SCRIPT}" | sed 's/\//\\\//g')"'/'g)
+        else
+            mkdir -p /tmp/potenfyr 2>/dev/null || true
+            if [ ! -f "/tmp/potenfyr/run.sh" ]; then
+                curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/run.sh -o /tmp/potenfyr/run.sh 2>/dev/null || true
+                chmod +x /tmp/potenfyr/run.sh 2>/dev/null || true
             fi
+            MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/tmp\/potenfyr\/run\.sh/g')
         fi
         ;;
 esac

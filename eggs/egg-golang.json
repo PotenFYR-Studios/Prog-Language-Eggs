@@ -15,7 +15,7 @@
         "Universal Runtime": "ghcr.io/potenfyr-studios/prog-language-eggs:latest"
     },
     "file_denylist": [],
-    "startup": "bash run.sh",
+    "startup": "bash /usr/local/bin/run.sh",
     "config": {
         "files": "{\".env\":{\"parser\":\"file\",\"find\":{\"PORT=\":\"PORT={{server.build.default.port}}\",\"SERVER_PORT=\":\"SERVER_PORT={{server.build.default.port}}\"}}}",
         "startup": "{\"done\":[\"listening on\",\"started on\",\"Server started\",\"Listening on\",\"Ready on\",\"running at\"],\"user_interaction\":[],\"strip_ansi\":false}",
@@ -24,7 +24,7 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/ash\n# PotenFYR Studios Universal Programming Language Installer\napk add --no-cache curl git tar jq unzip bash ca-certificates\nINSTALL_DIR=\"/mnt/server\"\n[ ! -d \"${INSTALL_DIR}\" ] && INSTALL_DIR=\"${PWD}\"\ncd \"${INSTALL_DIR}\" || exit 1\necho \"[potenfyr] Initializing server workspace...\"\ncurl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/run.sh -o run.sh 2>/dev/null || true\ncurl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o install-runtime.sh 2>/dev/null || true\nchmod +x run.sh install-runtime.sh 2>/dev/null || true\nif [ -n \"${GIT_REPO:-}\" ]; then\n    echo \"[potenfyr] Cloning repository: ${GIT_REPO}...\"\n    AUTH_URL=\"${GIT_REPO}\"\n    [ -n \"${GIT_AUTH_TOKEN:-}\" ] && [[ \"${GIT_REPO}\" =~ ^https:// ]] && AUTH_URL=\"https://${GIT_AUTH_TOKEN}@${GIT_REPO#https://}\"\n    git clone --branch \"${GIT_BRANCH:-main}\" --depth 1 \"${AUTH_URL}\" . || git clone --depth 1 \"${AUTH_URL}\" . || true\nfi\nchown -R 988:988 \"${INSTALL_DIR}\" 2>/dev/null || chown -R 1000:1000 \"${INSTALL_DIR}\" 2>/dev/null || chmod -R 777 \"${INSTALL_DIR}\" 2>/dev/null || true\necho \"[potenfyr][✓] Installation completed successfully!\"",
+            "script": "#!/bin/ash\n# PotenFYR Studios Universal Programming Language Installer\napk add --no-cache curl git ca-certificates\nINSTALL_DIR=\"/mnt/server\"\n[ ! -d \"${INSTALL_DIR}\" ] && INSTALL_DIR=\"${PWD}\"\ncd \"${INSTALL_DIR}\" || exit 1\nif [ -n \"${GIT_REPO:-}\" ]; then\n    echo \"[potenfyr] Cloning repository: ${GIT_REPO}...\"\n    AUTH_URL=\"${GIT_REPO}\"\n    [ -n \"${GIT_AUTH_TOKEN:-}\" ] && [[ \"${GIT_REPO}\" =~ ^https:// ]] && AUTH_URL=\"https://${GIT_AUTH_TOKEN}@${GIT_REPO#https://}\"\n    git clone --branch \"${GIT_BRANCH:-main}\" --depth 1 \"${AUTH_URL}\" . || git clone --depth 1 \"${AUTH_URL}\" . || true\nfi\nchown -R 988:988 \"${INSTALL_DIR}\" 2>/dev/null || chown -R 1000:1000 \"${INSTALL_DIR}\" 2>/dev/null || chmod -R 777 \"${INSTALL_DIR}\" 2>/dev/null || true\necho \"[potenfyr][✓] Installation complete. Workspace ready.\"",
             "container": "ghcr.io/pterodactyl/installers:alpine",
             "entrypoint": "ash"
         }
