@@ -406,8 +406,12 @@ case "${LANG_LOWER}" in
                 chmod +x "${DEST_DIR}/custom-binary"
                 ;;
         esac
+        chmod -R +x "${DEST_DIR}" 2>/dev/null || true
+        for bin in "${DEST_DIR}"/*; do
+            [ -f "${bin}" ] && [ -x "${bin}" ] && ln -sf "${bin}" "/usr/local/bin/$(basename "${bin}")" 2>/dev/null || true
+        done
         rm -f "${TMP_ARCHIVE}"
-        ok "Custom runtime installed to ${DEST_DIR}"
+        ok "Custom runtime installed to ${DEST_DIR} and linked to PATH"
         ;;
 
     *)

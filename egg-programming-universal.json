@@ -5,7 +5,7 @@
         "update_url": null
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
-    "name": "Universal Programming Languages & Toolchains",
+    "name": "Multi-Languages",
     "author": "support@potenfyr.in",
     "description": "One egg for 50+ programming languages with package managers, auto-detection, memory tuning, and Dev Watch mode.",
     "features": [
@@ -256,7 +256,27 @@
             "default_value": "{{server.build.default.port}}",
             "user_viewable": true,
             "user_editable": false,
-            "rules": "required|numeric",
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Extra Runtimes",
+            "description": "Comma-separated extra toolchains to enable (e.g. 'python,java,go' or 'none').",
+            "env_variable": "EXTRA_RUNTIMES",
+            "default_value": "auto",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Skip Runtimes",
+            "description": "Comma-separated runtimes to skip/disable (e.g. 'python,java' or 'none').",
+            "env_variable": "SKIP_RUNTIMES",
+            "default_value": "none",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
             "field_type": "text"
         },
         {

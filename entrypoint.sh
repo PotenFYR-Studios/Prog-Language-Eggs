@@ -84,8 +84,8 @@ fi
 # 4. Universal Toolchain & PATH Configuration
 # -----------------------------------------------------------------------------
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
-export PATH="${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${PATH}"
-export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:${PATH}"
+export PATH="${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${ACTIVE_WORK_DIR}/custom/bin:${PATH}"
+export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:/opt/runtimes/custom:/opt/runtimes/custom/bin:${PATH}"
 export PATH="/root/.cargo/bin:/opt/cargo/bin:${ACTIVE_WORK_DIR}/.cargo/bin:${PATH}"
 export PATH="/opt/go/bin:${ACTIVE_WORK_DIR}/go/bin:${PATH}"
 export PATH="/opt/dotnet:${ACTIVE_WORK_DIR}/.dotnet:${PATH}"
@@ -129,9 +129,10 @@ apply_conf() {
 
 for _key in LANGUAGE RUNNER MAIN_FILE PACKAGE_MANAGER BUILD_COMMAND \
             AUTO_INSTALL_DEPS AUTO_RESTART GIT_REPO GIT_BRANCH \
-            GIT_AUTH_TOKEN CUSTOM_COMMAND EXTRA_ARGS DEBUG RUNTIME_VERSION \
+            GIT_AUTH_TOKEN CUSTOM_COMMAND CUSTOM_RUNTIME_URL EXTRA_ARGS DEBUG RUNTIME_VERSION \
             STARTER_TEMPLATE SERVER_PORT MEMORY_AUTO_TUNE DEV_MODE \
-            PRE_RUN_COMMAND POST_RUN_COMMAND CLEAN_BUILD_CACHE AUTO_ENV_INJECT; do
+            PRE_RUN_COMMAND POST_RUN_COMMAND CLEAN_BUILD_CACHE AUTO_ENV_INJECT \
+            NODE_GYP_SUPPORT EXTRA_RUNTIMES SKIP_RUNTIMES SKIP_PYTHON; do
     apply_conf "${_key}"
 done
 unset _key
@@ -216,15 +217,37 @@ EOF
 fi
 
 # -----------------------------------------------------------------------------
-# 8. Dynamic Toolchain Auto-Installer (On-demand)
+# 8. Dynamic Toolchain & Auxiliary Runtime Orchestrator (On-Demand)
 # -----------------------------------------------------------------------------
 REQ_LANG="${LANGUAGE:-auto}"
 REQ_VER="${RUNTIME_VERSION:-latest}"
 
-if [ "${REQ_LANG}" != "auto" ] && [ "${REQ_LANG}" != "" ]; then
+if [ "${REQ_LANG}" != "auto" ] && [ "${REQ_LANG}" != "" ] && [ "${REQ_LANG}" != "custom" ]; then
     if [ -f /usr/local/bin/install-runtime.sh ]; then
         /usr/local/bin/install-runtime.sh "${REQ_LANG}" "${REQ_VER}" /opt/runtimes >/dev/null 2>&1 || true
     fi
+fi
+
+if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
+    if [ -f /usr/local/bin/install-runtime.sh ]; then
+        /usr/local/bin/install-runtime.sh "custom" "${CUSTOM_RUNTIME_URL}" /opt/runtimes >/dev/null 2>&1 || true
+    fi
+fi
+
+if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXTRA_RUNTIMES}" != "auto" ]; then
+    IFS=',' read -ra ADDR <<< "${EXTRA_RUNTIMES}"
+    for extra_r in "${ADDR[@]}"; do
+        extra_r=$(echo "${extra_r}" | tr -d '[:space:]')
+        [ -z "${extra_r}" ] && continue
+        
+        if [[ ",${SKIP_RUNTIMES:-}," == *",${extra_r},"* ]] || [ "${SKIP_PYTHON:-0}" = "1" -a "${extra_r}" = "python" ]; then
+            continue
+        fi
+        
+        if [ -f /usr/local/bin/install-runtime.sh ]; then
+            /usr/local/bin/install-runtime.sh "${extra_r}" "latest" /opt/runtimes >/dev/null 2>&1 || true
+        fi
+    done
 fi
 
 # -----------------------------------------------------------------------------

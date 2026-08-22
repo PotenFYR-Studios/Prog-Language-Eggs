@@ -5,7 +5,7 @@
         "update_url": null
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
-    "name": "Node.js, Bun & TypeScript",
+    "name": "Multi-Languages (Node.js, Bun & TypeScript)",
     "author": "support@potenfyr.in",
     "description": "High-performance JavaScript and TypeScript runtime supporting Node.js, Bun, Deno, ts-node, and tsx.",
     "features": ["pid_limit"],
@@ -89,13 +89,33 @@
             "field_type": "text"
         },
         {
+            "name": "Node-gyp & Python Build Tools",
+            "description": "Enable Python 3 & build tools for native node-gyp compilation (1=Enabled, 0=Disabled).",
+            "env_variable": "NODE_GYP_SUPPORT",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Extra Runtimes",
+            "description": "Comma-separated extra toolchains to load (e.g. 'java,python' or 'none').",
+            "env_variable": "EXTRA_RUNTIMES",
+            "default_value": "none",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
+            "field_type": "text"
+        },
+        {
             "name": "Assigned Port",
             "description": "Primary network port allocated by the panel.",
             "env_variable": "SERVER_PORT",
             "default_value": "{{server.build.default.port}}",
             "user_viewable": true,
             "user_editable": false,
-            "rules": "required|numeric",
+            "rules": "nullable|string",
             "field_type": "text"
         }
     ]
