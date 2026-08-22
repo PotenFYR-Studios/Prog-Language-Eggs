@@ -235,12 +235,12 @@ print_card_row() {
 
 print_banner() {
     printf "\n"
-    printf "${C_CYAN}${C_BOLD}   __  ___      ____  _       __                              ${C_RESET}\n"
-    printf "${C_CYAN}${C_BOLD}  /  |/  /_  __/ / /_(_)     / /   ____ _____  ____ _         ${C_RESET}\n"
-    printf "${C_BLUE}${C_BOLD} / /|_/ / / / / / __/ /_____/ /   / __ \`/ __ \/ __ \`/         ${C_RESET}\n"
-    printf "${C_BLUE}${C_BOLD}/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          ${C_RESET}\n"
-    printf "${C_MAGENTA}${C_BOLD}/_/  /_/\\__,_/_/\\__/_/     /_____/\\__,_/_/ /_/\\__, /          ${C_RESET}\n"
-    printf "${C_MAGENTA}${C_BOLD}                                             /____/           ${C_RESET}\n"
+    printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "   __  ___      ____  _       __                              "
+    printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "  /  |/  /_  __/ / /_(_)     / /   ____ _____  ____ _         "
+    printf "${C_BLUE}${C_BOLD}%s${C_RESET}\n" " / /|_/ / / / / / __/ /_____/ /   / __ \`/ __ \/ __ \`/         "
+    printf "${C_BLUE}${C_BOLD}%s${C_RESET}\n" "/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          "
+    printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "/_/  /_/\\__,_/_/\\__/_/     /_____/\\__,_/_/ /_/\\__, /          "
+    printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "                                             /____/           "
     printf "${C_YELLOW}${C_BOLD}  » Universal Multi-Language Runtime Environment${C_RESET}\n"
     printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
 
@@ -266,6 +266,17 @@ REQ_VER="${RUNTIME_VERSION:-latest}"
 if [ "${REQ_LANG}" != "auto" ] && [ "${REQ_LANG}" != "" ] && [ "${REQ_LANG}" != "custom" ]; then
     if [ -f /usr/local/bin/install-runtime.sh ]; then
         /usr/local/bin/install-runtime.sh "${REQ_LANG}" "${REQ_VER}" /opt/runtimes || true
+    fi
+fi
+
+# Ensure specific engine/runner toolchain is provisioned if chosen (e.g. bun, deno)
+if [ "${RUNNER:-auto}" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
+    if [ -f /usr/local/bin/install-runtime.sh ]; then
+        /usr/local/bin/install-runtime.sh "bun" "latest" /opt/runtimes || true
+    fi
+elif [ "${RUNNER:-auto}" = "deno" ] && ! command -v deno >/dev/null 2>&1; then
+    if [ -f /usr/local/bin/install-runtime.sh ]; then
+        /usr/local/bin/install-runtime.sh "deno" "latest" /opt/runtimes || true
     fi
 fi
 

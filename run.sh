@@ -231,7 +231,7 @@ Bun.serve({
 EOF
             LANGUAGE="bun"
             MAIN_FILE="index.ts"
-            RUNNER="bun"
+            [ "${RUNNER}" = "auto" ] || [ -z "${RUNNER}" ] && RUNNER="bun"
             ;;
 
         typescript|ts)
@@ -289,7 +289,7 @@ server.listen(Number(port), '0.0.0.0', () => {
 EOF
             LANGUAGE="typescript"
             MAIN_FILE="src/index.ts"
-            RUNNER="ts-node"
+            [ "${RUNNER}" = "auto" ] || [ -z "${RUNNER}" ] && RUNNER="tsx"
             ;;
 
         python|py)
@@ -587,11 +587,45 @@ fi
 # Ensure runtime toolchain is present in container, install locally if absent
 ensure_local_runtime() {
     local lang="${DETECTED_LANG}"
-    local needed=0
+    local runner="${RUNNER:-auto}"
     
+    # Check runner requirements (e.g. user selected bun or deno engine)
+    if [ "${runner}" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
+        log "Runner 'bun' selected but not found in PATH. Installing Bun locally..."
+        local inst_script=""
+        [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
+        [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
+        if [ -n "${inst_script}" ]; then
+            /bin/sh "${inst_script}" "bun" "latest" "${WORK_DIR}/.runtimes" || true
+            export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/bun/bin:/opt/runtimes/bun/bin:${PATH}"
+        fi
+    elif [ "${runner}" = "deno" ] && ! command -v deno >/dev/null 2>&1; then
+        log "Runner 'deno' selected but not found in PATH. Installing Deno locally..."
+        local inst_script=""
+        [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
+        [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
+        if [ -n "${inst_script}" ]; then
+            /bin/sh "${inst_script}" "deno" "latest" "${WORK_DIR}/.runtimes" || true
+            export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/deno/bin:/opt/runtimes/deno/bin:${PATH}"
+        fi
+    fi
+
+    # Check language requirements
+    local needed=0
     case "${lang}" in
-        nodejs|javascript|js|typescript|ts)
+        nodejs|javascript|js)
             command -v node >/dev/null 2>&1 || needed=1
+            ;;
+        typescript|ts)
+            if [ "${runner}" = "bun" ]; then
+                command -v bun >/dev/null 2>&1 || needed=1
+                lang="bun"
+            elif [ "${runner}" = "deno" ]; then
+                command -v deno >/dev/null 2>&1 || needed=1
+                lang="deno"
+            else
+                command -v node >/dev/null 2>&1 || needed=1
+            fi
             ;;
         bun)
             command -v bun >/dev/null 2>&1 || needed=1
@@ -635,7 +669,7 @@ ensure_local_runtime() {
         
         if [ -f "${inst_script}" ]; then
             /bin/sh "${inst_script}" "${lang}" "${RUNTIME_VERSION:-latest}" "${WORK_DIR}/.runtimes" || true
-            export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/${lang}/bin:${PATH}"
+            export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/${lang}/bin:/opt/runtimes/${lang}/bin:${PATH}"
         fi
     fi
 }
@@ -1053,25 +1087,43 @@ construct_run_cmd() {
             ;;
 
         typescript|ts)
-            if [ "${RUNNER}" = "bun" ] && command -v bun >/dev/null 2>&1; then
+            if [ "${RUNNER}" = "bun" ]; then
                 local bun_watch=""
                 [ "${DEV_MODE}" = "1" ] && bun_watch="--watch"
                 echo "bun run ${bun_watch} ${RESOLVED_MAIN} ${EXTRA_ARGS}"
-            elif [ "${RUNNER}" = "tsx" ] && command -v tsx >/dev/null 2>&1; then
+            elif [ "${RUNNER}" = "deno" ]; then
+                local deno_watch=""
+                [ "${DEV_MODE}" = "1" ] && deno_watch="--watch"
+                echo "deno run -A ${deno_watch} ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+            elif [ "${RUNNER}" = "tsx" ]; then
                 local tsx_watch=""
                 [ "${DEV_MODE}" = "1" ] && tsx_watch="watch"
-                echo "tsx ${tsx_watch} ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+                if command -v tsx >/dev/null 2>&1; then
+                    echo "tsx ${tsx_watch} ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+                else
+                    echo "npx -y tsx ${tsx_watch} ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+                fi
+            elif [ "${RUNNER}" = "ts-node" ]; then
+                if command -v ts-node >/dev/null 2>&1; then
+                    echo "ts-node ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+                else
+                    echo "npx -y ts-node ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+                fi
             elif [ "${RUNNER}" = "tsc" ]; then
                 echo "tsc && node dist/index.js ${EXTRA_ARGS}"
             else
-                if command -v tsx >/dev/null 2>&1; then
+                if command -v bun >/dev/null 2>&1; then
+                    local bun_watch=""
+                    [ "${DEV_MODE}" = "1" ] && bun_watch="--watch"
+                    echo "bun run ${bun_watch} ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+                elif command -v tsx >/dev/null 2>&1; then
                     local tsx_watch=""
                     [ "${DEV_MODE}" = "1" ] && tsx_watch="watch"
                     echo "tsx ${tsx_watch} ${RESOLVED_MAIN} ${EXTRA_ARGS}"
                 elif command -v ts-node >/dev/null 2>&1; then
                     echo "ts-node ${RESOLVED_MAIN} ${EXTRA_ARGS}"
                 else
-                    echo "npx -y ts-node ${RESOLVED_MAIN} ${EXTRA_ARGS}"
+                    echo "npx -y tsx ${RESOLVED_MAIN} ${EXTRA_ARGS}"
                 fi
             fi
             ;;
