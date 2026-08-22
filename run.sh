@@ -122,8 +122,11 @@ fi
 # -----------------------------------------------------------------------------
 FILE_COUNT=$(find . -mindepth 1 -maxdepth 1 -not -name '.*' -not -name 'run.sh' -not -name 'entrypoint.sh' -not -name 'install.sh' -not -name 'install-runtime.sh' 2>/dev/null | wc -l)
 
-if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ "${LANGUAGE}" = "auto" ]; then
-    if [ -t 0 ]; then
+if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ]; then
+    if [ "${LANGUAGE}" != "auto" ] && [ -n "${LANGUAGE}" ] && [ "${LANGUAGE}" != "custom" ]; then
+        STARTER_TEMPLATE="${LANGUAGE}"
+        log "Empty workspace detected with language '${LANGUAGE}'. Auto-scaffolding starter project..."
+    elif [ -t 0 ]; then
         printf "\n${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
         printf "${C_CYAN}${C_BOLD}  Empty workspace detected! Choose a language to scaffold a starter project:${C_RESET}\n"
         printf "${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
@@ -143,26 +146,26 @@ if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ "${LANGUAGE}" 
 
         read -r -t 15 -p "$(echo -e "${C_YELLOW}${C_BOLD}Select choice [1-12] (Default 1): ${C_RESET}")" CHOICE 2>/dev/null || CHOICE="1"
         CHOICE="${CHOICE:-1}"
+
+        case "${CHOICE}" in
+            1) STARTER_TEMPLATE="nodejs" ;;
+            2) STARTER_TEMPLATE="bun" ;;
+            3) STARTER_TEMPLATE="typescript" ;;
+            4) STARTER_TEMPLATE="python" ;;
+            5) STARTER_TEMPLATE="java" ;;
+            6) STARTER_TEMPLATE="golang" ;;
+            7) STARTER_TEMPLATE="rust" ;;
+            8) STARTER_TEMPLATE="c-cpp" ;;
+            9) STARTER_TEMPLATE="php" ;;
+            10) STARTER_TEMPLATE="dotnet" ;;
+            11) STARTER_TEMPLATE="ruby" ;;
+            12) STARTER_TEMPLATE="static" ;;
+            *) STARTER_TEMPLATE="nodejs" ;;
+        esac
     else
         log "Non-interactive environment detected. Defaulting to Node.js starter."
-        CHOICE="1"
+        STARTER_TEMPLATE="nodejs"
     fi
-
-    case "${CHOICE}" in
-        1) STARTER_TEMPLATE="nodejs" ;;
-        2) STARTER_TEMPLATE="bun" ;;
-        3) STARTER_TEMPLATE="typescript" ;;
-        4) STARTER_TEMPLATE="python" ;;
-        5) STARTER_TEMPLATE="java" ;;
-        6) STARTER_TEMPLATE="golang" ;;
-        7) STARTER_TEMPLATE="rust" ;;
-        8) STARTER_TEMPLATE="c-cpp" ;;
-        9) STARTER_TEMPLATE="php" ;;
-        10) STARTER_TEMPLATE="dotnet" ;;
-        11) STARTER_TEMPLATE="ruby" ;;
-        12) STARTER_TEMPLATE="static" ;;
-        *) STARTER_TEMPLATE="nodejs" ;;
-    esac
 fi
 
 # -----------------------------------------------------------------------------
@@ -459,44 +462,26 @@ run_procfile() {
     [ -f "${procfile}" ] || return 1
     
     log "Procfile detected! Launching Multi-Process Supervisor..."
-    local pids=()
-    local names=()
-    local colors=(32 33 34 35 36 31)
-    local color_idx=0
-
-    handle_supervisor_signal() {
-        log "Stopping all supervised processes..."
-        for pid in "${pids[@]}"; do
-            [ -n "${pid}" ] && kill -TERM "${pid}" 2>/dev/null || true
-        done
-        wait 2>/dev/null || true
-        ok "All supervised processes stopped cleanly"
-        exit 0
-    }
-    trap handle_supervisor_signal SIGTERM SIGINT SIGHUP
+    local pids=""
 
     while IFS=':' read -r name cmd || [ -n "$name" ]; do
-        [[ "$name" =~ ^#.*$ ]] && continue
+        case "$name" in \#*) continue ;; esac
         [ -z "$name" ] && continue
         cmd=$(echo "$cmd" | sed -e 's/^[[:space:]]*//')
         [ -z "$cmd" ] && continue
-        
-        local color="${colors[$((color_idx % ${#colors[@]}))]}"
-        color_idx=$((color_idx + 1))
         
         log "Starting process: [${name}] -> ${cmd}"
         (
             export PROCESS_NAME="${name}"
             eval "${cmd}" 2>&1 | while IFS= read -r line; do
-                printf "\033[1;%sm[%s]\033[0m %s\n" "${color}" "${name}" "${line}"
+                printf "\033[1;36m[%s]\033[0m %s\n" "${name}" "${line}"
             done
         ) &
-        pids+=($!)
-        names+=("${name}")
+        pids="${pids} $!"
     done < "${procfile}"
 
-    if [ ${#pids[@]} -gt 0 ]; then
-        wait "${pids[@]}" 2>/dev/null || true
+    if [ -n "${pids}" ]; then
+        wait ${pids} 2>/dev/null || true
     fi
     exit 0
 }
@@ -710,7 +695,7 @@ if [ -n "${BUILD_COMMAND}" ]; then
 fi
 
 if [ "${CLEAN_BUILD_CACHE}" = "1" ]; then
-    rm -rf /tmp/* /root/.cache ~/.npm/_cacache 2>/dev/null || true
+    rm -rf /tmp/.npm /tmp/.cargo /tmp/.cache /root/.cache ~/.npm/_cacache /tmp/pip* /tmp/*.tar.* /tmp/*.zip 2>/dev/null || true
 fi
 
 # -----------------------------------------------------------------------------
@@ -806,13 +791,54 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     status: 'online',
-    message: 'Hello from PotenFYR Universal Programming Language Eggs!',
+    message: 'Hello from PotenFYR Universal Multi-Languages Runtime!',
     runtime: `Node.js ${process.version}`,
     timestamp: new Date().toISOString()
   }, null, 2));
 });
 server.listen(port, '0.0.0.0', () => {
   console.log(`[PotenFYR] Node.js server listening on port ${port}`);
+});
+EOF
+            ok "Initialized entrypoint: ${RESOLVED_MAIN}"
+            ;;
+
+        typescript|ts)
+            cat << 'EOF' > "${RESOLVED_MAIN}"
+import http from 'http';
+const port = Number(process.env.SERVER_PORT || process.env.PORT || 8080);
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'online',
+    message: 'Hello from PotenFYR TypeScript Runtime!',
+    runtime: `Node.js ${process.version}`,
+    timestamp: new Date().toISOString()
+  }, null, 2));
+});
+server.listen(port, '0.0.0.0', () => {
+  console.log(`[PotenFYR] TypeScript server listening on port ${port}`);
+});
+EOF
+            ok "Initialized entrypoint: ${RESOLVED_MAIN}"
+            ;;
+
+        bun)
+            cat << 'EOF' > "${RESOLVED_MAIN}"
+const port = Number(process.env.SERVER_PORT || process.env.PORT || 8080);
+console.log(`[PotenFYR] Bun HTTP server listening on port ${port}`);
+Bun.serve({
+  port: port,
+  fetch(req) {
+    return new Response(JSON.stringify({
+      status: "online",
+      message: "Hello from PotenFYR Bun Runtime!",
+      runtime: `Bun ${Bun.version}`,
+      timestamp: new Date().toISOString()
+    }, null, 2), {
+      headers: { "Content-Type": "application/json" }
+    });
+  }
 });
 EOF
             ok "Initialized entrypoint: ${RESOLVED_MAIN}"
@@ -834,13 +860,94 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({
             "status": "online",
-            "message": "Hello from PotenFYR Python Egg!",
+            "message": "Hello from PotenFYR Python Runtime!",
             "runtime": f"Python {os.sys.version.split()[0]}",
             "timestamp": datetime.utcnow().isoformat()
         }, indent=2).encode())
 
 print(f"[PotenFYR] Python HTTP server listening on port {PORT}")
 HTTPServer(('0.0.0.0', PORT), Handler).serve_forever()
+EOF
+            ok "Initialized entrypoint: ${RESOLVED_MAIN}"
+            ;;
+
+        golang|go)
+            cat << 'EOF' > "${RESOLVED_MAIN}"
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"runtime"
+	"time"
+)
+
+func main() {
+	port := os.Getenv("SERVER_PORT")
+	if port == "" {
+		port = os.Getenv("PORT")
+	}
+	if port == "" {
+		port = "8080"
+	}
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "online",
+			"message":   "Hello from PotenFYR Go Runtime!",
+			"runtime":   runtime.Version(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	fmt.Printf("[PotenFYR] Go HTTP server listening on port %s\n", port)
+	http.ListenAndServe("0.0.0.0:"+port, nil)
+}
+EOF
+            [ -f "go.mod" ] || go mod init potenfyr-server 2>/dev/null || true
+            ok "Initialized entrypoint: ${RESOLVED_MAIN}"
+            ;;
+
+        php)
+            cat << 'EOF' > "${RESOLVED_MAIN}"
+<?php
+$port = getenv('SERVER_PORT') ?: (getenv('PORT') ?: 8080);
+header('Content-Type: application/json');
+echo json_encode([
+    'status' => 'online',
+    'message' => 'Hello from PotenFYR PHP Runtime!',
+    'runtime' => 'PHP ' . PHP_VERSION,
+    'timestamp' => gmdate('c')
+], JSON_PRETTY_PRINT);
+EOF
+            ok "Initialized entrypoint: ${RESOLVED_MAIN}"
+            ;;
+
+        ruby)
+            cat << 'EOF' > "${RESOLVED_MAIN}"
+require 'webrick'
+require 'json'
+require 'time'
+
+port = (ENV['SERVER_PORT'] || ENV['PORT'] || 8080).to_i
+server = WEBrick::HTTPServer.new(:Port => port, :BindAddress => '0.0.0.0', :Logger => WEBrick::Log.new('/dev/null'), :AccessLog => [])
+
+server.mount_proc '/' do |req, res|
+  res['Content-Type'] = 'application/json'
+  res.body = JSON.pretty_generate({
+    status: 'online',
+    message: 'Hello from PotenFYR Ruby Runtime!',
+    runtime: "Ruby #{RUBY_VERSION}",
+    timestamp: Time.now.utc.iso8601
+  })
+end
+
+trap('INT') { server.shutdown }
+puts "[PotenFYR] Ruby server listening on port #{port}"
+server.start
 EOF
             ok "Initialized entrypoint: ${RESOLVED_MAIN}"
             ;;

@@ -235,12 +235,14 @@ if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
 fi
 
 if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXTRA_RUNTIMES}" != "auto" ]; then
-    IFS=',' read -ra ADDR <<< "${EXTRA_RUNTIMES}"
-    for extra_r in "${ADDR[@]}"; do
+    OLD_IFS="${IFS}"
+    IFS=','
+    for extra_r in ${EXTRA_RUNTIMES}; do
+        IFS="${OLD_IFS}"
         extra_r=$(echo "${extra_r}" | tr -d '[:space:]')
         [ -z "${extra_r}" ] && continue
         
-        if [[ ",${SKIP_RUNTIMES:-}," == *",${extra_r},"* ]] || [ "${SKIP_PYTHON:-0}" = "1" -a "${extra_r}" = "python" ]; then
+        if [ "${SKIP_PYTHON:-0}" = "1" ] && [ "${extra_r}" = "python" ]; then
             continue
         fi
         
@@ -248,6 +250,7 @@ if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXT
             /usr/local/bin/install-runtime.sh "${extra_r}" "latest" /opt/runtimes >/dev/null 2>&1 || true
         fi
     done
+    IFS="${OLD_IFS}"
 fi
 
 # -----------------------------------------------------------------------------
