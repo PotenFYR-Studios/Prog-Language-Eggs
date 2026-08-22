@@ -864,6 +864,37 @@ if [ -n "${PRE_RUN_COMMAND}" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# 6.5. Companion Runtime Resolution (EXTRA_RUNTIMES & Complex App Support)
+# -----------------------------------------------------------------------------
+if [ -n "${EXTRA_RUNTIMES:-}" ]; then
+    log "Configuring companion runtimes (EXTRA_RUNTIMES='${EXTRA_RUNTIMES}')..."
+    IFS=',' read -ra ADDR <<< "${EXTRA_RUNTIMES}"
+    for ext in "${ADDR[@]}"; do
+        ext=$(echo "${ext}" | tr -d "[:space:]" | tr "[:upper:]" "[:lower:]")
+        [ -z "${ext}" ] && continue
+        if ! command -v "${ext}" >/dev/null 2>&1; then
+            log "Installing companion runtime '${ext}' into isolated environment..."
+            if [ -f /usr/local/bin/install-runtime.sh ]; then
+                bash /usr/local/bin/install-runtime.sh "${ext}" "latest" "${WORK_DIR}/.runtimes" || true
+            fi
+        fi
+    done
+    build_isolated_environment
+fi
+
+if [ "${NODE_GYP_SUPPORT:-1}" = "1" ] && [ -f "package.json" ]; then
+    if grep -qiE '("node-gyp"|"bindings"|"node-addon-api"|"canvas"|"sqlite3"|"bcrypt"|"sharp")' package.json 2>/dev/null; then
+        if ! command -v python3 >/dev/null 2>&1; then
+            log "Native C++/Python dependencies detected in package.json. Installing Python companion toolchain..."
+            if [ -f /usr/local/bin/install-runtime.sh ]; then
+                bash /usr/local/bin/install-runtime.sh "python" "latest" "${WORK_DIR}/.runtimes" >/dev/null 2>&1 || true
+                build_isolated_environment
+            fi
+        fi
+    fi
+fi
+
 # 7. Dependency Management & Package Installation
 # -----------------------------------------------------------------------------
 if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
