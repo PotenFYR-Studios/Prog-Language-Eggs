@@ -84,7 +84,7 @@ fi
 # 4. Universal Toolchain & PATH Configuration
 # -----------------------------------------------------------------------------
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
-export PATH="${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${ACTIVE_WORK_DIR}/custom/bin:${PATH}"
+export PATH="${ACTIVE_WORK_DIR}/.runtimes/bin:${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${ACTIVE_WORK_DIR}/custom/bin:${PATH}"
 export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:/opt/runtimes/custom:/opt/runtimes/custom/bin:${PATH}"
 export PATH="/root/.cargo/bin:/opt/cargo/bin:${ACTIVE_WORK_DIR}/.cargo/bin:${PATH}"
 export PATH="/opt/go/bin:${ACTIVE_WORK_DIR}/go/bin:${PATH}"
@@ -307,7 +307,7 @@ fi
 # Replace Pterodactyl variable interpolation {{VAR}} with ${VAR}
 MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
-# If startup refers to run.sh but run.sh is not in current folder, fallback to system run.sh
+# If startup refers to run.sh but run.sh is not in current folder, fallback or download
 case "${MODIFIED_STARTUP}" in
     *run.sh*)
         if [ ! -f "run.sh" ]; then
@@ -315,10 +315,20 @@ case "${MODIFIED_STARTUP}" in
                 MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/usr\/local\/bin\/run\.sh/g')
             elif [ -f "/run.sh" ]; then
                 MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/run\.sh/g')
+            else
+                log "Downloading latest launcher scripts..."
+                curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/run.sh -o run.sh 2>/dev/null || true
+                curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o install-runtime.sh 2>/dev/null || true
+                chmod +x run.sh install-runtime.sh 2>/dev/null || true
             fi
         fi
         ;;
 esac
+
+# Fallback to /bin/sh if bash is missing on minimal/alpine containers
+if ! command -v bash >/dev/null 2>&1; then
+    MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\bbash\b/\/bin\/sh/g')
+fi
 
 log "Starting application process via launcher..."
 printf "${C_DIM}>>> ${MODIFIED_STARTUP}${C_RESET}\n\n"

@@ -432,3 +432,16 @@ case "${LANG_LOWER}" in
         log "Language '${LANG_REQ}' relies on pre-installed system packages or custom setup."
         ;;
 esac
+
+if [ -n "${DEST_DIR:-}" ] && [ -d "${DEST_DIR}" ]; then
+    mkdir -p "${TARGET_BASE}/bin" 2>/dev/null || true
+    if [ -d "${DEST_DIR}/bin" ]; then
+        for bin in "${DEST_DIR}/bin"/*; do
+            [ -f "${bin}" ] && [ -x "${bin}" ] && ln -sf "${bin}" "${TARGET_BASE}/bin/$(basename "${bin}")" 2>/dev/null || true
+        done
+    else
+        for bin in "${DEST_DIR}"/*; do
+            [ -f "${bin}" ] && [ -x "${bin}" ] && ln -sf "${bin}" "${TARGET_BASE}/bin/$(basename "${bin}")" 2>/dev/null || true
+        done
+    fi
+fi
