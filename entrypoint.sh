@@ -318,21 +318,34 @@ fi
 # Replace Pterodactyl variable interpolation {{VAR}} with ${VAR}
 MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
-# If startup refers to run.sh, point to system image run.sh
 LAUNCHER_SCRIPT="/usr/local/bin/run.sh"
 [ ! -f "${LAUNCHER_SCRIPT}" ] && [ -f "/run.sh" ] && LAUNCHER_SCRIPT="/run.sh"
+if [ ! -f "${LAUNCHER_SCRIPT}" ]; then
+    mkdir -p /tmp/potenfyr 2>/dev/null || true
+    if [ ! -f "/tmp/potenfyr/run.sh" ]; then
+        curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/run.sh -o /tmp/potenfyr/run.sh 2>/dev/null || true
+        chmod +x /tmp/potenfyr/run.sh 2>/dev/null || true
+    fi
+    LAUNCHER_SCRIPT="/tmp/potenfyr/run.sh"
+fi
 
+# 1. Normalize any variation of run.sh invocation across old and new server configs
 case "${MODIFIED_STARTUP}" in
     *run.sh*)
-        if [ -f "${LAUNCHER_SCRIPT}" ]; then
-            MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/'"$(echo "${LAUNCHER_SCRIPT}" | sed 's/\//\\\//g')"'/'g)
-        else
-            mkdir -p /tmp/potenfyr 2>/dev/null || true
-            if [ ! -f "/tmp/potenfyr/run.sh" ]; then
-                curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/run.sh -o /tmp/potenfyr/run.sh 2>/dev/null || true
-                chmod +x /tmp/potenfyr/run.sh 2>/dev/null || true
-            fi
-            MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/tmp\/potenfyr\/run\.sh/g')
+        MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed \
+            -e "s#/home/container/run\.sh#${LAUNCHER_SCRIPT}#g" \
+            -e "s#/server/run\.sh#${LAUNCHER_SCRIPT}#g" \
+            -e "s#/app/run\.sh#${LAUNCHER_SCRIPT}#g" \
+            -e "s#\./run\.sh#${LAUNCHER_SCRIPT}#g" \
+            -e "s# run\.sh# ${LAUNCHER_SCRIPT}#g" \
+            -e "s#^run\.sh#${LAUNCHER_SCRIPT}#g")
+        ;;
+    *)
+        # If server was migrated from another egg (e.g. startup was 'node index.js' or 'python main.py'),
+        # route it safely through the universal launcher as CUSTOM_COMMAND
+        if [ -n "${MODIFIED_STARTUP}" ] && [ "${MODIFIED_STARTUP}" != "${LAUNCHER_SCRIPT}" ] && [ "${MODIFIED_STARTUP}" != "bash ${LAUNCHER_SCRIPT}" ]; then
+            export CUSTOM_COMMAND="${MODIFIED_STARTUP}"
+            MODIFIED_STARTUP="bash ${LAUNCHER_SCRIPT}"
         fi
         ;;
 esac
