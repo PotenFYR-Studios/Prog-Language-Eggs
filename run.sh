@@ -46,7 +46,7 @@ fi
 cd "${WORK_DIR}" 2>/dev/null || true
 
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
-export PATH="${WORK_DIR}/.local/bin:${WORK_DIR}/bin:${WORK_DIR}/node_modules/.bin:${WORK_DIR}/custom/bin:${PATH}"
+export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.local/bin:${WORK_DIR}/bin:${WORK_DIR}/node_modules/.bin:${WORK_DIR}/custom/bin:${PATH}"
 export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:/opt/runtimes/custom:/opt/runtimes/custom/bin:${PATH}"
 export PATH="/root/.cargo/bin:/opt/cargo/bin:${WORK_DIR}/.cargo/bin:${PATH}"
 export PATH="/opt/go/bin:${WORK_DIR}/go/bin:${PATH}"
@@ -580,9 +580,66 @@ log "Target Language / Runtime: ${C_BOLD}${DETECTED_LANG}${C_RESET}"
 if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
     if [ -f /usr/local/bin/install-runtime.sh ]; then
         log "Downloading and configuring custom runtime from ${CUSTOM_RUNTIME_URL}..."
-        /usr/local/bin/install-runtime.sh "custom" "${CUSTOM_RUNTIME_URL}" /opt/runtimes || true
+        /usr/local/bin/install-runtime.sh "custom" "${CUSTOM_RUNTIME_URL}" "${WORK_DIR}/.runtimes" || true
     fi
 fi
+
+# Ensure runtime toolchain is present in container, install locally if absent
+ensure_local_runtime() {
+    local lang="${DETECTED_LANG}"
+    local needed=0
+    
+    case "${lang}" in
+        nodejs|javascript|js|typescript|ts)
+            command -v node >/dev/null 2>&1 || needed=1
+            ;;
+        bun)
+            command -v bun >/dev/null 2>&1 || needed=1
+            ;;
+        python|py)
+            command -v python3 >/dev/null 2>&1 || needed=1
+            ;;
+        golang|go)
+            command -v go >/dev/null 2>&1 || needed=1
+            ;;
+        rust)
+            command -v rustc >/dev/null 2>&1 || needed=1
+            ;;
+        java)
+            command -v java >/dev/null 2>&1 || needed=1
+            ;;
+        dotnet)
+            command -v dotnet >/dev/null 2>&1 || needed=1
+            ;;
+        php)
+            command -v php >/dev/null 2>&1 || needed=1
+            ;;
+        ruby)
+            command -v ruby >/dev/null 2>&1 || needed=1
+            ;;
+    esac
+
+    if [ "${needed}" -eq 1 ]; then
+        log "Runtime binary for '${lang}' not found in system PATH. Installing locally to container..."
+        local inst_script=""
+        if [ -f "./install-runtime.sh" ]; then
+            inst_script="./install-runtime.sh"
+        elif [ -f "/usr/local/bin/install-runtime.sh" ]; then
+            inst_script="/usr/local/bin/install-runtime.sh"
+        else
+            curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o ./install-runtime.sh 2>/dev/null || true
+            chmod +x ./install-runtime.sh 2>/dev/null || true
+            inst_script="./install-runtime.sh"
+        fi
+        
+        if [ -f "${inst_script}" ]; then
+            /bin/sh "${inst_script}" "${lang}" "${RUNTIME_VERSION:-latest}" "${WORK_DIR}/.runtimes" || true
+            export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/${lang}/bin:${PATH}"
+        fi
+    fi
+}
+
+ensure_local_runtime
 
 # -----------------------------------------------------------------------------
 # 6. Pre-Run Hook Execution
