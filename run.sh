@@ -622,14 +622,15 @@ ensure_local_runtime() {
     if [ "${needed}" -eq 1 ]; then
         log "Runtime binary for '${lang}' not found in system PATH. Installing locally to container..."
         local inst_script=""
-        if [ -f "./install-runtime.sh" ]; then
-            inst_script="./install-runtime.sh"
-        elif [ -f "/usr/local/bin/install-runtime.sh" ]; then
+        if [ -f "/usr/local/bin/install-runtime.sh" ]; then
             inst_script="/usr/local/bin/install-runtime.sh"
+        elif [ -f "/install-runtime.sh" ]; then
+            inst_script="/install-runtime.sh"
         else
-            curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o ./install-runtime.sh 2>/dev/null || true
-            chmod +x ./install-runtime.sh 2>/dev/null || true
-            inst_script="./install-runtime.sh"
+            mkdir -p /tmp/potenfyr 2>/dev/null || true
+            curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
+            chmod +x /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
+            inst_script="/tmp/potenfyr/install-runtime.sh"
         fi
         
         if [ -f "${inst_script}" ]; then
