@@ -12,7 +12,17 @@
         "pid_limit"
     ],
     "docker_images": {
-        "Universal Runtime": "ghcr.io/potenfyr-studios/prog-language-eggs:latest"
+        "PHP CLI & Composer": "ghcr.io/potenfyr-studios/prog-language-eggs:php",
+        "Universal (50+ Languages)": "ghcr.io/potenfyr-studios/prog-language-eggs:latest",
+        "Node.js LTS (20.x & 22.x)": "ghcr.io/potenfyr-studios/prog-language-eggs:nodejs",
+        "Bun (High-Performance JS/TS)": "ghcr.io/potenfyr-studios/prog-language-eggs:bun",
+        "Python (3.12 & Astral uv)": "ghcr.io/potenfyr-studios/prog-language-eggs:python",
+        "Go / Golang Toolchain": "ghcr.io/potenfyr-studios/prog-language-eggs:golang",
+        "Rust & Cargo (Stable)": "ghcr.io/potenfyr-studios/prog-language-eggs:rust",
+        "Java OpenJDK (Adoptium Temurin)": "ghcr.io/potenfyr-studios/prog-language-eggs:java",
+        ".NET SDK (C# / F#)": "ghcr.io/potenfyr-studios/prog-language-eggs:dotnet",
+        "Ruby & Bundler": "ghcr.io/potenfyr-studios/prog-language-eggs:ruby",
+        "C / C++ (GCC & Clang Toolchain)": "ghcr.io/potenfyr-studios/prog-language-eggs:c-cpp"
     },
     "file_denylist": [],
     "startup": "bash /usr/local/bin/run.sh",

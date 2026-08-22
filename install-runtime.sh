@@ -68,7 +68,7 @@ USER_AGENT="ProgLanguageEggs/1.0 (PotenFYR Studios; Linux ${ARCH})"
 
 download() {
     local url="$1" dest="$2"
-    if ! curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o "${dest}" "${url}"; then
+    if ! curl -fsSL --retry 3 --connect-timeout 15 --max-time 120 -A "${USER_AGENT}" -o "${dest}" "${url}"; then
         rm -f "${dest}"
         fail "Failed to download from ${url}"
     fi

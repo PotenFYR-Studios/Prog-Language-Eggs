@@ -184,10 +184,25 @@ RUN if [ "${RUNTIME_VARIANT}" = "all" ] || [ "${RUNTIME_VARIANT}" = "java" ]; th
         apt-get update && apt-get install -y --no-install-recommends \
             default-jdk-headless \
             default-jre-headless \
+            maven \
         && rm -rf /var/lib/apt/lists/*; \
     fi
 
-# 12. Interpreted Languages (Lua, Perl, Tcl, Prolog - in all)
+# 12. .NET SDK & ASP.NET Core Runtime (Included in all, dotnet)
+RUN if [ "${RUNTIME_VARIANT}" = "all" ] || [ "${RUNTIME_VARIANT}" = "dotnet" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends \
+            dotnet-sdk-8.0 \
+            aspnetcore-runtime-8.0 \
+        || ( \
+            wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb \
+            && dpkg -i /tmp/packages-microsoft-prod.deb \
+            && rm -f /tmp/packages-microsoft-prod.deb \
+            && apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 aspnetcore-runtime-8.0 \
+        ) \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# 13. Interpreted Languages (Lua, Perl, Tcl, Prolog - in all)
 RUN if [ "${RUNTIME_VARIANT}" = "all" ]; then \
         apt-get update && apt-get install -y --no-install-recommends \
             lua5.4 \
@@ -198,7 +213,7 @@ RUN if [ "${RUNTIME_VARIANT}" = "all" ]; then \
         && rm -rf /var/lib/apt/lists/*; \
     fi
 
-# 13. Create multi-panel working directories and non-root container user
+# 14. Create multi-panel working directories and non-root container user
 RUN groupadd -g 988 container 2>/dev/null || true \
     && useradd -d /home/container -m -u 988 -g 988 container 2>/dev/null || true \
     && mkdir -p /opt/runtimes /home/container /server /app /mnt/server \

@@ -867,19 +867,22 @@ fi
 # -----------------------------------------------------------------------------
 # 6.5. Companion Runtime Resolution (EXTRA_RUNTIMES & Complex App Support)
 # -----------------------------------------------------------------------------
-if [ -n "${EXTRA_RUNTIMES:-}" ]; then
+if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXTRA_RUNTIMES}" != "auto" ]; then
     log "Configuring companion runtimes (EXTRA_RUNTIMES='${EXTRA_RUNTIMES}')..."
-    IFS=',' read -ra ADDR <<< "${EXTRA_RUNTIMES}"
-    for ext in "${ADDR[@]}"; do
-        ext=$(echo "${ext}" | tr -d "[:space:]" | tr "[:upper:]" "[:lower:]")
+    OLD_IFS="${IFS}"
+    IFS=','
+    for ext in ${EXTRA_RUNTIMES}; do
+        IFS="${OLD_IFS}"
+        ext=$(echo "${ext}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
         [ -z "${ext}" ] && continue
         if ! command -v "${ext}" >/dev/null 2>&1; then
             log "Installing companion runtime '${ext}' into isolated environment..."
             if [ -f /usr/local/bin/install-runtime.sh ]; then
-                bash /usr/local/bin/install-runtime.sh "${ext}" "latest" "${WORK_DIR}/.runtimes" || true
+                /bin/sh /usr/local/bin/install-runtime.sh "${ext}" "latest" "${WORK_DIR}/.runtimes" || true
             fi
         fi
     done
+    IFS="${OLD_IFS}"
     build_isolated_environment
 fi
 
@@ -1602,6 +1605,77 @@ handle_signal() {
 
 trap handle_signal SIGTERM SIGINT SIGHUP
 
+print_crash_diagnostics() {
+    local exit_code="$1"
+    [ "${exit_code}" -eq 0 ] && return 0
+
+    printf "\n${C_RED}${C_BOLD}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
+    printf "${C_RED}${C_BOLD}│ 🚨 PROCESS CRASH & DIAGNOSTIC REPORT                                     │${C_RESET}\n"
+    printf "${C_RED}${C_BOLD}├──────────────────────────────────────────────────────────────────────────┤${C_RESET}\n"
+    
+    # 1. Exit status
+    printf " ${C_DIM}│${C_RESET}  ${C_RED}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_RED}Exit Code %-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Crash Status" "${exit_code}"
+    
+    # 2. Active Runtime
+    local runtime_ver="Unknown"
+    case "${DETECTED_LANG}" in
+        nodejs|javascript|js) runtime_ver=$(node -v 2>/dev/null || echo "Node.js (not found)") ;;
+        bun)                  runtime_ver=$(bun -v 2>/dev/null && echo "Bun $(bun -v)" || echo "Bun (not found)") ;;
+        typescript|ts)        runtime_ver=$(tsx -v 2>/dev/null || bun -v 2>/dev/null || node -v 2>/dev/null || echo "TypeScript (not found)") ;;
+        python|py)            runtime_ver=$(python3 --version 2>/dev/null || echo "Python (not found)") ;;
+        golang|go)            runtime_ver=$(go version 2>/dev/null || echo "Go (not found)") ;;
+        rust|rs)              runtime_ver=$(rustc --version 2>/dev/null || echo "Rust (not found)") ;;
+        java)                 runtime_ver=$(java -version 2>&1 | head -n1 || echo "Java (not found)") ;;
+        php)                  runtime_ver=$(php -v 2>/dev/null | head -n1 || echo "PHP (not found)") ;;
+        ruby)                 runtime_ver=$(ruby -v 2>/dev/null || echo "Ruby (not found)") ;;
+        dotnet)               runtime_ver=$(dotnet --version 2>/dev/null || echo ".NET (not found)") ;;
+        *)                    runtime_ver="${DETECTED_LANG}" ;;
+    esac
+    printf " ${C_DIM}│${C_RESET}  ${C_CYAN}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_CYAN}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Active Runtime" "${runtime_ver:0:48}"
+
+    # 3. Memory Diagnostics
+    local mem_info="N/A"
+    if [ -f "/sys/fs/cgroup/memory/memory.usage_in_bytes" ]; then
+        local used_bytes
+        used_bytes=$(cat /sys/fs/cgroup/memory/memory.usage_in_bytes 2>/dev/null || echo "0")
+        local used_mb=$((used_bytes / 1024 / 1024))
+        mem_info="${used_mb}MB Used"
+        if [ -f "/sys/fs/cgroup/memory/memory.limit_in_bytes" ]; then
+            local limit_bytes
+            limit_bytes=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "0")
+            local limit_mb=$((limit_bytes / 1024 / 1024))
+            [ "${limit_mb}" -lt 999999 ] && mem_info="${used_mb}MB / ${limit_mb}MB Limit"
+        fi
+    elif [ -f "/sys/fs/cgroup/memory.current" ]; then
+        local used_bytes
+        used_bytes=$(cat /sys/fs/cgroup/memory.current 2>/dev/null || echo "0")
+        local used_mb=$((used_bytes / 1024 / 1024))
+        mem_info="${used_mb}MB Used"
+        if [ -f "/sys/fs/cgroup/memory.max" ]; then
+            local max_val
+            max_val=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "max")
+            if [ "${max_val}" != "max" ]; then
+                local limit_mb=$((max_val / 1024 / 1024))
+                mem_info="${used_mb}MB / ${limit_mb}MB Limit"
+            fi
+        fi
+    fi
+    printf " ${C_DIM}│${C_RESET}  ${C_MAGENTA}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_MAGENTA}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Memory Consumed" "${mem_info}"
+
+    # 4. Disk Usage
+    local disk_info
+    disk_info=$(df -h "${WORK_DIR}" 2>/dev/null | tail -n1 | awk '{print $4 " available (" $5 " used)"}' || echo "N/A")
+    printf " ${C_DIM}│${C_RESET}  ${C_YELLOW}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_YELLOW}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Disk Space" "${disk_info}"
+
+    # 5. Suggested actions
+    printf " ${C_DIM}│${C_RESET}  ${C_GREEN}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_WHITE}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Recommendation" "Check syntax, entry point, or missing deps"
+    printf "${C_RED}${C_BOLD}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
+
+    # 5-second grace period for full WebSocket streaming before exit
+    log "Holding 5-second diagnostic buffer to ensure complete console log stream..."
+    sleep 5
+}
+
 while [ "${RUN_LOOP}" -eq 1 ]; do
     log "Starting application process..."
     printf "${C_GREEN}${C_BOLD}>>> %s${C_RESET}\n\n" "${RUN_CMD}"
@@ -1619,10 +1693,14 @@ while [ "${RUN_LOOP}" -eq 1 ]; do
 
     if [ "${AUTO_RESTART}" = "1" ]; then
         warn "Process exited with code ${EXIT_CODE}. AUTO_RESTART is enabled."
+        print_crash_diagnostics "${EXIT_CODE}"
         log "Restarting in ${RESTART_DELAY} seconds... (Press Ctrl+C to abort)"
         sleep "${RESTART_DELAY}"
     else
         log "Process exited with code ${EXIT_CODE}."
+        if [ "${EXIT_CODE}" -ne 0 ]; then
+            print_crash_diagnostics "${EXIT_CODE}"
+        fi
         if [ -n "${POST_RUN_COMMAND}" ]; then
             eval "${POST_RUN_COMMAND}" || true
         fi
