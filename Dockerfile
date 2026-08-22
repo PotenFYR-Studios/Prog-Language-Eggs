@@ -89,19 +89,31 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && npm install -g --no-fund --no-audit npm pnpm yarn typescript ts-node tsx nodemon pm2 \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Install Bun
-RUN (curl -fsSL https://bun.sh/install | bash || true) \
-    && if [ -f /root/.bun/bin/bun ]; then \
-         mv /root/.bun/bin/bun /usr/local/bin/bun && ln -sf /usr/local/bin/bun /usr/local/bin/bunx; \
-       fi \
-    && rm -rf /root/.bun
+# 3. Install Bun (Direct release)
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64|amd64) BUN_ARCH="x64" ;; \
+        aarch64|arm64) BUN_ARCH="aarch64" ;; \
+        *) echo "Unsupported arch for Bun: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -fsSL "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${BUN_ARCH}.zip" -o /tmp/bun.zip && \
+    unzip -qo /tmp/bun.zip -d /tmp/bun-extract && \
+    mv /tmp/bun-extract/bun-linux-*/bun /usr/local/bin/bun && \
+    chmod 755 /usr/local/bin/bun && \
+    ln -sf /usr/local/bin/bun /usr/local/bin/bunx && \
+    rm -rf /tmp/bun.zip /tmp/bun-extract
 
-# 4. Install Deno
-RUN (curl -fsSL https://deno.land/install.sh | sh || true) \
-    && if [ -f /root/.deno/bin/deno ]; then \
-         mv /root/.deno/bin/deno /usr/local/bin/deno; \
-       fi \
-    && rm -rf /root/.deno
+# 4. Install Deno (Direct release)
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64|amd64) DENO_ARCH="x86_64" ;; \
+        aarch64|arm64) DENO_ARCH="aarch64" ;; \
+        *) echo "Unsupported arch for Deno: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-unknown-linux-gnu.zip" -o /tmp/deno.zip && \
+    unzip -qo /tmp/deno.zip -d /usr/local/bin && \
+    chmod 755 /usr/local/bin/deno && \
+    rm -f /tmp/deno.zip
 
 # 5. Install Rust & Cargo Toolchain
 RUN export RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo \
@@ -109,11 +121,17 @@ RUN export RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo \
     && chmod -R 777 /opt/cargo /opt/rustup 2>/dev/null || true
 
 # 6. Install Python Astral uv & Composer (PHP)
-RUN (curl -LsSf https://astral.sh/uv/install.sh | sh || true) \
-    && (if [ -f /root/.local/bin/uv ]; then mv /root/.local/bin/uv /usr/local/bin/uv; elif [ -f /root/.cargo/bin/uv ]; then mv /root/.cargo/bin/uv /usr/local/bin/uv; fi) \
-    && (if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; elif [ -f /root/.cargo/bin/uvx ]; then mv /root/.cargo/bin/uvx /usr/local/bin/uvx; fi) \
-    && (curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer || true) \
-    && rm -rf /root/.local
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64|amd64) UV_ARCH="x86_64" ;; \
+        aarch64|arm64) UV_ARCH="aarch64" ;; \
+    esac && \
+    curl -fsSL "https://github.com/astral-sh/uv/releases/latest/download/uv-${UV_ARCH}-unknown-linux-gnu.tar.gz" -o /tmp/uv.tar.gz && \
+    tar -xzf /tmp/uv.tar.gz -C /tmp && \
+    mv /tmp/uv-*/uv /tmp/uv-*/uvx /usr/local/bin/ && \
+    chmod 755 /usr/local/bin/uv /usr/local/bin/uvx && \
+    rm -rf /tmp/uv.tar.gz /tmp/uv-* && \
+    (curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer || true)
 
 # 7. Create multi-panel working directories and user compatibility
 RUN groupadd -g 988 container 2>/dev/null || true \
