@@ -115,7 +115,7 @@
             "env_variable": "PRE_RUN_COMMAND",
             "default_value": "",
             "user_viewable": true,
-            "user_editable": false,
+            "user_editable": true,
             "rules": "nullable|string|max:255",
             "field_type": "text"
         },
@@ -125,7 +125,7 @@
             "env_variable": "POST_RUN_COMMAND",
             "default_value": "",
             "user_viewable": true,
-            "user_editable": false,
+            "user_editable": true,
             "rules": "nullable|string|max:255",
             "field_type": "text"
         },
@@ -135,7 +135,7 @@
             "env_variable": "BUILD_COMMAND",
             "default_value": "",
             "user_viewable": true,
-            "user_editable": false,
+            "user_editable": true,
             "rules": "nullable|string|max:255",
             "field_type": "text"
         },
@@ -155,7 +155,7 @@
             "env_variable": "CUSTOM_COMMAND",
             "default_value": "",
             "user_viewable": true,
-            "user_editable": false,
+            "user_editable": true,
             "rules": "nullable|string|max:500",
             "field_type": "text"
         },
