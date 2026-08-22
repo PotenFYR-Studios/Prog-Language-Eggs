@@ -18,7 +18,7 @@
 #    install-runtime.sh custom https://example.com/custom-runtime.tar.gz
 # =============================================================================
 
-set -euo pipefail
+set -e
 
 # --- Visual formatting ---
 C_RESET='\033[0m'
@@ -128,8 +128,11 @@ case "${LANG_LOWER}" in
 
     # -------------------------------------------------------------------------
     # Bun
-    # -------------------------------------------------------------------------
     bun)
+        if command -v bun >/dev/null 2>&1; then
+            ok "Bun $(bun -v 2>/dev/null || true) is already available"
+            exit 0
+        fi
         log "Resolving Bun runtime..."
         DEST_DIR="${TARGET_BASE}/bun"
         mkdir -p "${DEST_DIR}/bin"
@@ -141,18 +144,28 @@ case "${LANG_LOWER}" in
         BUN_URL="https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${BUN_ARCH}.zip"
         TMP_ZIP="/tmp/bun.zip"
         download "${BUN_URL}" "${TMP_ZIP}"
+        rm -rf /tmp/bun-extract && mkdir -p /tmp/bun-extract
         unzip -qo "${TMP_ZIP}" -d /tmp/bun-extract
-        mv /tmp/bun-extract/bun-linux-*/bun "${DEST_DIR}/bin/bun"
-        chmod +x "${DEST_DIR}/bin/bun"
-        ln -sf "${DEST_DIR}/bin/bun" "${DEST_DIR}/bin/bunx"
+        if [ -f "/tmp/bun-extract/bun-linux-${BUN_ARCH}/bun" ]; then
+            mv -f "/tmp/bun-extract/bun-linux-${BUN_ARCH}/bun" "${DEST_DIR}/bin/bun"
+        elif [ -f "/tmp/bun-extract/bun" ]; then
+            mv -f "/tmp/bun-extract/bun" "${DEST_DIR}/bin/bun"
+        else
+            find /tmp/bun-extract -type f -name "bun" -exec mv -f {} "${DEST_DIR}/bin/bun" \;
+        fi
+        chmod +x "${DEST_DIR}/bin/bun" 2>/dev/null || true
+        ln -sf "${DEST_DIR}/bin/bun" "${DEST_DIR}/bin/bunx" 2>/dev/null || true
         rm -rf "${TMP_ZIP}" /tmp/bun-extract
         ok "Installed Bun to ${DEST_DIR}/bin/bun"
         ;;
 
     # -------------------------------------------------------------------------
     # Deno
-    # -------------------------------------------------------------------------
     deno)
+        if command -v deno >/dev/null 2>&1; then
+            ok "Deno $(deno -V 2>/dev/null || true) is already available"
+            exit 0
+        fi
         log "Resolving Deno runtime..."
         DEST_DIR="${TARGET_BASE}/deno"
         mkdir -p "${DEST_DIR}/bin"
@@ -162,7 +175,7 @@ case "${LANG_LOWER}" in
         TMP_ZIP="/tmp/deno.zip"
         download "${DENO_URL}" "${TMP_ZIP}"
         unzip -qo "${TMP_ZIP}" -d "${DEST_DIR}/bin"
-        chmod +x "${DEST_DIR}/bin/deno"
+        chmod +x "${DEST_DIR}/bin/deno" 2>/dev/null || true
         rm -f "${TMP_ZIP}"
         ok "Installed Deno to ${DEST_DIR}/bin/deno"
         ;;

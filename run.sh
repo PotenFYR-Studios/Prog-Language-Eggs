@@ -596,7 +596,7 @@ ensure_local_runtime() {
         [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
         [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
         if [ -n "${inst_script}" ]; then
-            /bin/sh "${inst_script}" "bun" "latest" "${WORK_DIR}/.runtimes" || true
+            bash "${inst_script}" "bun" "latest" "${WORK_DIR}/.runtimes" || true
             export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/bun/bin:/opt/runtimes/bun/bin:${PATH}"
         fi
     elif [ "${runner}" = "deno" ] && ! command -v deno >/dev/null 2>&1; then
@@ -605,7 +605,7 @@ ensure_local_runtime() {
         [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
         [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
         if [ -n "${inst_script}" ]; then
-            /bin/sh "${inst_script}" "deno" "latest" "${WORK_DIR}/.runtimes" || true
+            bash "${inst_script}" "deno" "latest" "${WORK_DIR}/.runtimes" || true
             export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/deno/bin:/opt/runtimes/deno/bin:${PATH}"
         fi
     fi
@@ -668,7 +668,7 @@ ensure_local_runtime() {
         fi
         
         if [ -f "${inst_script}" ]; then
-            /bin/sh "${inst_script}" "${lang}" "${RUNTIME_VERSION:-latest}" "${WORK_DIR}/.runtimes" || true
+            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION:-latest}" "${WORK_DIR}/.runtimes" || true
             export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/${lang}/bin:/opt/runtimes/${lang}/bin:${PATH}"
         fi
     fi
