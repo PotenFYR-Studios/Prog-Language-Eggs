@@ -78,6 +78,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         perl \
         tcl \
         swi-prolog \
+        default-jdk-headless \
         default-jre-headless \
         golang-go \
     && rm -rf /var/lib/apt/lists/*
