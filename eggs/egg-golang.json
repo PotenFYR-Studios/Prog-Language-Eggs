@@ -5,7 +5,7 @@
         "update_url": null
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
-    "name": "Go (Golang)",
+    "name": "Multi-Languages (Go & Golang)",
     "author": "support@potenfyr.in",
     "description": "High performance Go runtime supporting go run, go build, and pre-compiled binaries.",
     "features": ["pid_limit"],
@@ -59,13 +59,23 @@
             "field_type": "text"
         },
         {
+            "name": "Extra Runtimes",
+            "description": "Comma-separated extra toolchains to load (e.g. 'node,python' or 'none').",
+            "env_variable": "EXTRA_RUNTIMES",
+            "default_value": "none",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
+            "field_type": "text"
+        },
+        {
             "name": "Assigned Port",
             "description": "Primary network port allocated by the panel.",
             "env_variable": "SERVER_PORT",
             "default_value": "{{server.build.default.port}}",
             "user_viewable": true,
             "user_editable": false,
-            "rules": "required|numeric",
+            "rules": "nullable|string",
             "field_type": "text"
         }
     ]

@@ -46,8 +46,8 @@ fi
 cd "${WORK_DIR}" 2>/dev/null || true
 
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
-export PATH="${WORK_DIR}/.local/bin:${WORK_DIR}/bin:${WORK_DIR}/node_modules/.bin:${PATH}"
-export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:${PATH}"
+export PATH="${WORK_DIR}/.local/bin:${WORK_DIR}/bin:${WORK_DIR}/node_modules/.bin:${WORK_DIR}/custom/bin:${PATH}"
+export PATH="/opt/runtimes/bin:/opt/runtimes/bun/bin:/opt/runtimes/deno/bin:/opt/runtimes/python/bin:/opt/runtimes/zig:/opt/runtimes/dart-sdk/bin:/opt/runtimes/nim/bin:/opt/runtimes/gleam/bin:/opt/runtimes/odin:/opt/runtimes/custom:/opt/runtimes/custom/bin:${PATH}"
 export PATH="/root/.cargo/bin:/opt/cargo/bin:${WORK_DIR}/.cargo/bin:${PATH}"
 export PATH="/opt/go/bin:${WORK_DIR}/go/bin:${PATH}"
 export PATH="/opt/dotnet:${WORK_DIR}/.dotnet:${PATH}"
@@ -69,6 +69,7 @@ MAIN_FILE="${MAIN_FILE:-auto}"
 PACKAGE_MANAGER="${PACKAGE_MANAGER:-auto}"
 BUILD_COMMAND="${BUILD_COMMAND:-}"
 CUSTOM_COMMAND="${CUSTOM_COMMAND:-}"
+CUSTOM_RUNTIME_URL="${CUSTOM_RUNTIME_URL:-}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
 AUTO_RESTART="${AUTO_RESTART:-0}"
@@ -82,6 +83,10 @@ GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_AUTH_TOKEN="${GIT_AUTH_TOKEN:-}"
 STARTER_TEMPLATE="${STARTER_TEMPLATE:-}"
 SERVER_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-8080}}}}"
+NODE_GYP_SUPPORT="${NODE_GYP_SUPPORT:-1}"
+EXTRA_RUNTIMES="${EXTRA_RUNTIMES:-}"
+SKIP_RUNTIMES="${SKIP_RUNTIMES:-}"
+SKIP_PYTHON="${SKIP_PYTHON:-0}"
 DEBUG="${DEBUG:-0}"
 
 [ "${DEBUG}" = "1" ] && set -x
@@ -586,6 +591,13 @@ detect_language() {
 
 DETECTED_LANG=$(detect_language)
 log "Target Language / Runtime: ${C_BOLD}${DETECTED_LANG}${C_RESET}"
+
+if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
+    if [ -f /usr/local/bin/install-runtime.sh ]; then
+        log "Downloading and configuring custom runtime from ${CUSTOM_RUNTIME_URL}..."
+        /usr/local/bin/install-runtime.sh "custom" "${CUSTOM_RUNTIME_URL}" /opt/runtimes || true
+    fi
+fi
 
 # -----------------------------------------------------------------------------
 # 6. Pre-Run Hook Execution

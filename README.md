@@ -179,6 +179,27 @@ ghcr.io/potenfyr-studios/prog-language-eggs:latest
 
 ---
 
+## Available Egg Configurations
+
+The repository includes both the universal all-in-one egg and modular targeted eggs:
+
+| Egg File | Name in Panel | Target Stack / Use-case |
+|---|---|---|
+| [`egg-programming-universal.json`](egg-programming-universal.json) | **Multi-Languages (Universal All-In-One)** | Single egg supporting all 50+ languages with dynamic auto-detection. |
+| [`eggs/egg-nodejs-bun-typescript.json`](eggs/egg-nodejs-bun-typescript.json) | **Multi-Languages (Node.js, Bun & TypeScript)** | Node.js, Bun, Deno, TypeScript, TSX, with node-gyp & Python helper. |
+| [`eggs/egg-python.json`](eggs/egg-python.json) | **Multi-Languages (Python, FastAPI & Flask)** | Python 3, uv, pip, poetry, pipenv, FastAPI, Flask, Django, Discord bots. |
+| [`eggs/egg-java.json`](eggs/egg-java.json) | **Multi-Languages (Java, Maven & Spring)** | OpenJDK, Maven, Gradle, Spring Boot, executable JARs. |
+| [`eggs/egg-golang.json`](eggs/egg-golang.json) | **Multi-Languages (Go & Golang)** | Go compiler, Gin, Fiber, Echo, CGO build support. |
+| [`eggs/egg-rust.json`](eggs/egg-rust.json) | **Multi-Languages (Rust & Cargo)** | Cargo, Axum, Actix-web, Tokio, native release optimization. |
+| [`eggs/egg-c-cpp.json`](eggs/egg-c-cpp.json) | **Multi-Languages (C & C++)** | GCC, G++, Clang, Make, CMake, Ninja native compilation. |
+| [`eggs/egg-dotnet.json`](eggs/egg-dotnet.json) | **Multi-Languages (.NET & C#)** | .NET SDK, C#, F#, VB.NET, ASP.NET Core web apps. |
+| [`eggs/egg-php.json`](eggs/egg-php.json) | **Multi-Languages (PHP & Composer)** | PHP CLI, built-in server, Composer, Laravel, Symfony. |
+| [`eggs/egg-ruby.json`](eggs/egg-ruby.json) | **Multi-Languages (Ruby & Rails)** | Ruby, Bundler, Puma, Sinatra, Rails web servers. |
+| [`eggs/egg-static-spa.json`](eggs/egg-static-spa.json) | **Multi-Languages (Static Website & SPA)** | Static HTML5, React, Vue, Svelte, Vite, Single Page Applications. |
+| [`eggs/egg-custom.json`](eggs/egg-custom.json) | **Multi-Languages (Custom & Dynamic Runtimes)** | Custom toolchains, direct binary URL downloads, arbitrary commands. |
+
+---
+
 ## Egg Variables Reference
 
 | Variable Name | Env Variable | Default | Editable | Description |
@@ -186,6 +207,10 @@ ghcr.io/potenfyr-studios/prog-language-eggs:latest
 | **Target Language** | `LANGUAGE` | `auto` | 👤 Yes | Target language or 'auto' for intelligent file auto-detection. |
 | **Execution Runner** | `RUNNER` | `auto` | 👤 Yes | Runner or engine to use (e.g. auto, node, bun, tsx, uvicorn, cargo, go). |
 | **Main Entry File** | `MAIN_FILE` | `auto` | 👤 Yes | The main script or file to execute (leave 'auto' for smart detection). |
+| **Extra Runtimes** | `EXTRA_RUNTIMES` | `none` | 👤 Yes | Comma-separated auxiliary toolchains to install (e.g. `python,java,go` or `none`). |
+| **Skip Runtimes** | `SKIP_RUNTIMES` | `none` | 👤 Yes | Comma-separated runtimes to skip/disable (e.g. `python,java`). |
+| **Node-gyp Support** | `NODE_GYP_SUPPORT` | `1` | 👤 Yes | Enable Python 3 & build tools for native node addon compilation (1=Enabled, 0=Disabled). |
+| **Custom Download URL** | `CUSTOM_RUNTIME_URL` | `""` | 👤 Yes | Direct URL to download a custom runtime (.tar.gz, .zip, or standalone binary). |
 | **Package Manager** | `PACKAGE_MANAGER` | `auto` | 👤 Yes | Package manager for dependency resolution (e.g. auto, npm, pnpm, yarn, bun, pip, cargo). |
 | **Memory Auto Tune** | `MEMORY_AUTO_TUNE` | `1` | 👤 Yes | Auto-tune GC & memory limits to prevent container OOM (1 = Enabled, 0 = Disabled). |
 | **Dev Watch Mode** | `DEV_MODE` | `0` | 👤 Yes | Enable watch and hot-reload mode during development (1 = Enabled, 0 = Disabled). |
@@ -204,7 +229,7 @@ ghcr.io/potenfyr-studios/prog-language-eggs:latest
 | **Extra URLs** | `EXTRA_URLS` | `""` | 👤 Yes | Additional files or archives to download on boot (URL or dest\|URL). |
 | **Auto Restart** | `AUTO_RESTART` | `0` | 👤 Yes | Automatically restart process on unexpected crash (1 = Enabled, 0 = Disabled). |
 | **Restart Delay** | `RESTART_DELAY` | `3` | 👤 Yes | Delay in seconds before attempting to auto-restart. |
-| **Assigned Port** | `SERVER_PORT` | `{{server.build.default.port}}` | 🔒 Admin | Primary network port allocated by the panel. |
+| **Assigned Port** | `SERVER_PORT` | `{{server.build.default.port}}` | 🔒 Admin | Primary network port allocated by the panel (`nullable|string`). |
 | **Debug Mode** | `DEBUG` | `0` | 👤 Yes | Enable verbose script debug output (1 = Enabled, 0 = Disabled). |
 
 ---

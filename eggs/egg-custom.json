@@ -5,9 +5,9 @@
         "update_url": null
     },
     "exported_at": "2026-08-22T03:08:00+00:00",
-    "name": "Multi-Languages (Java, Maven & Spring)",
+    "name": "Multi-Languages (Custom & Dynamic Runtimes)",
     "author": "support@potenfyr.in",
-    "description": "Enterprise Java runtime supporting OpenJDK, Maven, Gradle, and executable JARs.",
+    "description": "Dynamic custom runtime egg allowing custom toolchains, direct binary downloads, and arbitrary execution commands.",
     "features": ["pid_limit"],
     "docker_images": {
         "Universal Runtime": "ghcr.io/potenfyr-studios/prog-language-eggs:latest"
@@ -16,7 +16,7 @@
     "startup": "bash run.sh",
     "config": {
         "files": "{\".env\":{\"parser\":\"file\",\"find\":{\"PORT=\":\"PORT={{server.build.default.port}}\",\"SERVER_PORT=\":\"SERVER_PORT={{server.build.default.port}}\"}}}",
-        "startup": "{\"done\":[\"Started \",\"Tomcat started on port\",\"Netty started on port\",\"Server started\",\"Listening on\",\"Ready on\"],\"user_interaction\":[],\"strip_ansi\":false}",
+        "startup": "{\"done\":[\"listening on\",\"started on\",\"Server started\",\"Listening on\",\"Ready on\",\"running at\",\"HTTP server listening\",\"Application started\",\"online\"],\"user_interaction\":[],\"strip_ansi\":false}",
         "stop": "^C",
         "logs": "{}"
     },
@@ -29,23 +29,53 @@
     },
     "variables": [
         {
-            "name": "Server Jar / Main File",
-            "description": "Executable JAR file or main class to run (e.g. server.jar, app.jar).",
-            "env_variable": "MAIN_FILE",
-            "default_value": "server.jar",
+            "name": "Target Language",
+            "description": "Language or runtime to load (e.g. zig, dart, nim, gleam, odin, julia, swift, elixir, custom, or auto).",
+            "env_variable": "LANGUAGE",
+            "default_value": "auto",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|string|max:100",
+            "rules": "required|string|max:50",
             "field_type": "text"
         },
         {
-            "name": "Java Flags & Memory",
-            "description": "JVM memory and GC arguments (e.g. '-Xmx2048M -XX:+UseG1GC').",
-            "env_variable": "EXTRA_ARGS",
-            "default_value": "-Xmx1024M",
+            "name": "Custom Command",
+            "description": "Arbitrary command line to execute directly (e.g. './my_binary --port 8080').",
+            "env_variable": "CUSTOM_COMMAND",
+            "default_value": "",
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Custom Runtime Download URL",
+            "description": "Optional direct URL to download a custom runtime (.tar.gz, .zip, or executable binary).",
+            "env_variable": "CUSTOM_RUNTIME_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Extra Runtimes",
+            "description": "Comma-separated extra toolchains to load (e.g. 'python,node,java,rust' or 'none').",
+            "env_variable": "EXTRA_RUNTIMES",
+            "default_value": "none",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Skip Runtimes",
+            "description": "Comma-separated runtimes to skip/disable (e.g. 'python,java' or 'none').",
+            "env_variable": "SKIP_RUNTIMES",
+            "default_value": "none",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
             "field_type": "text"
         },
         {
@@ -56,16 +86,6 @@
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string|max:255",
-            "field_type": "text"
-        },
-        {
-            "name": "Extra Runtimes",
-            "description": "Comma-separated extra toolchains to load (e.g. 'node,python' or 'none').",
-            "env_variable": "EXTRA_RUNTIMES",
-            "default_value": "none",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "nullable|string|max:100",
             "field_type": "text"
         },
         {
