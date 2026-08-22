@@ -584,7 +584,185 @@ if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
     fi
 fi
 
+# -----------------------------------------------------------------------------
+# Dynamic Session-Layer PATH & Sandbox Isolation (Alternative 4 Hybrid Architecture)
+# -----------------------------------------------------------------------------
+build_isolated_environment() {
+    local lang="${DETECTED_LANG}"
+    local runner="${RUNNER:-auto}"
+
+    # 1. Base clean system utilities
+    local ISO_PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+
+    # 2. Local workspace project binaries (highest priority)
+    ISO_PATH="${WORK_DIR}/.local/bin:${WORK_DIR}/bin:${WORK_DIR}/node_modules/.bin:${WORK_DIR}/.venv/bin:${ISO_PATH}"
+    
+    # 3. User-installed local runtimes (/home/container/.runtimes/<lang>/bin)
+    if [ -d "${WORK_DIR}/.runtimes" ]; then
+        ISO_PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/${lang}/bin:${WORK_DIR}/.runtimes/${runner}/bin:${ISO_PATH}"
+    fi
+
+    # 4. Activate ONLY the selected isolated runtime prefix
+    case "${lang}" in
+        typescript|ts)
+            if [ "${runner}" = "bun" ]; then
+                ISO_PATH="/opt/runtimes/bun/bin:${ISO_PATH}"
+            elif [ "${runner}" = "deno" ]; then
+                ISO_PATH="/opt/runtimes/deno/bin:${ISO_PATH}"
+            else
+                ISO_PATH="/opt/runtimes/node/bin:${ISO_PATH}"
+            fi
+            ;;
+        bun)
+            ISO_PATH="/opt/runtimes/bun/bin:${ISO_PATH}"
+            ;;
+        deno)
+            ISO_PATH="/opt/runtimes/deno/bin:${ISO_PATH}"
+            ;;
+        node|nodejs|javascript|js)
+            ISO_PATH="/opt/runtimes/node/bin:${ISO_PATH}"
+            ;;
+        python|py)
+            ISO_PATH="/opt/runtimes/uv/bin:/opt/runtimes/python/bin:${ISO_PATH}"
+            ;;
+        rust)
+            ISO_PATH="/opt/cargo/bin:${ISO_PATH}"
+            ;;
+        golang|go)
+            ISO_PATH="${WORK_DIR}/go/bin:/opt/go/bin:/opt/runtimes/go/bin:${ISO_PATH}"
+            ;;
+        zig)
+            ISO_PATH="/opt/runtimes/zig:${ISO_PATH}"
+            ;;
+        dart)
+            ISO_PATH="/opt/runtimes/dart-sdk/bin:${ISO_PATH}"
+            ;;
+        dotnet)
+            ISO_PATH="/opt/dotnet:${WORK_DIR}/.dotnet:${ISO_PATH}"
+            ;;
+    esac
+
+    # 5. Handle EXTRA_RUNTIMES if specified (e.g. EXTRA_RUNTIMES="python,bun")
+    if [ -n "${EXTRA_RUNTIMES:-}" ]; then
+        local IFS=','
+        for ext in ${EXTRA_RUNTIMES}; do
+            ext=$(echo "${ext}" | tr -d "[:space:]" | tr "[:upper:]" "[:lower:]")
+            [ -d "/opt/runtimes/${ext}/bin" ] && ISO_PATH="/opt/runtimes/${ext}/bin:${ISO_PATH}"
+            [ -d "${WORK_DIR}/.runtimes/${ext}/bin" ] && ISO_PATH="${WORK_DIR}/.runtimes/${ext}/bin:${ISO_PATH}"
+        done
+    fi
+
+    export PATH="${ISO_PATH}"
+
+    # Per-language sandbox isolation directories
+    export PYTHONUSERBASE="${WORK_DIR}/.local"
+    export GOPATH="${WORK_DIR}/go"
+    export GOCACHE="${WORK_DIR}/.cache/go-build"
+    export CARGO_HOME="${WORK_DIR}/.cargo"
+    export CARGO_TARGET_DIR="${WORK_DIR}/target"
+    export BUN_INSTALL="${WORK_DIR}/.bun"
+    export COMPOSER_HOME="${WORK_DIR}/.composer"
+    export GEM_HOME="${WORK_DIR}/.gem"
+    export DOTNET_CLI_HOME="${WORK_DIR}/.dotnet"
+    mkdir -p "${WORK_DIR}/.local/bin" "${WORK_DIR}/bin" "${WORK_DIR}/.cache" 2>/dev/null || true
+}
+
 # Ensure runtime toolchain is present in container, install locally if absent
+ensure_local_runtime() {
+    build_isolated_environment
+
+    local lang="${DETECTED_LANG}"
+    local runner="${RUNNER:-auto}"
+    
+    # Check runner requirements
+    if [ "${runner}" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
+        log "Runner 'bun' selected but not found in PATH. Installing Bun locally..."
+        local inst_script=""
+        [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
+        [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
+        if [ -n "${inst_script}" ]; then
+            bash "${inst_script}" "bun" "latest" "${WORK_DIR}/.runtimes" || true
+            build_isolated_environment
+        fi
+    elif [ "${runner}" = "deno" ] && ! command -v deno >/dev/null 2>&1; then
+        log "Runner 'deno' selected but not found in PATH. Installing Deno locally..."
+        local inst_script=""
+        [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
+        [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
+        if [ -n "${inst_script}" ]; then
+            bash "${inst_script}" "deno" "latest" "${WORK_DIR}/.runtimes" || true
+            build_isolated_environment
+        fi
+    fi
+
+    # Check language requirements
+    local needed=0
+    case "${lang}" in
+        nodejs|javascript|js)
+            command -v node >/dev/null 2>&1 || needed=1
+            ;;
+        typescript|ts)
+            if [ "${runner}" = "bun" ]; then
+                command -v bun >/dev/null 2>&1 || needed=1
+                lang="bun"
+            elif [ "${runner}" = "deno" ]; then
+                command -v deno >/dev/null 2>&1 || needed=1
+                lang="deno"
+            else
+                command -v node >/dev/null 2>&1 || needed=1
+                lang="node"
+            fi
+            ;;
+        bun)
+            command -v bun >/dev/null 2>&1 || needed=1
+            ;;
+        python|py)
+            command -v python3 >/dev/null 2>&1 || needed=1
+            ;;
+        golang|go)
+            command -v go >/dev/null 2>&1 || needed=1
+            ;;
+        rust)
+            command -v rustc >/dev/null 2>&1 || needed=1
+            ;;
+        java)
+            command -v java >/dev/null 2>&1 || needed=1
+            ;;
+        dotnet)
+            command -v dotnet >/dev/null 2>&1 || needed=1
+            ;;
+        php)
+            command -v php >/dev/null 2>&1 || needed=1
+            ;;
+        ruby)
+            command -v ruby >/dev/null 2>&1 || needed=1
+            ;;
+        zig)
+            command -v zig >/dev/null 2>&1 || needed=1
+            ;;
+    esac
+
+    if [ "${needed}" -eq 1 ]; then
+        log "Runtime binary for '${lang}' not found in system PATH. Installing locally to container..."
+        local inst_script=""
+        if [ -f "/usr/local/bin/install-runtime.sh" ]; then
+            inst_script="/usr/local/bin/install-runtime.sh"
+        elif [ -f "/install-runtime.sh" ]; then
+            inst_script="/install-runtime.sh"
+        else
+            mkdir -p /tmp/potenfyr 2>/dev/null || true
+            curl -fsSL --retry 3 --connect-timeout 10 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
+            chmod +x /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
+            inst_script="/tmp/potenfyr/install-runtime.sh"
+        fi
+        
+        if [ -f "${inst_script}" ]; then
+            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION:-latest}" "${WORK_DIR}/.runtimes" || true
+            build_isolated_environment
+        fi
+    fi
+}
+
 ensure_local_runtime() {
     local lang="${DETECTED_LANG}"
     local runner="${RUNNER:-auto}"
