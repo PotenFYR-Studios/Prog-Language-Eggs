@@ -217,44 +217,8 @@ EOF
 fi
 
 # -----------------------------------------------------------------------------
-# 8. Dynamic Toolchain & Auxiliary Runtime Orchestrator (On-Demand)
 # -----------------------------------------------------------------------------
-REQ_LANG="${LANGUAGE:-auto}"
-REQ_VER="${RUNTIME_VERSION:-latest}"
-
-if [ "${REQ_LANG}" != "auto" ] && [ "${REQ_LANG}" != "" ] && [ "${REQ_LANG}" != "custom" ]; then
-    if [ -f /usr/local/bin/install-runtime.sh ]; then
-        /usr/local/bin/install-runtime.sh "${REQ_LANG}" "${REQ_VER}" /opt/runtimes >/dev/null 2>&1 || true
-    fi
-fi
-
-if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
-    if [ -f /usr/local/bin/install-runtime.sh ]; then
-        /usr/local/bin/install-runtime.sh "custom" "${CUSTOM_RUNTIME_URL}" /opt/runtimes >/dev/null 2>&1 || true
-    fi
-fi
-
-if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXTRA_RUNTIMES}" != "auto" ]; then
-    OLD_IFS="${IFS}"
-    IFS=','
-    for extra_r in ${EXTRA_RUNTIMES}; do
-        IFS="${OLD_IFS}"
-        extra_r=$(echo "${extra_r}" | tr -d '[:space:]')
-        [ -z "${extra_r}" ] && continue
-        
-        if [ "${SKIP_PYTHON:-0}" = "1" ] && [ "${extra_r}" = "python" ]; then
-            continue
-        fi
-        
-        if [ -f /usr/local/bin/install-runtime.sh ]; then
-            /usr/local/bin/install-runtime.sh "${extra_r}" "latest" /opt/runtimes >/dev/null 2>&1 || true
-        fi
-    done
-    IFS="${OLD_IFS}"
-fi
-
-# -----------------------------------------------------------------------------
-# 9. Clean, Modern ANSI Gradient Banner & System Information Card
+# 8. Clean, Modern ANSI Gradient Banner & System Information Card
 # -----------------------------------------------------------------------------
 print_card_row() {
     local label="$1"
@@ -294,6 +258,43 @@ print_banner() {
 print_banner
 
 # -----------------------------------------------------------------------------
+# 9. Dynamic Toolchain & Auxiliary Runtime Orchestrator (On-Demand)
+# -----------------------------------------------------------------------------
+REQ_LANG="${LANGUAGE:-auto}"
+REQ_VER="${RUNTIME_VERSION:-latest}"
+
+if [ "${REQ_LANG}" != "auto" ] && [ "${REQ_LANG}" != "" ] && [ "${REQ_LANG}" != "custom" ]; then
+    if [ -f /usr/local/bin/install-runtime.sh ]; then
+        /usr/local/bin/install-runtime.sh "${REQ_LANG}" "${REQ_VER}" /opt/runtimes || true
+    fi
+fi
+
+if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
+    if [ -f /usr/local/bin/install-runtime.sh ]; then
+        /usr/local/bin/install-runtime.sh "custom" "${CUSTOM_RUNTIME_URL}" /opt/runtimes || true
+    fi
+fi
+
+if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXTRA_RUNTIMES}" != "auto" ]; then
+    OLD_IFS="${IFS}"
+    IFS=','
+    for extra_r in ${EXTRA_RUNTIMES}; do
+        IFS="${OLD_IFS}"
+        extra_r=$(echo "${extra_r}" | tr -d '[:space:]')
+        [ -z "${extra_r}" ] && continue
+        
+        if [ "${SKIP_PYTHON:-0}" = "1" ] && [ "${extra_r}" = "python" ]; then
+            continue
+        fi
+        
+        if [ -f /usr/local/bin/install-runtime.sh ]; then
+            /usr/local/bin/install-runtime.sh "${extra_r}" "latest" /opt/runtimes || true
+        fi
+    done
+    IFS="${OLD_IFS}"
+fi
+
+# -----------------------------------------------------------------------------
 # 10. Execute Startup Command
 # -----------------------------------------------------------------------------
 RAW_STARTUP="${STARTUP:-bash run.sh}"
@@ -307,13 +308,17 @@ fi
 MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
 # If startup refers to run.sh but run.sh is not in current folder, fallback to system run.sh
-if [[ "${MODIFIED_STARTUP}" == *"run.sh"* ]] && [ ! -f "run.sh" ]; then
-    if [ -f "/usr/local/bin/run.sh" ]; then
-        MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/usr\/local\/bin\/run\.sh/g')
-    elif [ -f "/run.sh" ]; then
-        MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/run\.sh/g')
-    fi
-fi
+case "${MODIFIED_STARTUP}" in
+    *run.sh*)
+        if [ ! -f "run.sh" ]; then
+            if [ -f "/usr/local/bin/run.sh" ]; then
+                MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/usr\/local\/bin\/run\.sh/g')
+            elif [ -f "/run.sh" ]; then
+                MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed -E 's/\brun\.sh\b/\/run\.sh/g')
+            fi
+        fi
+        ;;
+esac
 
 log "Starting application process via launcher..."
 printf "${C_DIM}>>> ${MODIFIED_STARTUP}${C_RESET}\n\n"

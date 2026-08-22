@@ -74,7 +74,18 @@ download() {
     fi
 }
 
-mkdir -p "${TARGET_BASE}"
+if [ ! -w "${TARGET_BASE}" ] && [ ! -w "$(dirname "${TARGET_BASE}")" ]; then
+    if [ -d "/home/container" ] && [ -w "/home/container" ]; then
+        TARGET_BASE="/home/container/.runtimes"
+    elif [ -d "/app" ] && [ -w "/app" ]; then
+        TARGET_BASE="/app/.runtimes"
+    elif [ -d "/server" ] && [ -w "/server" ]; then
+        TARGET_BASE="/server/.runtimes"
+    else
+        TARGET_BASE="/tmp/runtimes"
+    fi
+fi
+mkdir -p "${TARGET_BASE}" 2>/dev/null || true
 
 LANG_LOWER=$(echo "${LANG_REQ}" | tr '[:upper:]' '[:lower:]')
 
@@ -83,12 +94,16 @@ case "${LANG_LOWER}" in
     # Node.js / JavaScript / TypeScript
     # -------------------------------------------------------------------------
     node|nodejs|javascript|js)
+        if command -v node >/dev/null 2>&1 && [ "${VERSION_REQ}" = "latest" -o "${VERSION_REQ}" = "default" -o -z "${VERSION_REQ}" ]; then
+            ok "Node.js $(node -v 2>/dev/null) is already installed and ready"
+            exit 0
+        fi
         log "Resolving Node.js runtime (version: ${VERSION_REQ})..."
         if [ "${VERSION_REQ}" = "latest" ] || [ "${VERSION_REQ}" = "lts" ] || [ -z "${VERSION_REQ}" ]; then
-            NODE_VER=$(curl -fsSL https://nodejs.org/dist/index.json | jq -r '[.[] | select(.lts != false)][0].version')
+            NODE_VER=$(curl -fsSL https://nodejs.org/dist/index.json 2>/dev/null | jq -r '[.[] | select(.lts != false)][0].version' || echo "v20.18.0")
         elif [[ "${VERSION_REQ}" =~ ^v?[0-9]+$ ]]; then
             MAJOR="${VERSION_REQ#v}"
-            NODE_VER=$(curl -fsSL https://nodejs.org/dist/index.json | jq -r --arg m "v${MAJOR}." '[.[] | select(.version | startswith($m))][0].version')
+            NODE_VER=$(curl -fsSL https://nodejs.org/dist/index.json 2>/dev/null | jq -r --arg m "v${MAJOR}." '[.[] | select(.version | startswith($m))][0].version' || echo "v${MAJOR}.0.0")
         else
             [[ "${VERSION_REQ}" =~ ^v ]] && NODE_VER="${VERSION_REQ}" || NODE_VER="v${VERSION_REQ}"
         fi
@@ -107,9 +122,8 @@ case "${LANG_LOWER}" in
             ok "Installed Node.js ${NODE_VER} to ${DEST_DIR}"
         fi
         
-        # Install global essential packages (ts-node, tsx, typescript, pnpm, yarn, pm2)
         export PATH="${DEST_DIR}/bin:${PATH}"
-        npm install -g --no-fund --no-audit npm pnpm yarn typescript ts-node tsx nodemon pm2 || true
+        npm install -g --no-fund --no-audit npm pnpm yarn typescript ts-node tsx nodemon pm2 2>/dev/null || true
         ;;
 
     # -------------------------------------------------------------------------
