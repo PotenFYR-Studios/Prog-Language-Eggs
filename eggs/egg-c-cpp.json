@@ -36,7 +36,7 @@
             "env_variable": "BUILD_COMMAND",
             "default_value": "make",
             "user_viewable": true,
-            "user_editable": true,
+            "user_editable": false,
             "rules": "nullable|string|max:255",
             "field_type": "text"
         },
