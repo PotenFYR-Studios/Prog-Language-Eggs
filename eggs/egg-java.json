@@ -80,5 +80,6 @@
             "rules": "nullable|string",
             "field_type": "text"
         }
-    ]
+    ],
+    "image": "ghcr.io/potenfyr-studios/prog-language-eggs:java"
 }

@@ -1,4 +1,4 @@
-name: Build and Publish Multi-Arch Docker Image
+name: Build and Publish Multi-Arch Docker Images
 
 on:
   push:
@@ -13,11 +13,37 @@ env:
   IMAGE_NAME: potenfyr-studios/prog-language-eggs
 
 jobs:
-  build-and-push:
+  build-and-push-matrix:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: all
+            tag: latest
+          - variant: bun
+            tag: bun
+          - variant: nodejs
+            tag: nodejs
+          - variant: python
+            tag: python
+          - variant: golang
+            tag: golang
+          - variant: rust
+            tag: rust
+          - variant: php
+            tag: php
+          - variant: ruby
+            tag: ruby
+          - variant: java
+            tag: java
+          - variant: dotnet
+            tag: dotnet
+          - variant: c-cpp
+            tag: c-cpp
 
     steps:
       - name: Checkout repository
@@ -39,25 +65,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=sha,format=short
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            RUNTIME_VARIANT=${{ matrix.variant }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
