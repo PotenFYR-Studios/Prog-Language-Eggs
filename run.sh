@@ -114,10 +114,10 @@ fi
 # -----------------------------------------------------------------------------
 # 2. Interactive Setup Wizard (Interactive TTY vs Non-Interactive)
 # -----------------------------------------------------------------------------
-FILE_COUNT=$(find . -maxdepth 1 -not -name '.*' -not -name 'run.sh' -not -name 'entrypoint.sh' -not -name 'install.sh' -not -name 'install-runtime.sh' 2>/dev/null | wc -l)
+FILE_COUNT=$(find . -mindepth 1 -maxdepth 1 -not -name '.*' -not -name 'run.sh' -not -name 'entrypoint.sh' -not -name 'install.sh' -not -name 'install-runtime.sh' 2>/dev/null | wc -l)
 
 if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ "${LANGUAGE}" = "auto" ]; then
-    if [ -t 0 ] || [ -e /dev/tty ]; then
+    if [ -t 0 ]; then
         printf "\n${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
         printf "${C_CYAN}${C_BOLD}  Empty workspace detected! Choose a language to scaffold a starter project:${C_RESET}\n"
         printf "${C_MAGENTA}${C_BOLD}===============================================================================${C_RESET}\n"
