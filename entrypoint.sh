@@ -9,10 +9,10 @@
 #    - Feather Panel (feather-panel / renoki-co)
 #    - PufferPanel
 #    - Jexactyl / Wisp (Pterodactyl forks)
-#    - Standalone Docker & Kubernetes (Helm / Pods)
+#    - Standalone Docker & Kubernetes (Helm / Pods / Compose)
 # =============================================================================
 
-# --- Visual Colors ---
+# --- Visual Colors & Styling ---
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
 C_CYAN='\033[36m'
@@ -21,12 +21,14 @@ C_YELLOW='\033[33m'
 C_RED='\033[31m'
 C_MAGENTA='\033[35m'
 C_BLUE='\033[34m'
+C_WHITE='\033[37m'
 C_DIM='\033[2m'
 
-log()   { printf "${C_CYAN}${C_BOLD}prog-egg@universal~${C_RESET} ${C_BOLD}%s${C_RESET}\n" "$*"; }
-warn()  { printf "${C_YELLOW}${C_BOLD}prog-egg@universal~${C_RESET} ${C_YELLOW}${C_BOLD}[warn]${C_RESET} %s\n" "$*"; }
-error() { printf "${C_RED}${C_BOLD}prog-egg@universal~${C_RESET} ${C_RED}${C_BOLD}[error]${C_RESET} %s\n" "$*"; }
-ok()    { printf "${C_GREEN}${C_BOLD}prog-egg@universal~${C_RESET} ${C_GREEN}${C_BOLD}[ok]${C_RESET} %s\n" "$*"; }
+log()   { printf "${C_CYAN}${C_BOLD}[potenfyr]${C_RESET} %s\n" "$*"; }
+ok()    { printf "${C_GREEN}${C_BOLD}[potenfyr][✓]${C_RESET} %s\n" "$*"; }
+warn()  { printf "${C_YELLOW}${C_BOLD}[potenfyr][!]${C_RESET} ${C_YELLOW}%s${C_RESET}\n" "$*"; }
+error() { printf "${C_RED}${C_BOLD}[potenfyr][✗]${C_RESET} ${C_RED}%s${C_RESET}\n" "$*"; }
+info()  { printf "${C_BLUE}${C_BOLD}[potenfyr][i]${C_RESET} %s\n" "$*"; }
 
 # -----------------------------------------------------------------------------
 # 1. Universal Working Directory Resolution
@@ -40,6 +42,9 @@ elif [ -d "/app" ]; then
 elif [ -d "/server" ]; then
     cd /server 2>/dev/null || true
     ACTIVE_WORK_DIR="/server"
+elif [ -d "/workspace" ]; then
+    cd /workspace 2>/dev/null || true
+    ACTIVE_WORK_DIR="/workspace"
 else
     ACTIVE_WORK_DIR="${PWD}"
 fi
@@ -47,7 +52,7 @@ fi
 export WORK_DIR="${ACTIVE_WORK_DIR}"
 
 # -----------------------------------------------------------------------------
-# 2. Universal Port & Host Resolution
+# 2. Universal Port & Network Resolution
 # -----------------------------------------------------------------------------
 ACTIVE_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-${ALLOCATED_PORT:-${HTTP_PORT:-8080}}}}}}"
 export PORT="${ACTIVE_PORT}"
@@ -60,21 +65,23 @@ export HOST="0.0.0.0"
 export BIND_ADDRESS="0.0.0.0"
 
 # -----------------------------------------------------------------------------
-# 3. Detect Host Panel Environment
+# 3. Universal Host Panel Detection
 # -----------------------------------------------------------------------------
 PANEL_TYPE="Docker / Standalone"
-if [ -n "${P_SERVER_UUID:-}" ] || [ -d "/home/container" ]; then
+if [ -n "${P_SERVER_UUID:-}" ] || [ -f "/etc/pterodactyl/config.json" ]; then
     PANEL_TYPE="Pterodactyl / Pelican"
 elif [ -n "${FEATHER_PORT:-}" ] || [ -n "${FEATHER_SERVER_ID:-}" ]; then
     PANEL_TYPE="Feather Panel"
 elif [ -n "${PUFFER_PORT:-}" ] || [ -d "/server" ]; then
     PANEL_TYPE="PufferPanel"
 elif [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
-    PANEL_TYPE="Kubernetes"
+    PANEL_TYPE="Kubernetes Pod"
+elif [ -d "/home/container" ]; then
+    PANEL_TYPE="Pterodactyl / Pelican"
 fi
 
 # -----------------------------------------------------------------------------
-# 4. System PATH Configuration
+# 4. Universal Toolchain & PATH Configuration
 # -----------------------------------------------------------------------------
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
 export PATH="${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${PATH}"
@@ -90,8 +97,17 @@ export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export PYTHONUNBUFFERED=1
 export TZ="${TZ:-UTC}"
 
+# Ensure cache directories are writable for rootless / custom UID environments
+if [ -w "${ACTIVE_WORK_DIR}" ]; then
+    export NPM_CONFIG_CACHE="${ACTIVE_WORK_DIR}/.npm"
+    export PIP_CACHE_DIR="${ACTIVE_WORK_DIR}/.cache/pip"
+else
+    export NPM_CONFIG_CACHE="/tmp/.npm"
+    export PIP_CACHE_DIR="/tmp/.cache/pip"
+fi
+
 # -----------------------------------------------------------------------------
-# 5. Persisted Settings (.multi-prog.conf)
+# 5. Load Persisted Configuration (.multi-prog.conf)
 # -----------------------------------------------------------------------------
 CONF_FILE="${ACTIVE_WORK_DIR}/.multi-prog.conf"
 
@@ -126,13 +142,14 @@ unset _key
 MEMORY_AUTO_TUNE="${MEMORY_AUTO_TUNE:-1}"
 TOTAL_MEM_MB=0
 
-# Safely extract numeric memory limit
 if [ -n "${SERVER_MEMORY:-}" ] && [[ "${SERVER_MEMORY}" =~ ^[0-9]+$ ]]; then
     TOTAL_MEM_MB="${SERVER_MEMORY}"
 elif [ -n "${MEMORY:-}" ] && [[ "${MEMORY}" =~ ^[0-9]+$ ]]; then
     TOTAL_MEM_MB="${MEMORY}"
 elif [ -n "${FEATHER_MEMORY:-}" ] && [[ "${FEATHER_MEMORY}" =~ ^[0-9]+$ ]]; then
     TOTAL_MEM_MB="${FEATHER_MEMORY}"
+elif [ -n "${PUFFER_MEMORY:-}" ] && [[ "${PUFFER_MEMORY}" =~ ^[0-9]+$ ]]; then
+    TOTAL_MEM_MB="${PUFFER_MEMORY}"
 fi
 
 if [ "${TOTAL_MEM_MB}" -le 0 ]; then
@@ -156,7 +173,7 @@ fi
 
 AUTO_TUNE_INFO="Default"
 if [ "${MEMORY_AUTO_TUNE}" = "1" ] && [ "${SAFE_MEM_MB}" -gt 128 ]; then
-    AUTO_TUNE_INFO="${SAFE_MEM_MB}MB (85% of ${TOTAL_MEM_MB}MB Limit)"
+    AUTO_TUNE_INFO="${SAFE_MEM_MB}MB (${TOTAL_MEM_MB}MB Limit -> 85% Safe Heap)"
 
     if [[ " ${NODE_OPTIONS:-} " != *"--max-old-space-size"* ]]; then
         export NODE_OPTIONS="--max-old-space-size=${SAFE_MEM_MB} ${NODE_OPTIONS:-}"
@@ -198,7 +215,9 @@ EOF
     fi
 fi
 
-# --- Dynamic Toolchain Check ---
+# -----------------------------------------------------------------------------
+# 8. Dynamic Toolchain Auto-Installer (On-demand)
+# -----------------------------------------------------------------------------
 REQ_LANG="${LANGUAGE:-auto}"
 REQ_VER="${RUNTIME_VERSION:-latest}"
 
@@ -208,33 +227,48 @@ if [ "${REQ_LANG}" != "auto" ] && [ "${REQ_LANG}" != "" ]; then
     fi
 fi
 
-# --- Banner ---
+# -----------------------------------------------------------------------------
+# 9. Clean, Modern ANSI Gradient Banner & System Information Card
+# -----------------------------------------------------------------------------
+print_card_row() {
+    local label="$1"
+    local value="$2"
+    local color="$3"
+    
+    # Smart truncation to ensure pixel-perfect right border alignment
+    if [ "${#value}" -gt 48 ]; then
+        value="${value:0:45}..."
+    fi
+    
+    printf " ${C_DIM}│${C_RESET}  ${C_CYAN}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${color}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "${label}" "${value}"
+}
+
 print_banner() {
-    printf "${C_CYAN}${C_BOLD}"
-    cat << "EOF"
-.______   .______        ______    _______      .___  ___.  __    __   __      .___________. __  
-|   _  \  |   _  \      /  __  \  /  _____|     |   \/   | |  |  |  | |  |     |           ||  | 
-|  |_)  | |  |_)  |    |  |  |  ||  |  __  ____ |  \  /  | |  |  |  | |  |     `---|  |----`|  | 
-|   ___/  |      /     |  |  |  ||  | |_ ||____||  |\/|  | |  |  |  | |  |         |  |     |  | 
-|  |      |  |\  \----.|  `--'  ||  |__| |      |  |  |  | |  `--'  | |  `----.    |  |     |__| 
-| _|      | _| `._____| \______/  \______|      |__|  |__|  \______/  |_______|    |__|     (__) 
-EOF
-    printf "${C_MAGENTA}${C_BOLD}   :: Universal Programming Language Eggs :: By PotenFYR Studios ::\n${C_RESET}\n"
-    printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────┐${C_RESET}\n"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_GREEN}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Target Language" "${LANGUAGE:-Auto-Detect}"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_CYAN}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Runner / Engine" "${RUNNER:-Auto-Detect}"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_YELLOW}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Entry Point" "${MAIN_FILE:-Auto-Detect}"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_BLUE}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Host Platform" "${PANEL_TYPE}"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_MAGENTA}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Auto Memory Tune" "${AUTO_TUNE_INFO}"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_GREEN}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Assigned Port" "${ACTIVE_PORT}"
-    printf " ${C_DIM}│${C_RESET} ${C_BOLD}%-16s${C_RESET} : ${C_DIM}%-45s${C_RESET} ${C_DIM}│${C_RESET}\n" "Working Dir" "${ACTIVE_WORK_DIR}"
-    printf " ${C_DIM}└──────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
+    printf "\n"
+    printf "${C_CYAN}${C_BOLD}   __  ___      ____  _       __                              ${C_RESET}\n"
+    printf "${C_CYAN}${C_BOLD}  /  |/  /_  __/ / /_(_)     / /   ____ _____  ____ _         ${C_RESET}\n"
+    printf "${C_BLUE}${C_BOLD} / /|_/ / / / / / __/ /_____/ /   / __ \`/ __ \/ __ \`/         ${C_RESET}\n"
+    printf "${C_BLUE}${C_BOLD}/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          ${C_RESET}\n"
+    printf "${C_MAGENTA}${C_BOLD}/_/  /_/\\__,_/_/\\__/_/     /_____/\\__,_/_/ /_/\\__, /          ${C_RESET}\n"
+    printf "${C_MAGENTA}${C_BOLD}                                             /____/           ${C_RESET}\n"
+    printf "${C_YELLOW}${C_BOLD}  » Universal Multi-Language Runtime Environment${C_RESET}\n"
+    printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
+
+    printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
+    print_card_row "Target Language" "${LANGUAGE:-Auto-Detect}" "${C_GREEN}"
+    print_card_row "Runner / Engine" "${RUNNER:-Auto-Detect}" "${C_CYAN}"
+    print_card_row "Entry Point"     "${MAIN_FILE:-Auto-Detect}" "${C_YELLOW}"
+    print_card_row "Host Platform"   "${PANEL_TYPE}" "${C_BLUE}"
+    print_card_row "Memory Tuning"   "${AUTO_TUNE_INFO}" "${C_MAGENTA}"
+    print_card_row "Port Allocation" "${ACTIVE_PORT} (0.0.0.0)" "${C_GREEN}"
+    print_card_row "Working Dir"     "${ACTIVE_WORK_DIR}" "${C_DIM}"
+    printf " ${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 }
 
 print_banner
 
 # -----------------------------------------------------------------------------
-# 8. Execute Startup Command
+# 10. Execute Startup Command
 # -----------------------------------------------------------------------------
 RAW_STARTUP="${STARTUP:-bash run.sh}"
 
@@ -255,7 +289,8 @@ if [[ "${MODIFIED_STARTUP}" == *"run.sh"* ]] && [ ! -f "run.sh" ]; then
     fi
 fi
 
-log "Executing startup command: ${MODIFIED_STARTUP}"
-printf "\n"
+log "Starting application process via launcher..."
+printf "${C_DIM}>>> ${MODIFIED_STARTUP}${C_RESET}\n\n"
 
+# Execute with signal trapping for clean container lifecycle
 eval "${MODIFIED_STARTUP}"

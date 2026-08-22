@@ -23,10 +23,11 @@ C_MAGENTA='\033[35m'
 C_BLUE='\033[34m'
 C_DIM='\033[2m'
 
-log()  { printf "${C_CYAN}${C_BOLD}[run]${C_RESET} %s\n" "$*"; }
-ok()   { printf "${C_GREEN}${C_BOLD}[run][OK]${C_RESET} %s\n" "$*"; }
-warn() { printf "${C_YELLOW}${C_BOLD}[run][warn]${C_RESET} %s\n" "$*"; }
-fail() { printf "${C_RED}${C_BOLD}[run][ERROR]${C_RESET} %s\n" "$*"; exit 1; }
+log()   { printf "${C_CYAN}${C_BOLD}[potenfyr]${C_RESET} %s\n" "$*"; }
+ok()    { printf "${C_GREEN}${C_BOLD}[potenfyr][✓]${C_RESET} %s\n" "$*"; }
+warn()  { printf "${C_YELLOW}${C_BOLD}[potenfyr][!]${C_RESET} ${C_YELLOW}%s${C_RESET}\n" "$*"; }
+fail()  { printf "${C_RED}${C_BOLD}[potenfyr][✗]${C_RESET} ${C_RED}%s${C_RESET}\n" "$*"; exit 1; }
+info()  { printf "${C_BLUE}${C_BOLD}[potenfyr][i]${C_RESET} %s\n" "$*"; }
 
 # Determine active working directory across panels
 WORK_DIR="${WORK_DIR:-${PWD}}"
