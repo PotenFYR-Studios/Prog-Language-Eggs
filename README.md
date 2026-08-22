@@ -2,14 +2,15 @@
 
 > One egg. Every programming language. Every runtime. Every panel. Installs, updates, compiles and runs **50+ programming languages** across **Pterodactyl**, **Pelican**, **Feather Panel**, **PufferPanel**, **Jexactyl**, **Wisp**, and **Standalone Docker / Kubernetes**.
 
-```
-.______   .______        ______    _______      .___  ___.  __    __   __      .___________. __  
-|   _  \  |   _  \      /  __  \  /  _____|     |   \/   | |  |  |  | |  |     |           ||  | 
-|  |_)  | |  |_)  |    |  |  |  ||  |  __  ____ |  \  /  | |  |  |  | |  |     `---|  |----`|  | 
-|   ___/  |      /     |  |  |  ||  | |_ ||____||  |\/|  | |  |  |  | |  |         |  |     |  | 
-|  |      |  |\  \----.|  `--'  ||  |__| |      |  |  |  | |  `--'  | |  `----.    |  |     |__| 
-| _|      | _| `._____| \______/  \______|      |__|  |__|  \______/  |_______|    |__|     (__) 
-                           - By PotenFYR Studios
+```text
+   __  ___      ____  _       __                              
+  /  |/  /_  __/ / /_(_)     / /   ____ _____  ____ _         
+ / /|_/ / / / / / __/ /_____/ /   / __ `/ __ \/ __ `/         
+/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          
+/_/  /_/\__,_/_/\__/_/     /_____/\__,_/_/ /_/\__, /          
+                                             /____/           
+  » Universal Multi-Language Runtime Environment
+    By PotenFYR Studios • support@potenfyr.in
 ```
 
 [![CI Build](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions/workflows/docker-image.yml/badge.svg)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)

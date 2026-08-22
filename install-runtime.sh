@@ -28,10 +28,11 @@ C_GREEN='\033[32m'
 C_YELLOW='\033[33m'
 C_RED='\033[31m'
 
-log()  { printf "${C_CYAN}${C_BOLD}[runtime-manager]${C_RESET} %s\n" "$*"; }
-ok()   { printf "${C_GREEN}${C_BOLD}[runtime-manager][OK]${C_RESET} %s\n" "$*"; }
-warn() { printf "${C_YELLOW}${C_BOLD}[runtime-manager][warn]${C_RESET} %s\n" "$*"; }
-fail() { printf "${C_RED}${C_BOLD}[runtime-manager][ERROR]${C_RESET} %s\n" "$*"; exit 1; }
+log()   { printf "${C_CYAN}${C_BOLD}[potenfyr]${C_RESET} %s\n" "$*"; }
+ok()    { printf "${C_GREEN}${C_BOLD}[potenfyr][✓]${C_RESET} %s\n" "$*"; }
+warn()  { printf "${C_YELLOW}${C_BOLD}[potenfyr][!]${C_RESET} ${C_YELLOW}%s${C_RESET}\n" "$*"; }
+fail()  { printf "${C_RED}${C_BOLD}[potenfyr][✗]${C_RESET} ${C_RED}%s${C_RESET}\n" "$*"; exit 1; }
+info()  { printf "${C_BLUE}${C_BOLD}[potenfyr][i]${C_RESET} %s\n" "$*"; }
 
 LANG_REQ="${1:-}"
 VERSION_REQ="${2:-latest}"

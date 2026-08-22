@@ -35,10 +35,11 @@ C_GREEN='\033[32m'
 C_YELLOW='\033[33m'
 C_RED='\033[31m'
 
-log()  { printf "${C_CYAN}${C_BOLD}[install]${C_RESET} %s\n" "$*"; }
-ok()   { printf "${C_GREEN}${C_BOLD}[install][OK]${C_RESET} %s\n" "$*"; }
-warn() { printf "${C_YELLOW}${C_BOLD}[install][warn]${C_RESET} %s\n" "$*"; }
-fail() { printf "${C_RED}${C_BOLD}[install][ERROR]${C_RESET} %s\n" "$*"; exit 1; }
+log()   { printf "${C_CYAN}${C_BOLD}[potenfyr]${C_RESET} %s\n" "$*"; }
+ok()    { printf "${C_GREEN}${C_BOLD}[potenfyr][✓]${C_RESET} %s\n" "$*"; }
+warn()  { printf "${C_YELLOW}${C_BOLD}[potenfyr][!]${C_RESET} ${C_YELLOW}%s${C_RESET}\n" "$*"; }
+fail()  { printf "${C_RED}${C_BOLD}[potenfyr][✗]${C_RESET} ${C_RED}%s${C_RESET}\n" "$*"; exit 1; }
+info()  { printf "${C_BLUE}${C_BOLD}[potenfyr][i]${C_RESET} %s\n" "$*"; }
 
 DEBUG="${DEBUG:-0}"
 [ "${DEBUG}" = "1" ] && set -x
