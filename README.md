@@ -53,17 +53,27 @@
 
 ## Universal Multi-Panel Support
 
-The container dynamically adapts to any panel environment:
+The container detects its host platform **accurately** at boot (via environment markers, cgroup inspection
+and well-known paths) and adapts working directory, port and memory conventions automatically. The detected
+platform is exposed as `PANEL_TYPE` (human label) and `PANEL_FAMILY` (`wings|feather|puffer|k8s|paas|docker`)
+for scripts that need to branch on it.
 
-| Panel / Platform | Working Directory | Port Variable Unified | Memory Variable Unified |
-|---|---|---|---|
-| **Pterodactyl Panel** | `/home/container` | `SERVER_PORT` / `PORT` | `SERVER_MEMORY` |
-| **Pelican Panel** | `/home/container` | `SERVER_PORT` / `PORT` | `SERVER_MEMORY` |
-| **Feather Panel** | `/app` or `/home/container` | `FEATHER_PORT` / `PORT` | `FEATHER_MEMORY` / `MEMORY` |
-| **PufferPanel** | `/server` | `PORT` / `PUFFER_PORT` | `MEMORY` / `MAX_RAM` |
-| **Jexactyl / Wisp** | `/home/container` | `SERVER_PORT` / `PORT` | `SERVER_MEMORY` |
-| **Standalone Docker** | `/home/container` or `$PWD` | `PORT` / `HTTP_PORT` | Cgroup v1/v2 limits |
-| **Kubernetes** | `/home/container` or `/app` | `PORT` / `HTTP_PORT` | Cgroup v1/v2 limits |
+| Panel / Platform | Detected As (`PANEL_TYPE`) | Family | Working Directory | Port Variable Unified |
+|---|---|---|---|---|
+| **Pterodactyl Panel** | Pterodactyl Panel | wings | `/home/container` | `SERVER_PORT` / `PORT` |
+| **Pelican Panel** | Pelican Panel | wings | `/home/container` | `SERVER_PORT` / `PORT` |
+| **Feather Panel** | Feather Panel | feather | `/app` or `/home/container` | `FEATHER_PORT` / `PORT` |
+| **PufferPanel** | PufferPanel | puffer | `/server` | `PORT` / `PUFFER_PORT` |
+| **Jexactyl / Wisp / Emerald** | per-panel label | wings | `/home/container` | `SERVER_PORT` / `PORT` |
+| **Kubernetes / OpenShift** | Kubernetes Pod | k8s | `/home/container` or `/app` | `PORT` / `HTTP_PORT` |
+| **Fly.io** | Fly.io | paas | `$PWD` | `PORT` |
+| **Railway** | Railway | paas | `$PWD` | `PORT` |
+| **Render** | Render | paas | `$PWD` | `PORT` |
+| **Heroku-style dynos** | Heroku-style Dyno | paas | `/app` | `PORT` |
+| **Standalone Docker / Podman** | Docker / Standalone | docker | `/home/container` or `$PWD` | `PORT` / `HTTP_PORT` |
+
+The single universal egg imports cleanly into every PTDL_v2-compatible panel (Pterodactyl, Pelican, Feather,
+Jexactyl, Wisp, Emerald, Convoy) — one egg file covers them all.
 
 ---
 
@@ -132,26 +142,21 @@ The container dynamically adapts to any panel environment:
 
 ```
 Prog-Language-Eggs/
-├── egg-programming-universal.json       ← Flagship Universal Egg (Import into Pterodactyl / Pelican / Feather)
-├── eggs/                                 ← Modular Dedicated Eggs per Category
-│   ├── egg-nodejs-bun-typescript.json
-│   ├── egg-python.json
-│   ├── egg-golang.json
-│   ├── egg-rust.json
-│   ├── egg-java.json
-│   ├── egg-c-cpp.json
-│   ├── egg-php.json
-│   ├── egg-dotnet.json
-│   └── egg-ruby.json
-├── templates/                            ← Starter Project Templates
-├── Dockerfile                            ← Universal Multi-Arch Runtime Container
+├── egg-programming-universal.json       ← THE Single Universal Egg (Import into Pterodactyl / Pelican / Feather)
+├── Dockerfile                            ← Universal Multi-Arch Runtime Container (single image)
 ├── entrypoint.sh                         ← Multi-Panel Entrypoint (Settings, Environment, Banner)
-├── run.sh                                ← Universal Launcher & Project Auto-Detector
+├── run.sh                                ← Universal Launcher & Project Auto-Detector (+ Environment Isolation)
 ├── install.sh                            ← Multi-Panel Installer Script
-├── install-runtime.sh                    ← Dynamic On-Demand Toolchain Downloader
+├── install-runtime.sh                    ← Dynamic On-Demand Toolchain Downloader (version-aware)
+├── resolve-version.sh                    ← Version Validator & Channel Resolver (live upstream feeds)
 ├── .github/workflows/docker-image.yml    ← Automated CI/CD Multi-Arch Build Workflow
 └── README.md                             ← Comprehensive Documentation
 ```
+
+> **One egg. One image.** All previous per-language eggs (`eggs/egg-*.json`) have been consolidated into
+> `egg-programming-universal.json`. The target language and its exact version are chosen at startup via
+> variables (`LANGUAGE`, `RUNTIME_VERSION`, `EXTRA_RUNTIMES=name@version`, ...) and the runtime is downloaded
+> **inside your container** on demand — fully isolated, rootless, nothing pre-baked.
 
 ---
 
@@ -181,22 +186,117 @@ ghcr.io/potenfyr-studios/prog-language-eggs:latest
 
 ## Available Egg Configurations
 
-The repository includes both the universal all-in-one egg and modular targeted eggs:
+There is exactly **one** egg to maintain:
 
 | Egg File | Name in Panel | Target Stack / Use-case |
 |---|---|---|
-| [`egg-programming-universal.json`](egg-programming-universal.json) | **Multi-Languages (Universal All-In-One)** | Single egg supporting all 50+ languages with dynamic auto-detection. |
-| [`eggs/egg-nodejs-bun-typescript.json`](eggs/egg-nodejs-bun-typescript.json) | **Multi-Languages (Node.js, Bun & TypeScript)** | Node.js, Bun, Deno, TypeScript, TSX, with node-gyp & Python helper. |
-| [`eggs/egg-python.json`](eggs/egg-python.json) | **Multi-Languages (Python, FastAPI & Flask)** | Python 3, uv, pip, poetry, pipenv, FastAPI, Flask, Django, Discord bots. |
-| [`eggs/egg-java.json`](eggs/egg-java.json) | **Multi-Languages (Java, Maven & Spring)** | OpenJDK, Maven, Gradle, Spring Boot, executable JARs. |
-| [`eggs/egg-golang.json`](eggs/egg-golang.json) | **Multi-Languages (Go & Golang)** | Go compiler, Gin, Fiber, Echo, CGO build support. |
-| [`eggs/egg-rust.json`](eggs/egg-rust.json) | **Multi-Languages (Rust & Cargo)** | Cargo, Axum, Actix-web, Tokio, native release optimization. |
-| [`eggs/egg-c-cpp.json`](eggs/egg-c-cpp.json) | **Multi-Languages (C & C++)** | GCC, G++, Clang, Make, CMake, Ninja native compilation. |
-| [`eggs/egg-dotnet.json`](eggs/egg-dotnet.json) | **Multi-Languages (.NET & C#)** | .NET SDK, C#, F#, VB.NET, ASP.NET Core web apps. |
-| [`eggs/egg-php.json`](eggs/egg-php.json) | **Multi-Languages (PHP & Composer)** | PHP CLI, built-in server, Composer, Laravel, Symfony. |
-| [`eggs/egg-ruby.json`](eggs/egg-ruby.json) | **Multi-Languages (Ruby & Rails)** | Ruby, Bundler, Puma, Sinatra, Rails web servers. |
-| [`eggs/egg-static-spa.json`](eggs/egg-static-spa.json) | **Multi-Languages (Static Website & SPA)** | Static HTML5, React, Vue, Svelte, Vite, Single Page Applications. |
-| [`eggs/egg-custom.json`](eggs/egg-custom.json) | **Multi-Languages (Custom & Dynamic Runtimes)** | Custom toolchains, direct binary URL downloads, arbitrary commands. |
+| [`egg-programming-universal.json`](egg-programming-universal.json) | **Multi-Languages (Universal All-In-One)** | Single egg supporting all 50+ languages with dynamic auto-detection, on-demand runtime installation inside the container, per-version environment isolation, and version channel keywords. |
+
+---
+
+## Version Selection & Channels (`RUNTIME_VERSION`)
+
+Version requests are **validated and resolved from live upstream feeds** before anything downloads — invalid
+input fails fast with clear guidance instead of a broken install. No hardcoded pins.
+
+| Request | Example | Behaviour |
+|---|---|---|
+| `latest` | `RUNTIME_VERSION=latest` | Newest stable/GA release (default). |
+| `stable` | `RUNTIME_VERSION=stable` | Newest LTS/stable line (Node → newest LTS, Rust → `stable`, .NET → LTS channel). |
+| `lts` | `RUNTIME_VERSION=lts` | Newest LTS (Node.js, Java/Adoptium, .NET). |
+| `alpha`, `beta`, `rc`, `preview`, `pre` | `RUNTIME_VERSION=beta` | Pre-release channel where upstream publishes one (Go beta/rc, Deno pre-releases, .NET STS preview, Dart beta, Java EA, Zig latest, Rust `beta`). Falls back to newest stable with a console notice when no pre-release exists. |
+| `nightly`, `dev`, `canary`, `tip`, `edge` | `RUNTIME_VERSION=nightly` | Nightly/canary line (Node nightly CDN, Rust `nightly`, Zig `master`, .NET daily, Dart dev, Bun canary, Java tip-EA). |
+| Concrete | `22`, `20.11`, `v22.1.4`, `3.12`, `1.22`, `17`, `9.0` | Resolved to the newest matching release from the feed; unknown series are rejected with the list of valid ones. |
+| Invalid input | `22.abc!!` | **Rejected before any download** — exit 64 with accepted-form examples. |
+
+Companion runtimes accept a **per-component version**: `EXTRA_RUNTIMES=python@3.12,bun@1.1,java@21`.
+
+Resolution diagnostics are logged to `.logs/version-resolver.log`.
+
+---
+
+## Per-Language Environment Isolation & Data Retention
+
+Everything installs **inside your container** (workspace `.runtimes/`) — rootless, isolated from the host.
+Each language + major-version series gets its own environment folder so switching never conflicts or deletes:
+
+```text
+.environments/
+├── active                    ← last used instance marker
+├── nodejs/
+│   ├── node22/               ← npm/bun caches, tool state for Node 22.x
+│   └── node24/               ← kept intact if you switch to 24 and back
+├── python/py3.12/  golang/go1.22/  java/jdk21/  rust/rust-stable/ ...
+└── .resolved/<lang>          ← resolved concrete version cache
+```
+
+**Switch behaviour (nothing is ever auto-deleted):**
+
+| Change | What happens |
+|---|---|
+| Same language, same major series (e.g. patch update) | ✅ Compatible — same environment folder reused. Console: info message. |
+| Same language, new major series (e.g. Node 22 → 24) | ⚠️ Breaking boundary — **new** folder created; previous folder preserved untouched; yellow console warning shows both paths. |
+| Different language (e.g. Python → Go) | ⚠️ Separate subtree created; previous language's environment fully retained; console warning lists it. |
+
+Retained environments are listed in the console with their sizes on every boot, including instructions to
+delete them **manually** via the panel File Manager when you no longer need them.
+
+---
+
+## Production & Multi-Layer Applications
+
+Built for both tiny services and multi-layer architectures (web + worker + api) inside one container:
+
+### Multi-Process Supervisor (Procfile)
+Create a `Procfile` in your workspace:
+
+```procfile
+web:    node server.js
+api:    wait_port 127.0.0.1 6379 30 && python -m uvicorn api:app --port 8081
+worker: node worker.js
+```
+
+| Capability | Detail |
+|---|---|
+| Forced mode | `SUPERVISOR=procfile` runs the supervisor even when a single language is detected; `SUPERVISOR=single` disables it. Default `auto`. |
+| Crash recovery | Crashed processes restart with linear backoff (1s→2s→3s...), giving up after 5 attempts (`PROCFILE_RESTART=1`, `PROCFILE_MAX_RESTARTS`). |
+| Graceful shutdown | SIGTERM from the panel relays to every child; hard-kill only after a drain window. |
+| Per-process logs | `PROCFILE_LOGS=1` mirrors each stream to `.logs/processes/<name>.log`. |
+| Startup ordering | Built-in `wait_port <host> <port> [timeout]` helper lets layers wait on dependencies (databases, caches, queues). |
+
+### Health Checks
+Set `HEALTH_CHECK_PATH=/healthz` and the launcher probes `http://127.0.0.1:$SERVER_PORT/healthz`
+after boot until it answers (default budget 60s). With `HEALTH_STRICT=1`, a failed probe exits non-zero
+so panels mark the server unhealthy instead of silently running.
+
+### Speed & Efficiency
+* **Parallel companion installs** — `EXTRA_RUNTIMES=a,b,c` download simultaneously; each stream logged to
+  `.logs/runtime-install-<name>.log`.
+* **Resolver TTL cache** — version lookups are cached under `.cache/version-resolver/` for 6h
+  (`RESOLVER_CACHE_TTL` seconds, `0` disables) so warm boots skip upstream feeds entirely.
+* **Idempotent installs** — already-downloaded runtimes short-circuit before any network I/O.
+
+### Security Posture
+* **Checksum verification** — Node.js tarballs verified against official `SHASUMS256.txt`; Zig against the
+  published `shasum`; mismatch aborts the install loudly.
+* **URL validation** — `GIT_REPO`, `CUSTOM_RUNTIME_URL` must be well-formed https/ssh/http URLs
+  (CRLF/header-injection shapes rejected before any fetch).
+* **Secret redaction** — credentials embedded in URLs or tokens never reach console/log output.
+* **Root guard** — warns when the container runs as uid 0 (panels should use the non-root image user).
+* **Full audit trail** — every boot mirrors the complete console to `.logs/console.log`
+  (previous boot kept as `.1`; disable with `LAUNCHER_LOG=0`), plus an image provenance stamp
+  (`/etc/potenfyr-version`) printed at startup.
+
+---
+
+## Troubleshooting & Diagnostics
+
+| Symptom | Where to look |
+|---|---|
+| Version request rejected / wrong version picked | `.logs/version-resolver.log` |
+| Runtime download or extraction failure | Installer console output (each step is logged with retry counts and sizes) |
+| Environment not reused after restart | Check `.environments/active` marker contents |
+| Full step-by-step script trace | Restart with `DEBUG=1` — bash xtrace is written to log files while the console stays readable |
 
 ---
 
@@ -207,9 +307,9 @@ The repository includes both the universal all-in-one egg and modular targeted e
 | **Target Language** | `LANGUAGE` | `auto` | 👤 Yes | Target language or 'auto' for intelligent file auto-detection. |
 | **Execution Runner** | `RUNNER` | `auto` | 👤 Yes | Runner or engine to use (e.g. auto, node, bun, tsx, uvicorn, cargo, go). |
 | **Main Entry File** | `MAIN_FILE` | `auto` | 👤 Yes | The main script or file to execute (leave 'auto' for smart detection). |
-| **Extra Runtimes** | `EXTRA_RUNTIMES` | `none` | 👤 Yes | Comma-separated auxiliary toolchains to install (e.g. `python,java,go` or `none`). |
+| **Extra Runtimes** | `EXTRA_RUNTIMES` | `none` | 👤 Yes | Comma-separated auxiliary toolchains to install (e.g. `python,java,go`) with optional per-component versions (`python@3.12,bun@1.1`). |
 | **Skip Runtimes** | `SKIP_RUNTIMES` | `none` | 👤 Yes | Comma-separated runtimes to skip/disable (e.g. `python,java`). |
-| **Node-gyp Support** | `NODE_GYP_SUPPORT` | `1` | 👤 Yes | Enable Python 3 & build tools for native node addon compilation (1=Enabled, 0=Disabled). |
+| **Runtime Version** | `RUNTIME_VERSION` | `latest` | 👤 Yes | Primary runtime version: concrete (`22`, `20.11.1`) or channel keyword (`latest`, `stable`, `lts`, `alpha`, `beta`, `rc`, `preview`, `nightly`). Validated against live upstream feeds — invalid values fail fast with guidance. |
 | **Custom Download URL** | `CUSTOM_RUNTIME_URL` | `""` | 👤 Yes | Direct URL to download a custom runtime (.tar.gz, .zip, or standalone binary). |
 | **Package Manager** | `PACKAGE_MANAGER` | `auto` | 👤 Yes | Package manager for dependency resolution (e.g. auto, npm, pnpm, yarn, bun, pip, cargo). |
 | **Memory Auto Tune** | `MEMORY_AUTO_TUNE` | `1` | 👤 Yes | Auto-tune GC & memory limits to prevent container OOM (1 = Enabled, 0 = Disabled). |
@@ -226,9 +326,16 @@ The repository includes both the universal all-in-one egg and modular targeted e
 | **Git Repository** | `GIT_REPO` | `""` | 👤 Yes | Git repository URL to clone and sync on startup. |
 | **Git Branch** | `GIT_BRANCH` | `main` | 👤 Yes | Target branch to clone or track from the Git repository. |
 | **Git Auth Token** | `GIT_AUTH_TOKEN` | `""` | 👤 Yes | Personal Access Token for private Git repositories. |
+| **Node-gyp Support** | `NODE_GYP_SUPPORT` | `1` | 👤 Yes | Install Python 3 & build tools for native node addon compilation (1=Enabled, 0=Disabled). |
+| **Skip Python Companion** | `SKIP_PYTHON` | `0` | 👤 Yes | Prevent the Python companion toolchain from being installed (1 = Skip). |
 | **Extra URLs** | `EXTRA_URLS` | `""` | 👤 Yes | Additional files or archives to download on boot (URL or dest\|URL). |
 | **Auto Restart** | `AUTO_RESTART` | `0` | 👤 Yes | Automatically restart process on unexpected crash (1 = Enabled, 0 = Disabled). |
 | **Restart Delay** | `RESTART_DELAY` | `3` | 👤 Yes | Delay in seconds before attempting to auto-restart. |
+| **Supervisor Mode** | `SUPERVISOR` | `auto` | 👤 Yes | Multi-process mode: `auto`, `procfile` (force), or `single`. Powers multi-layer apps in one container. |
+| **Procfile Auto-Restart** | `PROCFILE_RESTART` | `1` | 👤 Yes | Restart crashed Procfile processes with backoff (1 = Enabled, 0 = Disabled). |
+| **Procfile Per-Process Logs** | `PROCFILE_LOGS` | `0` | 👤 Yes | Mirror each supervised process stream to `.logs/processes/<name>.log` (1 = Enabled). |
+| **Health Check Path** | `HEALTH_CHECK_PATH` | `""` | 👤 Yes | HTTP path probed after boot (e.g. `/healthz`). Empty = disabled. |
+| **Health Check Strict** | `HEALTH_STRICT` | `0` | 👤 Yes | Exit non-zero when the health check fails (1 = Strict, 0 = Warn only). |
 | **Assigned Port** | `SERVER_PORT` | `{{server.build.default.port}}` | 🔒 Admin | Primary network port allocated by the panel (`nullable|string`). |
 | **Debug Mode** | `DEBUG` | `0` | 👤 Yes | Enable verbose script debug output (1 = Enabled, 0 = Disabled). |
 

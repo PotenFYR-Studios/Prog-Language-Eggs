@@ -65,19 +65,93 @@ export HOST="0.0.0.0"
 export BIND_ADDRESS="0.0.0.0"
 
 # -----------------------------------------------------------------------------
-# 3. Universal Host Panel Detection
+# 3. Universal Host Panel Detection (accurate, multi-panel, multi-platform)
 # -----------------------------------------------------------------------------
+# Detection strategy (most specific -> most generic), exporting both a human
+# label and a machine family so launchers can adapt behaviour per platform:
+#
+#   FAMILY wings    : Pterodactyl, Pelican, Jexactyl, Wisp, Emerald (Wings-based)
+#   FAMILY feather  : Feather Panel
+#   FAMILY puffer   : PufferPanel
+#   FAMILY k8s      : Kubernetes / OpenShift / Nomad orchestrators
+#   FAMILY paas     : Railway / Render / Fly.io / Heroku-style platforms
+#   FAMILY docker   : Plain Docker / Podman / containerd
+#
 PANEL_TYPE="Docker / Standalone"
-if [ -n "${P_SERVER_UUID:-}" ] || [ -f "/etc/pterodactyl/config.json" ]; then
-    PANEL_TYPE="Pterodactyl / Pelican"
+PANEL_FAMILY="docker"
+
+if [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
+    PANEL_TYPE="Kubernetes Pod"
+    PANEL_FAMILY="k8s"
+elif [ -n "${FLY_APP_NAME:-}" ] || [ -n "${FLY_MACHINE_ID:-}" ]; then
+    PANEL_TYPE="Fly.io"
+    PANEL_FAMILY="paas"
+elif [ -n "${RAILWAY_ENVIRONMENT:-}" ] || [ -n "${RAILWAY_PROJECT_ID:-}" ]; then
+    PANEL_TYPE="Railway"
+    PANEL_FAMILY="paas"
+elif [ -n "${RENDER_SERVICE_NAME:-}" ] || [ -n "${RENDER_INTERNAL_HOSTNAME:-}" ]; then
+    PANEL_TYPE="Render"
+    PANEL_FAMILY="paas"
+elif [ -d "/app" ] && [ -f "/app/Procfile" ] && [ -z "${SERVER_PORT:-}" ] && [ -n "${DYNO:-}" ]; then
+    PANEL_TYPE="Heroku-style Dyno"
+    PANEL_FAMILY="paas"
+elif [ -n "${PUFFER_PORT:-}" ] || [ -n "${PUFFER_SERVER_UUID:-}" ] || grep -qs "pufferpanel" /proc/1/cgroup 2>/dev/null; then
+    PANEL_TYPE="PufferPanel"
+    PANEL_FAMILY="puffer"
 elif [ -n "${FEATHER_PORT:-}" ] || [ -n "${FEATHER_SERVER_ID:-}" ]; then
     PANEL_TYPE="Feather Panel"
-elif [ -n "${PUFFER_PORT:-}" ] || [ -d "/server" ]; then
-    PANEL_TYPE="PufferPanel"
-elif [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
+    PANEL_FAMILY="feather"
+elif [ -n "${P_SERVER_UUID:-}" ] || [ -n "${SERVER_UUID:-}" ] || [ -f "/etc/pterodactyl/config.json" ]; then
+    # Wings-family discrimination:
+    #   Pterodactyl Wings injects SERVER_UUID; Pelican uses P_SERVER_UUID.
+    if [ -n "${PELICAN_PANEL_VERSION:-}" ] || { [ -n "${P_SERVER_UUID:-}" ] && [ -z "${SERVER_UUID:-}" ]; }; then
+        PANEL_TYPE="Pelican Panel"
+        PANEL_FAMILY="wings"
+    elif [ -n "${JEXACTYL_VERSION:-}" ] || [ -f "/etc/jexactyl/config.json" ]; then
+        PANEL_TYPE="Jexactyl"
+        PANEL_FAMILY="wings"
+    elif [ -n "${WISP_PANEL_VERSION:-}" ] || [ -f "/etc/wisp/config.json" ]; then
+        PANEL_TYPE="Wisp"
+        PANEL_FAMILY="wings"
+    else
+        PANEL_TYPE="Pterodactyl Panel"
+        PANEL_FAMILY="wings"
+    fi
+elif [ -n "${EMERALD_SRV_UUID:-}" ]; then
+    PANEL_TYPE="Emerald Panel"
+    PANEL_FAMILY="wings"
+elif [ -n "${HOSTNAME:-}" ] && grep -qs "kubepods" /proc/1/cgroup 2>/dev/null; then
     PANEL_TYPE="Kubernetes Pod"
-elif [ -d "/home/container" ]; then
-    PANEL_TYPE="Pterodactyl / Pelican"
+    PANEL_FAMILY="k8s"
+fi
+
+export PANEL_TYPE PANEL_FAMILY
+
+# -----------------------------------------------------------------------------
+# 3.5 Production Reliability: Console Mirroring, Version Stamp, Safety Checks
+# -----------------------------------------------------------------------------
+# Mirror the entire boot + runtime console into .logs/console.log so users can
+# troubleshoot crashes even after the panel scrollback is gone. Opt out with
+# LAUNCHER_LOG=0. Rotates the previous boot's log to .1 automatically.
+LAUNCH_CONSOLE_LOG=""
+if [ "${LAUNCHER_LOG:-1}" = "1" ]; then
+    _LOGDIR="${ACTIVE_WORK_DIR}/.logs"
+    mkdir -p "${_LOGDIR}" 2>/dev/null || true
+    if [ -d "${_LOGDIR}" ] && [ -w "${_LOGDIR}" ]; then
+        LAUNCH_CONSOLE_LOG="${_LOGDIR}/console.log"
+        [ -f "${LAUNCH_CONSOLE_LOG}" ] && mv -f "${LAUNCH_CONSOLE_LOG}" "${LAUNCH_CONSOLE_LOG}.1" 2>/dev/null || true
+        exec > >(tee -a "${LAUNCH_CONSOLE_LOG}") 2>&1
+    fi
+fi
+
+# Running as root inside a panel container is a security anti-pattern; warn.
+if [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
+    warn "Container is running as ROOT. Panels should launch images as a non-root user (e.g. uid 988)."
+fi
+
+# Image provenance stamp (written at docker build time) for supportability.
+if [ -f "/etc/potenfyr-version" ]; then
+    info "Image build: $(head -n1 /etc/potenfyr-version 2>/dev/null)"
 fi
 
 # -----------------------------------------------------------------------------
@@ -132,7 +206,9 @@ for _key in LANGUAGE RUNNER MAIN_FILE PACKAGE_MANAGER BUILD_COMMAND \
             GIT_AUTH_TOKEN CUSTOM_COMMAND CUSTOM_RUNTIME_URL EXTRA_ARGS DEBUG RUNTIME_VERSION \
             STARTER_TEMPLATE SERVER_PORT MEMORY_AUTO_TUNE DEV_MODE \
             PRE_RUN_COMMAND POST_RUN_COMMAND CLEAN_BUILD_CACHE AUTO_ENV_INJECT \
-            NODE_GYP_SUPPORT EXTRA_RUNTIMES SKIP_RUNTIMES SKIP_PYTHON; do
+            NODE_GYP_SUPPORT EXTRA_RUNTIMES SKIP_RUNTIMES SKIP_PYTHON \
+            SUPERVISOR PROCFILE_RESTART PROCFILE_LOGS PROCFILE_MAX_RESTARTS \
+            HEALTH_CHECK_PATH HEALTH_STRICT HEALTH_TIMEOUT LAUNCHER_LOG RESOLVER_CACHE_TTL; do
     apply_conf "${_key}"
 done
 unset _key
@@ -287,22 +363,52 @@ if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
 fi
 
 if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXTRA_RUNTIMES}" != "auto" ]; then
+    # Install companion runtimes in PARALLEL for fast boots; each stream is
+    # logged separately to .logs/runtime-install-<name>.log and summarized.
+    _LOGDIR="${ACTIVE_WORK_DIR}/.logs"
+    mkdir -p "${_LOGDIR}" 2>/dev/null || true
     OLD_IFS="${IFS}"
     IFS=','
     for extra_r in ${EXTRA_RUNTIMES}; do
         IFS="${OLD_IFS}"
-        extra_r=$(echo "${extra_r}" | tr -d '[:space:]')
-        [ -z "${extra_r}" ] && continue
-        
+        extra_full=$(echo "${extra_r}" | tr -d '[:space:]')
+        [ -z "${extra_full}" ] && continue
+        # Per-component version syntax: name@version (e.g. python@3.12, java@21)
+        extra_r="${extra_full%%@*}"; extra_ver="${extra_full#*@}"
+        [ "${extra_ver}" = "${extra_full}" ] && extra_ver="latest"
+        extra_r=$(echo "${extra_r}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+
         if [ "${SKIP_PYTHON:-0}" = "1" ] && [ "${extra_r}" = "python" ]; then
             continue
         fi
-        
+
         if [ -f /usr/local/bin/install-runtime.sh ]; then
-            /usr/local/bin/install-runtime.sh "${extra_r}" "latest" /opt/runtimes || true
+            log "Installing companion runtime '${extra_r}' (${extra_ver}) in background..."
+            (
+                if /usr/local/bin/install-runtime.sh "${extra_r}" "${extra_ver}" /opt/runtimes \
+                        >>"${_LOGDIR}/runtime-install-${extra_r}.log" 2>&1; then
+                    : >"${_LOGDIR}/.${extra_r}.install-ok"
+                else
+                    : >"${_LOGDIR}/.${extra_r}.install-failed"
+                fi
+            ) &
         fi
     done
     IFS="${OLD_IFS}"
+    wait
+    # Summarize parallel install results
+    _FAILED=0
+    for marker in "${_LOGDIR}"/.*.install-failed; do
+        [ -f "${marker}" ] || continue
+        _name="$(basename "${marker}" .install-failed)"; _name="${_name#.}"
+        warn "Companion runtime '${_name}' FAILED to install -> ${_LOGDIR}/runtime-install-${_name}.log"
+        rm -f "${marker}"; _FAILED=1
+    done
+    for marker in "${_LOGDIR}"/.*.install-ok; do
+        [ -f "${marker}" ] && rm -f "${marker}"
+    done
+    [ "${_FAILED}" = "0" ] && ok "All companion runtimes installed successfully."
+    unset _FAILED
 fi
 
 # -----------------------------------------------------------------------------
@@ -340,20 +446,19 @@ if [ ! -f "${LAUNCHER_SCRIPT}" ]; then
     LAUNCHER_SCRIPT="/tmp/potenfyr/run.sh"
 fi
 
-# 1. Normalize any variation of run.sh invocation across old and new server configs
+# 1. Normalize any variation of run.sh invocation across old/new/foreign configs.
+#    ANY startup that references run.sh is forced to exactly "bash <launcher>":
+#    this guarantees bash interpretation (run.sh uses bash features like
+#    associative arrays) regardless of whether the old egg wrote sh/bash/./abs
+#    paths, and drops stale extra arguments left over from previous eggs.
 case "${MODIFIED_STARTUP}" in
     *run.sh*)
-        MODIFIED_STARTUP=$(echo "${MODIFIED_STARTUP}" | sed \
-            -e "s#/home/container/run\.sh#${LAUNCHER_SCRIPT}#g" \
-            -e "s#/server/run\.sh#${LAUNCHER_SCRIPT}#g" \
-            -e "s#/app/run\.sh#${LAUNCHER_SCRIPT}#g" \
-            -e "s#\./run\.sh#${LAUNCHER_SCRIPT}#g" \
-            -e "s# run\.sh# ${LAUNCHER_SCRIPT}#g" \
-            -e "s#^run\.sh#${LAUNCHER_SCRIPT}#g")
+        MODIFIED_STARTUP="bash ${LAUNCHER_SCRIPT}"
         ;;
     *)
         # If server was migrated from another egg (e.g. startup was 'node index.js' or 'python main.py'),
-        # route it safely through the universal launcher as CUSTOM_COMMAND
+        # route it safely through the universal launcher as CUSTOM_COMMAND so
+        # the user's original command still runs, with all launcher features.
         if [ -n "${MODIFIED_STARTUP}" ] && [ "${MODIFIED_STARTUP}" != "${LAUNCHER_SCRIPT}" ] && [ "${MODIFIED_STARTUP}" != "bash ${LAUNCHER_SCRIPT}" ]; then
             export CUSTOM_COMMAND="${MODIFIED_STARTUP}"
             MODIFIED_STARTUP="bash ${LAUNCHER_SCRIPT}"

@@ -28,7 +28,7 @@
     "startup": "bash /usr/local/bin/run.sh",
     "config": {
         "files": "{\".env\":{\"parser\":\"file\",\"find\":{\"PORT=\":\"PORT={{server.build.default.port}}\",\"SERVER_PORT=\":\"SERVER_PORT={{server.build.default.port}}\"}},\"config.json\":{\"parser\":\"json\",\"find\":{\"port\":\"{{server.build.default.port}}\"}}}",
-        "startup": "{\"done\":[\"listening on\",\"started on\",\"Server started\",\"Listening on\",\"Ready on\",\"running at\",\"HTTP server listening\",\"Application started\",\"Serving at\",\"online\",\"Now listening on\"],\"user_interaction\":[\"Select choice\",\"[1-12]\",\"Press ENTER\"],\"strip_ansi\":false}",
+        "startup": "{\"done\":[\"listening on\",\"started on\",\"Server started\",\"Listening on\",\"Ready on\",\"ready\",\"running at\",\"HTTP server listening\",\"Application started\",\"Serving at\",\"online\",\"Now listening on\",\"Uvicorn running on\",\"Application startup complete\",\"Booting worker\",\"Puma starting\",\"Server is running\",\"app listening\",\"Tomcat started\",\"Started Application\"],\"user_interaction\":[\"Select choice\",\"[1-12]\",\"Press ENTER\"],\"strip_ansi\":false}",
         "stop": "^C",
         "logs": "{}"
     },
@@ -281,9 +281,99 @@
             "field_type": "text"
         },
         {
+            "name": "Runtime Version",
+            "description": "Version of the primary runtime: 22 | 22.1 | 22.1.4 or keywords latest, stable, lts, alpha, beta, rc, preview, nightly. Validated & resolved from live upstream feeds.",
+            "env_variable": "RUNTIME_VERSION",
+            "default_value": "latest",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Custom Runtime URL",
+            "description": "Direct URL to a custom runtime (.tar.gz, .zip or standalone binary) downloaded into the container on boot.",
+            "env_variable": "CUSTOM_RUNTIME_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255|url",
+            "field_type": "text"
+        },
+        {
+            "name": "Node-gyp Support",
+            "description": "Install Python 3 + build tools for native node addon compilation (1 = Enabled, 0 = Disabled).",
+            "env_variable": "NODE_GYP_SUPPORT",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Skip Python Companion",
+            "description": "Prevent the Python companion toolchain from being installed (1 = Skip, 0 = Allow).",
+            "env_variable": "SKIP_PYTHON",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
             "name": "Debug Output",
             "description": "Enable verbose script debug output (1 = Enabled, 0 = Disabled).",
             "env_variable": "DEBUG",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Supervisor Mode",
+            "description": "Multi-process mode: auto (Procfile when present + language auto), procfile (force), single (never). Powers multi-layer apps in one container.",
+            "env_variable": "SUPERVISOR",
+            "default_value": "auto",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|in:auto,procfile,multi,all,single,none",
+            "field_type": "text"
+        },
+        {
+            "name": "Procfile Auto-Restart",
+            "description": "Restart crashed Procfile processes with linear backoff (1 = Enabled, 0 = Disabled). Gives up after 5 attempts per process.",
+            "env_variable": "PROCFILE_RESTART",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Procfile Per-Process Logs",
+            "description": "Mirror each supervised process stream to .logs/processes/<name>.log (1 = Enabled, 0 = Console only).",
+            "env_variable": "PROCFILE_LOGS",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Health Check Path",
+            "description": "HTTP path probed after boot (e.g. /healthz). Empty = disabled. Probe targets http://127.0.0.1:$SERVER_PORT<path>.",
+            "env_variable": "HEALTH_CHECK_PATH",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "Health Check Strict",
+            "description": "Exit the server non-zero when the health check fails (1 = Strict, 0 = Warn only).",
+            "env_variable": "HEALTH_STRICT",
             "default_value": "0",
             "user_viewable": true,
             "user_editable": true,
