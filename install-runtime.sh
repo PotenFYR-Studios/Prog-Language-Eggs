@@ -446,8 +446,8 @@ case "${LANG_LOWER}" in
     # .NET SDK (C#, F#, VB.NET)
     # -------------------------------------------------------------------------
     dotnet|csharp|fsharp|vb)
-        # .NET supports linux x64/arm64/arm(32)/s390x/ppc64le - not riscv64
-        engine_arch_supported dotnet amd64 arm64 armv7 ppc64le s390x || exit 0
+        # .NET ships linux x64/arm64/arm(32) only - no ppc64le/s390x/riscv64
+        engine_arch_supported dotnet amd64 arm64 armv7 || exit 0
         log "Setting up .NET SDK (channel: ${VERSION_REQ:-LTS})..."
         DEST_DIR="${TARGET_BASE}/dotnet"
         mkdir -p "${DEST_DIR}"
