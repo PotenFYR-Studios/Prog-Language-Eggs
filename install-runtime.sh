@@ -66,6 +66,48 @@ esac
 
 USER_AGENT="ProgLanguageEggs/1.0 (PotenFYR Studios; Linux ${ARCH})"
 
+# --- Supply-chain integrity ---------------------------------------------------
+verify_sha256() { # verify_sha256 <file> <expected_hex> <label>
+    local f="$1" expect="$2" label="${3:-artifact}" actual
+    if ! command -v sha256sum >/dev/null 2>&1; then
+        warn "sha256sum unavailable - skipping integrity check for ${label}."
+        return 0
+    fi
+    if [ -z "${expect}" ]; then
+        warn "No upstream checksum published for ${label} - proceeding without verification."
+        return 0
+    fi
+    actual=$(sha256sum "${f}" 2>/dev/null | awk '{print $1}')
+    if [ "${actual}" = "$(echo "${expect}" | tr '[:upper:]' '[:lower:]')" ]; then
+        ok "Checksum verified (sha256) for ${label}"
+        return 0
+    fi
+    fail "CHECKSUM MISMATCH for ${label}! expected=${expect} got=${actual}. Download corrupted or tampered - aborting."
+}
+
+# --- Egg-switch / upgrade migration -------------------------------------------
+# Older releases installed some runtimes into unversioned directories. When a
+# server moves between eggs or upgrades this installer, migrate the existing
+# directory instead of re-downloading the whole toolchain.
+migrate_legacy_dir() { # migrate_legacy_dir <legacy_path> <new_path>
+    local legacy="$1" new="$2"
+    [ -d "${legacy}" ] || return 0
+    [ -e "${new}" ] && return 0
+    if mv "${legacy}" "${new}" 2>>"${LOG_FILE:-/dev/null}"; then
+        ok "Migrated existing installation: $(basename "${legacy}") -> $(basename "${new}")"
+        # Refresh stable-name symlinks so PATH keeps working immediately
+        if [ -d "${new}/bin" ]; then
+            mkdir -p "$(dirname "${legacy}")/bin" 2>/dev/null || true
+            local b
+            for b in "${new}/bin"/*; do
+                [ -f "${b}" ] && ln -sf "${b}" "${TARGET_BASE}/bin/$(basename "${b}")" 2>/dev/null || true
+            done
+        fi
+    else
+        warn "Could not migrate legacy directory ${legacy} (will install fresh to ${new})."
+    fi
+}
+
 download() {
     local url="$1" dest="$2"
     if ! curl -fsSL --retry 3 --connect-timeout 15 --max-time 120 -A "${USER_AGENT}" -o "${dest}" "${url}"; then
@@ -89,6 +131,31 @@ mkdir -p "${TARGET_BASE}" 2>/dev/null || true
 
 LANG_LOWER=$(echo "${LANG_REQ}" | tr '[:upper:]' '[:lower:]')
 
+# -----------------------------------------------------------------------------
+# Dynamic version resolution & validation (fail-fast, live feeds)
+#   * Rejects garbage BEFORE any download starts (clear guidance, exit 64)
+#   * Maps keywords -> concrete versions: latest/stable/lts/alpha/beta/rc/
+#     preview/nightly/canary/dev
+#   * Concrete versions are verified against upstream feeds where available
+# -----------------------------------------------------------------------------
+RESOLVER_SCRIPT="/usr/local/bin/resolve-version.sh"
+[ -f "${RESOLVER_SCRIPT}" ] || RESOLVER_SCRIPT="/resolve-version.sh"
+if [ -f "${RESOLVER_SCRIPT}" ]; then
+    log "Validating & resolving version request '${VERSION_REQ}' for '${LANG_LOWER}'..."
+    if bash "${RESOLVER_SCRIPT}" "${LANG_LOWER}" "${VERSION_REQ}" > /tmp/potenfyr-resolved.ver; then
+        RESOLVED_VERSION=$(cat /tmp/potenfyr-resolved.ver 2>/dev/null)
+        rm -f /tmp/potenfyr-resolved.ver
+        if [ -n "${RESOLVED_VERSION}" ]; then
+            VERSION_REQ="${RESOLVED_VERSION}"
+            ok "Using ${LANG_LOWER} version: ${VERSION_REQ}"
+        fi
+    else
+        rm -f /tmp/potenfyr-resolved.ver
+        # Resolver already printed a detailed, user-facing explanation on console
+        fail "Invalid or unresolvable version request for '${LANG_LOWER}'. Nothing was downloaded."
+    fi
+fi
+
 case "${LANG_LOWER}" in
     # -------------------------------------------------------------------------
     # Node.js / JavaScript / TypeScript
@@ -107,15 +174,23 @@ case "${LANG_LOWER}" in
         else
             [[ "${VERSION_REQ}" =~ ^v ]] && NODE_VER="${VERSION_REQ}" || NODE_VER="v${VERSION_REQ}"
         fi
-        
+
+        # Nightly builds live on a separate CDN path (resolver emits them for 'nightly')
+        NODE_BASE="https://nodejs.org/dist"
+        [[ "${NODE_VER}" == *nightly* ]] && NODE_BASE="https://nodejs.org/download/nightly"
+
         DEST_DIR="${TARGET_BASE}/node-${NODE_VER}"
         if [ -x "${DEST_DIR}/bin/node" ]; then
             ok "Node.js ${NODE_VER} is already installed at ${DEST_DIR}"
         else
             log "Downloading Node.js ${NODE_VER} for ${ARCH_ALT}..."
-            TAR_URL="https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-linux-${ARCH_ALT}.tar.xz"
+            TAR_URL="${NODE_BASE}/${NODE_VER}/node-${NODE_VER}-linux-${ARCH_ALT}.tar.xz"
             TMP_TAR="/tmp/node.tar.xz"
             download "${TAR_URL}" "${TMP_TAR}"
+            # Verify against the official SHASUMS256.txt published beside the tarball
+            NODE_SHA=$(curl -fsSL --max-time 30 "${NODE_BASE}/${NODE_VER}/SHASUMS256.txt" 2>/dev/null \
+                | awk -v f="node-${NODE_VER}-linux-${ARCH_ALT}.tar.xz" '$2 == f {print $1}')
+            verify_sha256 "${TMP_TAR}" "${NODE_SHA}" "Node.js ${NODE_VER}"
             mkdir -p "${DEST_DIR}"
             tar -xJf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
             rm -f "${TMP_TAR}"
@@ -133,15 +208,21 @@ case "${LANG_LOWER}" in
             ok "Bun $(bun -v 2>/dev/null || true) is already available"
             exit 0
         fi
-        log "Resolving Bun runtime..."
-        DEST_DIR="${TARGET_BASE}/bun"
+        log "Resolving Bun runtime (version: ${VERSION_REQ:-latest})..."
+        DEST_DIR="${TARGET_BASE}/bun-${VERSION_REQ:-latest}"
+        migrate_legacy_dir "${TARGET_BASE}/bun" "${DEST_DIR}"
         mkdir -p "${DEST_DIR}/bin"
         if [ "${ARCH_ALT}" = "x64" ]; then
             BUN_ARCH="x64"
         else
             BUN_ARCH="aarch64"
         fi
-        BUN_URL="https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${BUN_ARCH}.zip"
+        # Concrete versions download from their release tag; keywords from /latest/
+        if [[ "${VERSION_REQ:-}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${VERSION_REQ}/bun-linux-${BUN_ARCH}.zip"
+        else
+            BUN_URL="https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${BUN_ARCH}.zip"
+        fi
         TMP_ZIP="/tmp/bun.zip"
         download "${BUN_URL}" "${TMP_ZIP}"
         rm -rf /tmp/bun-extract && mkdir -p /tmp/bun-extract
@@ -166,12 +247,17 @@ case "${LANG_LOWER}" in
             ok "Deno $(deno -V 2>/dev/null || true) is already available"
             exit 0
         fi
-        log "Resolving Deno runtime..."
-        DEST_DIR="${TARGET_BASE}/deno"
+        log "Resolving Deno runtime (version: ${VERSION_REQ:-latest})..."
+        DEST_DIR="${TARGET_BASE}/deno-${VERSION_REQ:-latest}"
+        migrate_legacy_dir "${TARGET_BASE}/deno" "${DEST_DIR}"
         mkdir -p "${DEST_DIR}/bin"
         DENO_ARCH="${ARCH}"
         [ "${DENO_ARCH}" = "arm64" ] && DENO_ARCH="aarch64"
-        DENO_URL="https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-unknown-linux-gnu.zip"
+        if [[ "${VERSION_REQ:-}" =~ ^[0-9]+(\.[0-9]+){0,2}([-.][A-Za-z0-9.]+)*$ ]]; then
+            DENO_URL="https://github.com/denoland/deno/releases/download/v${VERSION_REQ}/deno-${DENO_ARCH}-unknown-linux-gnu.zip"
+        else
+            DENO_URL="https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-unknown-linux-gnu.zip"
+        fi
         TMP_ZIP="/tmp/deno.zip"
         download "${DENO_URL}" "${TMP_ZIP}"
         unzip -qo "${TMP_ZIP}" -d "${DEST_DIR}/bin"
@@ -200,6 +286,15 @@ case "${LANG_LOWER}" in
             rm -rf "${TMP_TAR}" /tmp/uv-*
             ok "Installed uv & uvx toolchain"
         fi
+        # Respect a concrete Python version request via uv (e.g. RUNTIME_VERSION=3.12)
+        if [[ "${VERSION_REQ}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            log "Installing Python ${VERSION_REQ} toolchain via uv..."
+            if "${DEST_DIR}/bin/uv" python install "${VERSION_REQ}" >>/tmp/potenfyr-uv-python.log 2>&1; then
+                ok "Python ${VERSION_REQ} installed (managed by uv)"
+            else
+                warn "Could not install Python ${VERSION_REQ} via uv (see /tmp/potenfyr-uv-python.log); system python3 stays active."
+            fi
+        fi
         ;;
 
     # -------------------------------------------------------------------------
@@ -210,13 +305,20 @@ case "${LANG_LOWER}" in
         [ "${JV}" = "latest" ] && JV="21"
         JV="${JV#java}"
         JV="${JV#jdk}"
-        
-        DEST_DIR="${TARGET_BASE}/java-${JV}"
+
+        # Early-access channel support: resolver emits "<major>-ea" for preview/nightly
+        JAVA_RELEASE_TYPE="ga"
+        if [[ "${JV}" == *-ea ]]; then
+            JAVA_RELEASE_TYPE="ea"
+            JV="${JV%-ea}"
+        fi
+
+        DEST_DIR="${TARGET_BASE}/java-${JV}$([ "${JAVA_RELEASE_TYPE}" = "ea" ] && echo "-ea" || true)"
         if [ -x "${DEST_DIR}/bin/java" ]; then
             ok "Java ${JV} already installed at ${DEST_DIR}"
         else
-            log "Downloading Adoptium OpenJDK ${JV} for ${ARCH_JAVA}..."
-            API_URL="https://api.adoptium.net/v3/binary/latest/${JV}/ga/linux/${ARCH_JAVA}/jdk/hotspot/normal/eclipse?project=jdk"
+            log "Downloading Adoptium OpenJDK ${JV} (${JAVA_RELEASE_TYPE}) for ${ARCH_JAVA}..."
+            API_URL="https://api.adoptium.net/v3/binary/latest/${JV}/${JAVA_RELEASE_TYPE}/linux/${ARCH_JAVA}/jdk/hotspot/normal/eclipse?project=jdk"
             TMP_TAR="/tmp/jdk${JV}.tar.gz"
             download "${API_URL}" "${TMP_TAR}"
             mkdir -p "${DEST_DIR}"
@@ -255,12 +357,20 @@ case "${LANG_LOWER}" in
     # Rust & Cargo
     # -------------------------------------------------------------------------
     rust|cargo|rustc)
-        log "Setting up Rust toolchain via rustup..."
+        # VERSION_REQ arrives pre-resolved: stable | beta | nightly | <x.y.z>
+        RUST_TOOLCHAIN="${VERSION_REQ:-stable}"
+        case "${RUST_TOOLCHAIN}" in
+            stable|beta|nightly) : ;;
+            *) [[ "${RUST_TOOLCHAIN}" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || RUST_TOOLCHAIN="stable" ;;
+        esac
+        log "Setting up Rust toolchain via rustup (channel: ${RUST_TOOLCHAIN})..."
         export RUSTUP_HOME="${TARGET_BASE}/rustup"
-        export CARGO_HOME="${TARGET_BASE}/cargo"
+        export CARGO_HOME="${TARGET_BASE}/cargo-${RUST_TOOLCHAIN}"
+        migrate_legacy_dir "${TARGET_BASE}/cargo" "${CARGO_HOME}"
         mkdir -p "${RUSTUP_HOME}" "${CARGO_HOME}"
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --no-modify-path
-        ok "Rust & Cargo toolchain ready at ${CARGO_HOME}/bin"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --no-modify-path \
+            || warn "rustup installation failed for toolchain '${RUST_TOOLCHAIN}'."
+        ok "Rust (${RUST_TOOLCHAIN}) & Cargo toolchain ready at ${CARGO_HOME}/bin"
         ;;
 
     # -------------------------------------------------------------------------
@@ -270,15 +380,18 @@ case "${LANG_LOWER}" in
         log "Resolving Zig compiler (version: ${VERSION_REQ})..."
         ZIG_ARCH="${ARCH}"
         [ "${ZIG_ARCH}" = "arm64" ] && ZIG_ARCH="aarch64"
-        if [ "${VERSION_REQ}" = "latest" ] || [ -z "${VERSION_REQ}" ]; then
+        if [ "${VERSION_REQ}" = "latest" ] || [ "${VERSION_REQ}" = "master" ] || [ -z "${VERSION_REQ}" ]; then
             ZIG_URL=$(curl -fsSL https://ziglang.org/download/index.json | jq -r ".master.\"${ZIG_ARCH}-linux\".tarball")
+            ZIG_SUM=$(curl -fsSL https://ziglang.org/download/index.json | jq -r ".master.\"${ZIG_ARCH}-linux\".shasum")
         else
             ZIG_URL=$(curl -fsSL https://ziglang.org/download/index.json | jq -r ".\"${VERSION_REQ}\".\"${ZIG_ARCH}-linux\".tarball")
+            ZIG_SUM=$(curl -fsSL https://ziglang.org/download/index.json | jq -r ".\"${VERSION_REQ}\".\"${ZIG_ARCH}-linux\".shasum")
         fi
-        
+
         DEST_DIR="${TARGET_BASE}/zig"
         TMP_TAR="/tmp/zig.tar.xz"
         download "${ZIG_URL}" "${TMP_TAR}"
+        verify_sha256 "${TMP_TAR}" "${ZIG_SUM}" "Zig ${VERSION_REQ}"
         mkdir -p "${DEST_DIR}"
         tar -xJf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
         rm -f "${TMP_TAR}"
@@ -289,15 +402,22 @@ case "${LANG_LOWER}" in
     # .NET SDK (C#, F#, VB.NET)
     # -------------------------------------------------------------------------
     dotnet|csharp|fsharp|vb)
-        log "Setting up .NET SDK (${VERSION_REQ})..."
+        log "Setting up .NET SDK (channel: ${VERSION_REQ:-LTS})..."
         DEST_DIR="${TARGET_BASE}/dotnet"
         mkdir -p "${DEST_DIR}"
         TMP_SH="/tmp/dotnet-install.sh"
         download "https://dot.net/v1/dotnet-install.sh" "${TMP_SH}"
         chmod +x "${TMP_SH}"
-        DOTNET_CHANNEL="8.0"
-        [ "${VERSION_REQ}" != "latest" ] && DOTNET_CHANNEL="${VERSION_REQ}"
-        bash "${TMP_SH}" --channel "${DOTNET_CHANNEL}" --install-dir "${DEST_DIR}" --no-path
+        # Resolver emits: LTS | STS:preview | STS:daily | <major.minor>
+        DOTNET_CHANNEL="LTS"; DOTNET_QUALITY="GA"
+        case "${VERSION_REQ}" in
+            LTS|"")                     DOTNET_CHANNEL="LTS";  DOTNET_QUALITY="GA" ;;
+            STS:preview|preview|alpha|beta|rc|pre) DOTNET_CHANNEL="STS";  DOTNET_QUALITY="Preview" ;;
+            STS:daily|nightly|dev)      DOTNET_CHANNEL="STS";  DOTNET_QUALITY="Daily" ;;
+            *)                          DOTNET_CHANNEL="${VERSION_REQ}"; DOTNET_QUALITY="GA" ;;
+        esac
+        log ".NET install -> channel=${DOTNET_CHANNEL} quality=${DOTNET_QUALITY}"
+        bash "${TMP_SH}" --channel "${DOTNET_CHANNEL}" --quality "${DOTNET_QUALITY}" --install-dir "${DEST_DIR}" --no-path
         rm -f "${TMP_SH}"
         ok "Installed .NET SDK to ${DEST_DIR}/dotnet"
         ;;

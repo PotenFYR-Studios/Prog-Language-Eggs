@@ -227,6 +227,7 @@ COPY run.sh /usr/local/bin/run.sh
 COPY install.sh /install.sh
 COPY install.sh /usr/local/bin/install.sh
 COPY install-runtime.sh /usr/local/bin/install-runtime.sh
+COPY resolve-version.sh /usr/local/bin/resolve-version.sh
 
 RUN sed -i 's/\r$//' /entrypoint.sh /run.sh /install.sh /usr/local/bin/*.sh \
     && chmod +x /entrypoint.sh \
@@ -235,7 +236,11 @@ RUN sed -i 's/\r$//' /entrypoint.sh /run.sh /install.sh /usr/local/bin/*.sh \
                 /usr/local/bin/entrypoint.sh \
                 /usr/local/bin/run.sh \
                 /usr/local/bin/install.sh \
-                /usr/local/bin/install-runtime.sh
+                /usr/local/bin/install-runtime.sh \
+                /usr/local/bin/resolve-version.sh
+
+# Provenance stamp surfaced at boot for supportability & audit trails
+RUN echo "PotenFYR Universal Runtime • variant=${RUNTIME_VARIANT} • built=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > /etc/potenfyr-version
 
 # 15. Base Path configuration
 ENV PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/cargo/bin:/opt/go/bin:/opt/runtimes/bin:/home/container/.local/bin:/home/container/bin:/home/container/node_modules/.bin:${PATH}"

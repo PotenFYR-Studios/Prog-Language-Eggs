@@ -75,5 +75,6 @@ jobs:
             RUNTIME_VARIANT=${{ matrix.variant }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Always build from a CLEAN slate: no stale layer caches are reused,
+          # so every published tag reflects the exact committed sources.
+          no-cache: true

@@ -62,6 +62,29 @@ save_conf() {
     chmod 600 "${CONF_FILE}" 2>/dev/null || true
 }
 
+# --- Security helpers --------------------------------------------------------
+# redact_url: never echo credentials embedded in URLs to console/logs.
+redact_url() {
+    local u="$1"
+    u=$(printf '%s' "${u}" | sed -E 's#//[^/@[:space:]]+:[^/@[:space:]]+@#//***:***@#g')
+    [ -n "${GIT_AUTH_TOKEN:-}" ] && u=$(printf '%s' "${u}" | sed -e "s#${GIT_AUTH_TOKEN}#***#g")
+    printf '%s' "${u}"
+}
+# valid_http_url: strict scheme/host allowlist; blocks header injection & junk.
+valid_http_url() {
+    local u="$1"
+    local re='^https?://[A-Za-z0-9._-]+(:[0-9]+)?(/[A-Za-z0-9._~:/?%#@!$&()*+,;=-]*)?$'
+    [[ "$u" =~ $re ]]
+}
+# valid_git_url: https / ssh / git@ forms only.
+valid_git_url() {
+    local u="$1"
+    local re_https='^https://[A-Za-z0-9._~-]+(:[0-9]+)?(/[A-Za-z0-9._~:/?%#@!$&()*+,;=-]*)?$'
+    local re_ssh='^(ssh://)?[A-Za-z0-9._~-]+@[A-Za-z0-9.-]+[:/][A-Za-z0-9._/~%-]+\.git$|^(ssh://)?[A-Za-z0-9._~-]+@[A-Za-z0-9.-]+[:/][A-Za-z0-9._/-]+$'
+    [[ "$u" =~ $re_https ]] && return 0
+    [[ "$u" =~ $re_ssh ]]
+}
+
 # --- Variables with defaults ---
 LANGUAGE="${LANGUAGE:-auto}"
 RUNNER="${RUNNER:-auto}"
@@ -90,11 +113,24 @@ SKIP_PYTHON="${SKIP_PYTHON:-0}"
 DEBUG="${DEBUG:-0}"
 
 [ "${DEBUG}" = "1" ] && set -x
+# Route the verbose trace to a log file instead of spamming the panel console
+if [ "${DEBUG}" = "1" ] && [ -z "${_POTENFYR_TRACE_FD:-}" ]; then
+    mkdir -p "${WORK_DIR}/.logs" 2>/dev/null || true
+    if exec 9>>"${WORK_DIR}/.logs/launcher-trace.log" 2>/dev/null; then
+        PS4='+ $(date "+%H:%M:%S") ${BASH_SOURCE}:${LINENO}: '
+        BASH_XTRACEFD=9
+        _POTENFYR_TRACE_FD=1
+        log "DEBUG=1 trace -> ${WORK_DIR}/.logs/launcher-trace.log"
+    fi
+fi
 
 # -----------------------------------------------------------------------------
 # 1. Git Synchronization
 # -----------------------------------------------------------------------------
 if [ -n "${GIT_REPO}" ]; then
+    if ! valid_git_url "${GIT_REPO}"; then
+        fail "GIT_REPO is not a valid https/ssh Git URL: $(redact_url "${GIT_REPO}")"
+    fi
     log "Checking Git repository integration..."
     AUTH_REPO_URL="${GIT_REPO}"
     if [ -n "${GIT_AUTH_TOKEN}" ] && [[ "${GIT_REPO}" =~ ^https:// ]]; then
@@ -102,7 +138,7 @@ if [ -n "${GIT_REPO}" ]; then
     fi
 
     if [ ! -d ".git" ]; then
-        log "Cloning repository: ${GIT_REPO} (branch: ${GIT_BRANCH})..."
+        log "Cloning repository: $(redact_url "${GIT_REPO}") (branch: ${GIT_BRANCH})..."
         if git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . ; then
             ok "Repository successfully cloned"
         else
@@ -455,40 +491,148 @@ EOF
 fi
 
 # -----------------------------------------------------------------------------
-# 4. Multi-Process Supervisor (Procfile support)
+# 4. Production Multi-Process Supervisor (Procfile support)
 # -----------------------------------------------------------------------------
+# Built for multi-layer / microservice-style apps inside ONE container:
+#
+#   Procfile:
+#     web:      node server.js
+#     worker:   wait_port 127.0.0.1 5432 60 && node worker.js
+#     api:      python -m uvicorn api:app --port $SERVER_PORT
+#
+#   * SUPERVISOR=procfile forces this mode even when a single language is
+#     detected; SUPERVISOR=single disables it entirely (default: auto).
+#   * PROCFILE_RESTART=1 (default) restarts crashed processes with backoff,
+#     giving up after PROCFILE_MAX_RESTARTS within the backoff window.
+#   * PROCFILE_LOGS=1 mirrors each process stream to .logs/processes/<name>.log
+#   * wait_port <host> <port> [timeout_s] is exported for startup ordering
+#     (e.g. wait for an external database before booting the web layer).
+#   * SIGTERM/SIGINT relay to ALL children for clean panel stops.
+# -----------------------------------------------------------------------------
+
+SUPERVISOR="${SUPERVISOR:-auto}"
+PROCFILE_RESTART="${PROCFILE_RESTART:-1}"
+PROCFILE_MAX_RESTARTS="${PROCFILE_MAX_RESTARTS:-5}"
+PROCFILE_LOGS="${PROCFILE_LOGS:-0}"
+
+wait_port() { # wait_port <host> <port> [timeout_seconds=30]
+    local host="$1" port="$2" timeout="${3:-30}" waited=0
+    while [ "${waited}" -lt "${timeout}" ]; do
+        if (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; then
+            exec 3>&- 3<&- 2>/dev/null || true
+            return 0
+        fi
+        sleep 1; waited=$((waited+1))
+    done
+    warn "wait_port: ${host}:${port} not reachable within ${timeout}s."
+    return 1
+}
+export -f wait_port
+
+PROC_PIDS=""; PROC_NAMES=""; PROC_FAILED=""
+
+proc_shutdown_all() {
+    local p
+    for p in ${PROC_PIDS}; do kill -TERM "${p}" 2>/dev/null || true; done
+    local i=0
+    for p in ${PROC_PIDS}; do
+        i=0
+        while kill -0 "${p}" 2>/dev/null && [ "${i}" -lt 20 ]; do sleep 0.5; i=$((i+1)); done
+        kill -KILL "${p}" 2>/dev/null || true
+    done
+}
+
 run_procfile() {
     local procfile="Procfile"
     [ -f "${procfile}" ] || return 1
-    
-    log "Procfile detected! Launching Multi-Process Supervisor..."
-    local pids=""
 
+    log "Procfile detected! Launching Production Multi-Process Supervisor..."
+    mkdir -p "${WORK_DIR}/.logs/processes" 2>/dev/null || true
+
+    declare -A RESTART_COUNT FIRST_SEEN
     while IFS=':' read -r name cmd || [ -n "$name" ]; do
         case "$name" in \#*) continue ;; esac
         [ -z "$name" ] && continue
         cmd=$(echo "$cmd" | sed -e 's/^[[:space:]]*//')
         [ -z "$cmd" ] && continue
-        
+
         log "Starting process: [${name}] -> ${cmd}"
+        RESTART_COUNT["${name}"]=0
+        FIRST_SEEN["${name}"]=$(date +%s)
         (
             export PROCESS_NAME="${name}"
-            eval "${cmd}" 2>&1 | while IFS= read -r line; do
-                printf "\033[1;36m[%s]\033[0m %s\n" "${name}" "${line}"
-            done
+            export SERVER_PORT PORT FEATHER_PORT PUFFER_PORT HTTP_PORT
+            if [ "${PROCFILE_LOGS}" = "1" ]; then
+                stdbuf -oL -eL eval "${cmd}" 2>&1 \
+                    | tee -a "${WORK_DIR}/.logs/processes/${name}.log" \
+                    | while IFS= read -r line; do printf "\033[1;36m[%s]\033[0m %s\n" "${name}" "${line}"; done
+            else
+                eval "${cmd}" 2>&1 \
+                    | while IFS= read -r line; do printf "\033[1;36m[%s]\033[0m %s\n" "${name}" "${line}"; done
+            fi
         ) &
-        pids="${pids} $!"
+        PROC_PIDS="${PROC_PIDS} $!"
+        PROC_NAMES="${PROC_NAMES} ${name}"
     done < "${procfile}"
 
-    if [ -n "${pids}" ]; then
-        wait ${pids} 2>/dev/null || true
-    fi
+    # Supervise: restart crashed children (backoff), report, and exit when all dead
+    while :; do
+        sleep 1
+        local idx=0 alive=0 new_pids="" new_names=""
+        for p in ${PROC_PIDS}; do
+            idx=$((idx+1))
+            local n; n=$(echo "${PROC_NAMES}" | awk '{print $'"${idx}"'}')
+            if kill -0 "${p}" 2>/dev/null; then
+                alive=$((alive+1)); new_pids="${new_pids} ${p}"; new_names="${new_names} ${n}"
+                continue
+            fi
+            wait "${p}" 2>/dev/null; local rc=$?
+            [ "${RUN_LOOP:-1}" = "0" ] && continue   # shutting down: don't restart
+            if [ "${PROCFILE_RESTART}" = "1" ]; then
+                local now count
+                now=$(date +%s)
+                count=$(( ${RESTART_COUNT["${n}"]:-0} + 1 ))
+                RESTART_COUNT["${n}"]="${count}"
+                if [ "${count}" -gt "${PROCFILE_MAX_RESTARTS}" ]; then
+                    warn "[${n}] exceeded ${PROCFILE_MAX_RESTARTS} restart attempts - giving up on this process."
+                    PROC_FAILED="${PROC_FAILED} ${n}"
+                    continue
+                fi
+                warn "[${n}] exited (code ${rc}). Restarting (attempt ${count}/${PROCFILE_MAX_RESTARTS}) in $((count))s..."
+                sleep "${count}"   # linear backoff: 1s, 2s, 3s...
+                (
+                    export PROCESS_NAME="${n}"
+                    eval "$(grep -E "^${n}:" "${procfile}" | head -n1 | cut -d':' -f2- | sed 's/^[[:space:]]*//')" 2>&1 \
+                        | while IFS= read -r line; do printf "\033[1;36m[%s]\033[0m %s\n" "${n}" "${line}"; done
+                ) &
+                new_pids="${new_pids} $!"; new_names="${new_names} ${n}"
+            else
+                warn "[${n}] exited (code ${rc}). PROCFILE_RESTART=0 - not restarting."
+            fi
+        done
+        PROC_PIDS="${new_pids}"; PROC_NAMES="${new_names}"
+        if [ "${alive}" = "0" ]; then
+            if [ -n "${PROC_FAILED// /}" ]; then
+                fail "All supervised processes have stopped. See .logs/processes/ for details."
+            fi
+            break
+        fi
+    done
+    ok "All supervised processes exited cleanly."
     exit 0
 }
 
-if [ -f "Procfile" ] && [ "${LANGUAGE}" = "auto" ] && [ -z "${CUSTOM_COMMAND}" ]; then
-    run_procfile
-fi
+case "${SUPERVISOR}" in
+    procfile|multi|all)
+        run_procfile || warn "SUPERVISOR=procfile requested but no Procfile found - continuing single-process."
+        ;;
+    single|none) : ;;   # explicitly disabled
+    *)
+        if [ -f "Procfile" ] && [ "${LANGUAGE}" = "auto" ] && [ -z "${CUSTOM_COMMAND}" ]; then
+            run_procfile
+        fi
+        ;;
+esac
 
 # -----------------------------------------------------------------------------
 # 5. Project & Language Auto-Detection Engine
@@ -577,9 +721,192 @@ detect_language() {
 DETECTED_LANG=$(detect_language)
 log "Target Language / Runtime: ${C_BOLD}${DETECTED_LANG}${C_RESET}"
 
+# -----------------------------------------------------------------------------
+# 5.5 Runtime Version Resolution & Per-Version Environment Isolation
+# -----------------------------------------------------------------------------
+# * RUNTIME_VERSION is validated & resolved ONCE through live upstream feeds:
+#     keywords: latest stable lts alpha beta rc preview nightly canary dev
+#     versions: 22 | 22.1 | 22.1.4 (v-prefix tolerated) - garbage fails fast.
+# * Each language+series keeps its own environment folder under .environments/
+#   so switching languages or major versions NEVER deletes or corrupts another:
+#
+#     .environments/<language>/<series>/    caches, homes, shims, tool state
+#     .environments/active                  last used instance (marker)
+#     .environments/.resolved/<lang>        resolved concrete version cache
+#
+#   Same series, newer patch -> compatible: SAME folder reused (info message).
+#   New series/major         -> breaking: NEW folder created, old preserved,
+#                               console warning lists old folders + sizes and
+#                               how to delete them manually (nothing is auto-
+#                               deleted, by design).
+# -----------------------------------------------------------------------------
+
+ENV_ROOT="${WORK_DIR}/.environments"
+ACTIVE_ENV_FILE="${ENV_ROOT}/active"
+RESOLVED_CACHE_DIR="${ENV_ROOT}/.resolved"
+mkdir -p "${ENV_ROOT}" "${RESOLVED_CACHE_DIR}" 2>/dev/null || true
+
+resolve_runtime_version() {
+    # Resolves once per boot; cached under .environments/.resolved/<lang>
+    local lang="$1" req="${RUNTIME_VERSION:-latest}" cache_file out rc=0
+    [ -z "${req}" ] && req="latest"
+    case "${req}" in latest|stable|lts|auto) cache_file="" ;; esac
+
+    local resolver="/usr/local/bin/resolve-version.sh"
+    [ -f "${resolver}" ] || resolver="/resolve-version.sh"
+    if [ ! -f "${resolver}" ]; then
+        mkdir -p /tmp/potenfyr 2>/dev/null || true
+        curl -fsSL --retry 3 --connect-timeout 10 \
+            "https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/resolve-version.sh" \
+            -o /tmp/potenfyr/resolve-version.sh 2>/dev/null || true
+        resolver="/tmp/potenfyr/resolve-version.sh"
+    fi
+    [ -f "${resolver}" ] || { warn "Version resolver unavailable; continuing with raw request '${req}'."; echo "${req}"; return 0; }
+
+    if ! out=$(bash "${resolver}" "${lang}" "${req}"); then
+        rc=$?
+        warn "Version request '${req}' rejected for ${lang}. Falling back to installer defaults."
+        echo ""
+        return $rc
+    fi
+    printf '%s\n' "${out}"
+    printf '%s\n' "${out}" > "${RESOLVED_CACHE_DIR}/${lang}" 2>/dev/null || true
+}
+
+env_series_of() { # compatibility domain: which versions share one environment folder
+    local lang="$1" v="${2:-}"
+    local r="${v#v}"
+    case "${lang}" in
+        nodejs|javascript|js|typescript|ts)
+            [[ "${r}" =~ ^[0-9]+ ]] && echo "node${r%%.*}" || echo "current" ;;
+        python|py)
+            if [[ "${r}" =~ ^[0-9]+\.[0-9]+ ]]; then echo "py${r%.*}"; elif [[ "${r}" =~ ^[0-9]+ ]]; then echo "py${r}.x"; else echo "current"; fi ;;
+        golang|go)
+            if [[ "${r}" =~ ^[0-9]+\.[0-9]+ ]]; then echo "go${r%.*}"; else echo "current"; fi ;;
+        java)
+            [[ "${r}" =~ ^[0-9]+ ]] && echo "jdk${r%%.*}" || echo "current" ;;
+        dotnet)
+            if [[ "${r}" =~ ^[0-9]+\.[0-9]+ ]]; then echo "net${r%.*}"; elif [[ "${r}" =~ ^[0-9]+$ ]]; then echo "net${r}.0"; else echo "current"; fi ;;
+        bun|deno|php|ruby|zig|dart|swift|julia|nim)
+            [[ "${r}" =~ ^[0-9]+ ]] && echo "${lang}-${r%%.*}" || echo "current" ;;
+        rust)
+            case "${r}" in stable|beta|nightly) echo "rust-${r}" ;; *) [[ "${r}" =~ ^[0-9]+\.[0-9]+ ]] && echo "rust-${r%.*}" || echo "rust-stable" ;; esac ;;
+        *)
+            echo "default" ;;
+    esac
+}
+
+read_env_active() {
+    ENV_PREV_LANG=""; ENV_PREV_SERIES=""
+    [ -f "${ACTIVE_ENV_FILE}" ] || return 1
+    local line
+    line=$(head -n1 "${ACTIVE_ENV_FILE}" 2>/dev/null | tr -d '\r')
+    ENV_PREV_LANG="$(echo "${line}" | awk -F'|' '{print $1}')"
+    ENV_PREV_SERIES="$(echo "${line}" | awk -F'|' '{print $2}')"
+    [ -n "${ENV_PREV_LANG}" ]
+}
+
+scan_retained_environments() {
+    local found="" d l s size
+    for d in "${ENV_ROOT}"/*/*; do
+        [ -d "${d}" ] || continue
+        l="$(basename "$(dirname "${d}")")"
+        s="$(basename "${d}")"
+        [ "${l}" = "${DETECTED_LANG}" ] && [ "${s}" = "${ENV_SERIES}" ] && continue
+        find "${d}" -mindepth 1 2>/dev/null | grep -q . || continue
+        size=$(du -sh "${d}" 2>/dev/null | awk '{print $1}')
+        found="${found}    - .environments/${l}/${s} (${size})\n"
+    done
+    if [ -n "${found}" ]; then
+        printf "\n" >&2
+        printf "${C_YELLOW}${C_BOLD}[potenfyr][!] RETAINED ENVIRONMENTS FROM PREVIOUS CONFIGURATIONS${C_RESET}\n" >&2
+        printf "${C_YELLOW}  Kept untouched on purpose (nothing is auto-deleted):%b${C_RESET}\n" "${found}" >&2
+        printf "${C_DIM}    Delete any of these manually via the panel File Manager when you no longer need them.${C_RESET}\n" >&2
+        printf "\n" >&2
+    fi
+}
+
+setup_isolated_environment() {
+    local resolved_ver=""
+    if resolved_ver=$(resolve_runtime_version "${DETECTED_LANG}"); then
+        [ -n "${resolved_ver}" ] && RUNTIME_VERSION_RESOLVED="${resolved_ver}"
+    fi
+    : "${RUNTIME_VERSION_RESOLVED:=${RUNTIME_VERSION:-}}"
+    export RUNTIME_VERSION_RESOLVED
+
+    ENV_SERIES=$(env_series_of "${DETECTED_LANG}" "${RUNTIME_VERSION_RESOLVED}")
+    ENV_DIR="${ENV_ROOT}/${DETECTED_LANG}/${ENV_SERIES}"
+    mkdir -p "${ENV_DIR}/bin" 2>/dev/null || true
+
+    read_env_active || true
+    if [ -n "${ENV_PREV_LANG}" ]; then
+        if [ "${ENV_PREV_LANG}" = "${DETECTED_LANG}" ] && [ "${ENV_PREV_SERIES}" = "${ENV_SERIES}" ]; then
+            info "Environment reused: ${DETECTED_LANG} [${ENV_SERIES}] (compatible series)."
+        elif [ "${ENV_PREV_LANG}" != "${DETECTED_LANG}" ]; then
+            printf "\n" >&2
+            printf "${C_YELLOW}${C_BOLD}[potenfyr][!] LANGUAGE CHANGE DETECTED (%s -> %s)${C_RESET}\n" "${ENV_PREV_LANG}" "${DETECTED_LANG}" >&2
+            printf "${C_YELLOW}  A separate environment was created: .environments/%s/%s${C_RESET}\n" "${DETECTED_LANG}" "${ENV_SERIES}" >&2
+            printf "${C_YELLOW}  Your previous %s environment is preserved at .environments/%s/${C_RESET}\n" "${ENV_PREV_LANG}" "${ENV_PREV_LANG}" >&2
+            printf "${C_DIM}  Nothing was deleted. Remove old environments manually when no longer needed.${C_RESET}\n" >&2
+            printf "\n" >&2
+        else
+            printf "\n" >&2
+            printf "${C_YELLOW}${C_BOLD}[potenfyr][!] BREAKING VERSION CHANGE (%s: %s -> %s)${C_RESET}\n" "${DETECTED_LANG}" "${ENV_PREV_SERIES}" "${ENV_SERIES}" >&2
+            printf "${C_YELLOW}  Major-version boundaries get their OWN environment folder.${C_RESET}\n" >&2
+            printf "${C_YELLOW}  New environment : .environments/%s/%s${C_RESET}\n" "${DETECTED_LANG}" "${ENV_SERIES}" >&2
+            printf "${C_YELLOW}  Previous kept at: .environments/%s/%s (safe to delete manually later)${C_RESET}\n" "${DETECTED_LANG}" "${ENV_PREV_SERIES}" >&2
+            printf "\n" >&2
+        fi
+        scan_retained_environments
+    fi
+
+    # Route toolchain caches/state into the isolated environment folder
+    case "${DETECTED_LANG}" in
+        nodejs|javascript|js|typescript|ts|bun)
+            export NPM_CONFIG_CACHE="${ENV_DIR}/npm-cache"
+            export BUN_INSTALL="${ENV_DIR}/bun-home"
+            ;;
+        python|py)
+            export PIP_CACHE_DIR="${ENV_DIR}/pip-cache"
+            export UV_CACHE_DIR="${ENV_DIR}/uv-cache"
+            ;;
+        golang|go)
+            export GOMODCACHE="${ENV_DIR}/gomodcache"
+            export GOCACHE="${ENV_DIR}/gocache"
+            ;;
+        rust)
+            export CARGO_HOME="${ENV_DIR}/cargo-home"
+            ;;
+        java)
+            export GRADLE_USER_HOME="${ENV_DIR}/gradle"
+            mkdir -p "${ENV_DIR}/m2" 2>/dev/null || true
+            [ -w "${HOME:-/home/container}" ] && ln -sfn "${ENV_DIR}/m2" "${HOME:-/home/container}/.m2" 2>/dev/null || true
+            ;;
+        dotnet)
+            export NUGET_PACKAGES="${ENV_DIR}/nuget"
+            export DOTNET_CLI_HOME="${ENV_DIR}/dotnet-home"
+            ;;
+        php)     export COMPOSER_HOME="${ENV_DIR}/composer" ;;
+        ruby)    export GEM_HOME="${ENV_DIR}/gems" ;;
+        dart)    export PUB_CACHE="${ENV_DIR}/pub" ;;
+        deno)    export DENO_DIR="${ENV_DIR}/deno" ;;
+        zig)     export ZIG_GLOBAL_CACHE_DIR="${ENV_DIR}/zig-cache" ;;
+    esac
+    export PATH="${ENV_DIR}/bin:${PATH}"
+
+    printf '%s|%s|%s\n' "${DETECTED_LANG}" "${ENV_SERIES}" "${RUNTIME_VERSION_RESOLVED}" > "${ACTIVE_ENV_FILE}" 2>/dev/null || \
+        warn "Could not write environment marker (${ACTIVE_ENV_FILE})."
+}
+
+setup_isolated_environment
+
+
 if [ -n "${CUSTOM_RUNTIME_URL:-}" ]; then
+    if ! valid_http_url "${CUSTOM_RUNTIME_URL}"; then
+        fail "CUSTOM_RUNTIME_URL must be a valid http(s) URL (got: $(redact_url "${CUSTOM_RUNTIME_URL}"))."
+    fi
     if [ -f /usr/local/bin/install-runtime.sh ]; then
-        log "Downloading and configuring custom runtime from ${CUSTOM_RUNTIME_URL}..."
+        log "Downloading and configuring custom runtime from $(redact_url "${CUSTOM_RUNTIME_URL}")..."
         /usr/local/bin/install-runtime.sh "custom" "${CUSTOM_RUNTIME_URL}" "${WORK_DIR}/.runtimes" || true
     fi
 fi
@@ -757,7 +1084,7 @@ ensure_local_runtime() {
         fi
         
         if [ -f "${inst_script}" ]; then
-            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION:-latest}" "${WORK_DIR}/.runtimes" || true
+            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION_RESOLVED:-${RUNTIME_VERSION:-latest}}" "${WORK_DIR}/.runtimes" || true
             build_isolated_environment
         fi
     fi
@@ -846,7 +1173,7 @@ ensure_local_runtime() {
         fi
         
         if [ -f "${inst_script}" ]; then
-            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION:-latest}" "${WORK_DIR}/.runtimes" || true
+            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION_RESOLVED:-${RUNTIME_VERSION:-latest}}" "${WORK_DIR}/.runtimes" || true
             export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/${lang}/bin:/opt/runtimes/${lang}/bin:${PATH}"
         fi
     fi
@@ -868,19 +1195,41 @@ fi
 # 6.5. Companion Runtime Resolution (EXTRA_RUNTIMES & Complex App Support)
 # -----------------------------------------------------------------------------
 if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXTRA_RUNTIMES}" != "auto" ]; then
-    log "Configuring companion runtimes (EXTRA_RUNTIMES='${EXTRA_RUNTIMES}')..."
+    # Parallel install for fast boots; per-runtime logs under .logs/
+    _CLOG="${WORK_DIR}/.logs"
+    mkdir -p "${_CLOG}" 2>/dev/null || true
+    log "Configuring companion runtimes in parallel (EXTRA_RUNTIMES='${EXTRA_RUNTIMES}')..."
     OLD_IFS="${IFS}"
     IFS=','
     for ext in ${EXTRA_RUNTIMES}; do
         IFS="${OLD_IFS}"
-        ext=$(echo "${ext}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-        [ -z "${ext}" ] && continue
+        ext_full=$(echo "${ext}" | tr -d '[:space:]')
+        [ -z "${ext_full}" ] && continue
+        # Per-component version syntax: name@version (e.g. python@3.12, bun@1.1)
+        ext="${ext_full%%@*}"; ext_ver="${ext_full#*@}"
+        [ "${ext_ver}" = "${ext_full}" ] && ext_ver="latest"
+        ext=$(echo "${ext}" | tr '[:upper:]' '[:lower:]')
         if ! command -v "${ext}" >/dev/null 2>&1; then
-            log "Installing companion runtime '${ext}' into isolated environment..."
-            if [ -f /usr/local/bin/install-runtime.sh ]; then
-                /bin/sh /usr/local/bin/install-runtime.sh "${ext}" "latest" "${WORK_DIR}/.runtimes" || true
-            fi
+            log "Installing companion runtime '${ext}' (version: ${ext_ver})..."
+            (
+                if /usr/local/bin/install-runtime.sh "${ext}" "${ext_ver}" "${WORK_DIR}/.runtimes" \
+                        >>"${_CLOG}/runtime-install-${ext}.log" 2>&1; then
+                    : >"${_CLOG}/.${ext}.install-ok"
+                else
+                    : >"${_CLOG}/.${ext}.install-failed"
+                fi
+            ) &
         fi
+    done
+    wait
+    for marker in "${_CLOG}"/.*.install-failed; do
+        [ -f "${marker}" ] || continue
+        _name="$(basename "${marker}")"; _name="${_name#.}"; _name="${_name%.install-failed}"
+        warn "Companion runtime '${_name}' FAILED -> see .logs/runtime-install-${_name}.log"
+        rm -f "${marker}"
+    done
+    for marker in "${_CLOG}"/.*.install-ok; do
+        [ -f "${marker}" ] && rm -f "${marker}"
     done
     IFS="${OLD_IFS}"
     build_isolated_environment
@@ -1587,8 +1936,11 @@ RUN_LOOP=1
 CHILD_PID=0
 
 handle_signal() {
-    log "Received shutdown signal. Relaying to child process (PID: ${CHILD_PID})..."
+    log "Received shutdown signal. Relaying to child process(es)..."
     RUN_LOOP=0
+    # Multi-process supervisor children first (graceful, then forced)
+    [ -n "${PROC_PIDS:-}" ] && proc_shutdown_all
+    [ -n "${HEALTH_PID:-}" ] && kill "${HEALTH_PID}" 2>/dev/null || true
     if [ "${CHILD_PID}" -ne 0 ]; then
         kill -TERM "${CHILD_PID}" 2>/dev/null || true
         wait "${CHILD_PID}" 2>/dev/null || true
@@ -1679,12 +2031,41 @@ print_crash_diagnostics() {
 while [ "${RUN_LOOP}" -eq 1 ]; do
     log "Starting application process..."
     printf "${C_GREEN}${C_BOLD}>>> %s${C_RESET}\n\n" "${RUN_CMD}"
-    
+
     eval "${RUN_CMD}" &
     CHILD_PID=$!
-    
+
+    # --- Health Check (first boot only) --------------------------------------
+    # HEALTH_CHECK_PATH=/healthz probes http://127.0.0.1:$SERVER_PORT$PATH until
+    # it answers. HEALTH_STRICT=1 turns a failed probe into a non-zero exit.
+    if [ "${HEALTH_CHECK_DONE:-0}" != "1" ] && [ -n "${HEALTH_CHECK_PATH:-}" ]; then
+        export HEALTH_CHECK_DONE=1
+        (
+            local_probe() {
+                local url="http://127.0.0.1:${SERVER_PORT}${HEALTH_CHECK_PATH}"
+                local waited=0 timeout="${HEALTH_TIMEOUT:-60}"
+                while [ "${waited}" -lt "${timeout}" ]; do
+                    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${url}" 2>/dev/null || echo 000)
+                    case "${code}" in
+                        2??|3??)
+                            ok "Health check PASS (${url} -> HTTP ${code})"
+                            return 0 ;;
+                    esac
+                    sleep 2; waited=$((waited+2))
+                done
+                warn "Health check FAILED after ${timeout}s (${url}, last code ${code})."
+                [ "${HEALTH_STRICT:-0}" = "1" ] && exit 1
+                return 0
+            }
+            local_probe
+        ) &
+        HEALTH_PID=$!
+    fi
+
     wait "${CHILD_PID}" 2>/dev/null
     EXIT_CODE=$?
+    # Reap health-check probe before deciding on restart/exit
+    [ -n "${HEALTH_PID:-}" ] && { wait "${HEALTH_PID}" 2>/dev/null || true; }
     CHILD_PID=0
     
     if [ "${RUN_LOOP}" -eq 0 ]; then
