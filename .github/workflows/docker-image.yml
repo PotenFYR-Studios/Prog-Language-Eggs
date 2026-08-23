@@ -28,7 +28,9 @@ jobs:
       - name: Set up QEMU for multi-architecture emulation
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: linux/amd64,linux/arm64
+          # Must cover EVERY platform passed to build-push below, otherwise
+          # emulated RUN steps fail with "exec format error" (arm/v7 case).
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
