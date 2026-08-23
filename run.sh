@@ -1,9 +1,9 @@
 #!/bin/bash
 # =============================================================================
-#  Universal Programming Language Eggs - Universal Launcher
+#  Multi-Language Eggs - Multi-Language Launcher
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
-#  Universal Panel Compatibility:
+#  Multi-Panel Compatibility:
 #    - Pterodactyl Panel (Wings)
 #    - Pelican Panel
 #    - Feather Panel (feather-panel / renoki-co)
@@ -230,7 +230,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     status: 'online',
-    message: 'Hello from PotenFYR Universal Programming Language Eggs!',
+    message: 'Hello from PotenFYR Multi-Language Eggs!',
     runtime: `Node.js ${process.version}`,
     timestamp: new Date().toISOString()
   }, null, 2));
@@ -479,7 +479,7 @@ EOF
   <div class="card">
     <h1>🚀 PotenFYR Static Server</h1>
     <p>Your static website / SPA is live and running at peak performance!</p>
-    <div class="badge">Universal Programming Language Eggs</div>
+    <div class="badge">Multi-Language Eggs</div>
   </div>
 </body>
 </html>
@@ -1444,7 +1444,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     status: 'online',
-    message: 'Hello from PotenFYR Universal Multi-Languages Runtime!',
+    message: 'Hello from PotenFYR Multi-Languages Runtime!',
     runtime: `Node.js ${process.version}`,
     timestamp: new Date().toISOString()
   }, null, 2));

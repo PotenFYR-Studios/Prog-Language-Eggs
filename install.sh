@@ -1,9 +1,9 @@
 #!/bin/bash
 # =============================================================================
-#  Universal Programming Language Eggs - Container Installation Script
+#  Multi-Language Eggs - Container Installation Script
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
-#  Universal Panel Support:
+#  Multi-Panel Support:
 #    - Pterodactyl Panel (/mnt/server)
 #    - Pelican Panel (/mnt/server)
 #    - Feather Panel (/app or /mnt/server)
@@ -105,7 +105,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     status: 'online',
-    message: 'Hello from PotenFYR Universal Programming Language Eggs!',
+    message: 'Hello from PotenFYR Multi-Language Eggs!',
     runtime: `Node.js ${process.version}`,
     timestamp: new Date().toISOString()
   }, null, 2));

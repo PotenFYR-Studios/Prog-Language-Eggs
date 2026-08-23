@@ -9,7 +9,7 @@
 / /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          
 /_/  /_/\__,_/_/\__/_/     /_____/\__,_/_/ /_/\__, /          
                                              /____/           
-  » Universal Multi-Language Runtime Environment
+  » Multi-Language Runtime Environment
     By PotenFYR Studios • support@potenfyr.in
 ```
 
@@ -23,7 +23,7 @@
 
 ## Table of Contents
 1. [Features](#features)
-2. [Universal Multi-Panel Support](#universal-multi-panel-support)
+2. [Multi-Panel Support](#multi-panel-support)
 3. [Supported Languages & Toolchains (50+ Matrix)](#supported-languages--toolchains)
 4. [Advanced Capabilities](#advanced-capabilities)
 5. [Repository Layout](#repository-layout)
@@ -39,7 +39,7 @@
 
 ## Features
 
-- 🌐 **Universal Multi-Panel Compatibility**: Zero-configuration compatibility across **Pterodactyl**, **Pelican**, **Feather Panel**, **PufferPanel**, **Jexactyl**, **Wisp**, and **Docker/Kubernetes**.
+- 🌐 **Multi-Panel Compatibility**: Zero-configuration compatibility across **Pterodactyl**, **Pelican**, **Feather Panel**, **PufferPanel**, **Jexactyl**, **Wisp**, and **Docker/Kubernetes**.
 - 🧠 **Smart Memory Tuning (OOM Protection)**: Automatically computes safe memory ceilings (`--max-old-space-size`, `GOMEMLIMIT`, `-Xmx`, `DOTNET_GCHeapHardLimit`, `MALLOC_TRIM_THRESHOLD_`) to prevent host panel hard-kills.
 - ⚡ **50+ Languages & Modern Toolchains**: Preconfigured with `npm`, `pnpm`, `yarn`, `bun`, `deno`, `pip`, `uv`, `poetry`, `pipenv`, `cargo`, `go mod`, `maven`, `gradle`, `composer`, `gem`, `dotnet`, `mix`, and more.
 - 🔄 **Procfile Multi-Process Supervision**: Run web servers, bots, and background workers concurrently in a single container with colored log streams.
@@ -51,7 +51,7 @@
 
 ---
 
-## Universal Multi-Panel Support
+## Multi-Panel Support
 
 The container detects its host platform **accurately** at boot (via environment markers, cgroup inspection
 and well-known paths) and adapts working directory, port and memory conventions automatically. The detected
@@ -72,7 +72,7 @@ for scripts that need to branch on it.
 | **Heroku-style dynos** | Heroku-style Dyno | paas | `/app` | `PORT` |
 | **Standalone Docker / Podman** | Docker / Standalone | docker | `/home/container` or `$PWD` | `PORT` / `HTTP_PORT` |
 
-The single universal egg imports cleanly into every PTDL_v2-compatible panel (Pterodactyl, Pelican, Feather,
+The single multi-language egg imports cleanly into every PTDL_v2-compatible panel (Pterodactyl, Pelican, Feather,
 Jexactyl, Wisp, Emerald, Convoy) - one egg file covers them all.
 
 ---
@@ -142,10 +142,10 @@ Jexactyl, Wisp, Emerald, Convoy) - one egg file covers them all.
 
 ```
 Prog-Language-Eggs/
-├── egg-programming-universal.json       ← THE Single Universal Egg (Import into Pterodactyl / Pelican / Feather)
-├── Dockerfile                            ← Universal Multi-Arch Runtime Container (single image)
+├── egg-programming-multi.json       ← THE Single multi Egg (Import into Pterodactyl / Pelican / Feather)
+├── Dockerfile                            ← Single Multi-Arch Runtime Image (single image)
 ├── entrypoint.sh                         ← Multi-Panel Entrypoint (Settings, Environment, Banner)
-├── run.sh                                ← Universal Launcher & Project Auto-Detector (+ Environment Isolation)
+├── run.sh                                ← multi Launcher & Project Auto-Detector (+ Environment Isolation)
 ├── install.sh                            ← Multi-Panel Installer Script
 ├── install-runtime.sh                    ← Dynamic On-Demand Toolchain Downloader (version-aware)
 ├── resolve-version.sh                    ← Version Validator & Channel Resolver (live upstream feeds)
@@ -154,7 +154,7 @@ Prog-Language-Eggs/
 ```
 
 > **One egg. One image.** All previous per-language eggs (`eggs/egg-*.json`) have been consolidated into
-> `egg-programming-universal.json`. The target language and its exact version are chosen at startup via
+> `egg-programming-multi.json`. The target language and its exact version are chosen at startup via
 > variables (`LANGUAGE`, `RUNTIME_VERSION`, `EXTRA_RUNTIMES=name@version`, ...) and the runtime is downloaded
 > **inside your container** on demand - fully isolated, rootless, nothing pre-baked.
 
@@ -163,24 +163,42 @@ Prog-Language-Eggs/
 ## Quick Setup Guide
 
 ### 1. Import the Egg (Pterodactyl, Pelican, Feather Panel)
-1. Download [egg-programming-universal.json](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/main/egg-programming-universal.json).
+1. Download [egg-programming-multi.json](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/main/egg-programming-multi.json).
 2. Open your Panel Admin Area (**Nests** / **Templates**).
-3. Click **Import Egg**, select `egg-programming-universal.json`, and click **Save**.
+3. Click **Import Egg**, select `egg-programming-multi.json`, and click **Save**.
 
 ### 2. Create a Server
 1. Create a server using the imported egg.
-2. Under **Docker Image**, select `Universal (50+ Languages)`.
+2. Under **Docker Image**, select `Multi-Language (50+ Languages)`.
 3. Launch the server from your panel console.
 
 ---
 
-## Docker Images (GHCR)
+## Docker Image (GHCR)
 
-The runtime images are automatically built for multi-arch (`linux/amd64` and `linux/arm64`) and published to GitHub Container Registry:
+ONE image, ONE tag, every language. Published as a clean multi-arch build (no stale layer caches) to GitHub Container Registry:
 
 ```bash
 ghcr.io/potenfyr-studios/prog-language-eggs:latest
 ```
+
+### Runs on any host CPU & OS a panel can be hosted on
+
+| Host architecture | Status | Notes |
+|---|---|---|
+| `linux/amd64` | ✅ Full | Standard panel nodes |
+| `linux/arm64` | ✅ Full | Apple Silicon, Ampere, Raspberry Pi 4/5 (64-bit), Oracle ARM |
+| `linux/arm/v7` | ✅ Full image | SBC-hosted panels; engines without upstream armv7 builds self-provision alternatives |
+| `ppc64le` / `s390x` / `riscv64` | ⚙️ On-demand | Pull an amd64/arm64 base or any distro image + this egg: Node.js, Go, Rust, Java, .NET and more resolve official upstream builds automatically at container boot |
+
+**Host OS**: the egg runs wherever the panel can run containers - Linux hosts natively, and Windows/macOS
+panel hosts through Docker Desktop / WSL2 backends (the container itself is always Linux). Inside the
+container, a cross-distro assurance step detects alpine/debian/fedora-style bases and installs or flags
+any missing core tool (`curl`, `jq`, `xz`, ...) automatically.
+
+Per-engine availability is checked at install time with actionable messages - nothing hard-fails on an
+unusual CPU; you simply get told which engines ship for your platform.
+
 
 ---
 
@@ -190,7 +208,7 @@ There is exactly **one** egg to maintain:
 
 | Egg File | Name in Panel | Target Stack / Use-case |
 |---|---|---|
-| [`egg-programming-universal.json`](egg-programming-universal.json) | **Multi-Languages (Universal All-In-One)** | Single egg supporting all 50+ languages with dynamic auto-detection, on-demand runtime installation inside the container, per-version environment isolation, and version channel keywords. |
+| [`egg-programming-multi.json`](egg-programming-multi.json) | **Multi-Languages (All-In-One)** | The single egg: all 50+ languages, dynamic auto-detection, on-demand runtime installation inside the container, per-version environment isolation, and version channel keywords. One docker image serves every language. |
 
 ---
 

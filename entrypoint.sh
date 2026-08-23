@@ -1,9 +1,9 @@
 #!/bin/bash
 # =============================================================================
-#  Universal Programming Language Eggs - Container Entrypoint
+#  Multi-Language Eggs - Container Entrypoint
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
-#  Universal Panel Support:
+#  Multi-Panel Support:
 #    - Pterodactyl Panel (Wings Daemon)
 #    - Pelican Panel (Pelican Wings)
 #    - Feather Panel (feather-panel / renoki-co)
@@ -31,7 +31,7 @@ error() { printf "${C_RED}${C_BOLD}[potenfyr][✗]${C_RESET} ${C_RED}%s${C_RESET
 info()  { printf "${C_BLUE}${C_BOLD}[potenfyr][i]${C_RESET} %s\n" "$*"; }
 
 # -----------------------------------------------------------------------------
-# 1. Universal Working Directory Resolution
+# 1. Multi-Panel Working Directory Resolution
 # -----------------------------------------------------------------------------
 if [ -d "/home/container" ]; then
     cd /home/container 2>/dev/null || true
@@ -52,7 +52,7 @@ fi
 export WORK_DIR="${ACTIVE_WORK_DIR}"
 
 # -----------------------------------------------------------------------------
-# 2. Universal Port & Network Resolution
+# 2. Multi-Panel Port & Network Resolution
 # -----------------------------------------------------------------------------
 ACTIVE_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-${ALLOCATED_PORT:-${HTTP_PORT:-8080}}}}}}"
 export PORT="${ACTIVE_PORT}"
@@ -65,7 +65,7 @@ export HOST="0.0.0.0"
 export BIND_ADDRESS="0.0.0.0"
 
 # -----------------------------------------------------------------------------
-# 3. Universal Host Panel Detection (accurate, multi-panel, multi-platform)
+# 3. Multi-Panel Host Detection (accurate, multi-panel, multi-platform)
 # -----------------------------------------------------------------------------
 # Detection strategy (most specific -> most generic), exporting both a human
 # label and a machine family so launchers can adapt behaviour per platform:
@@ -128,6 +128,50 @@ fi
 export PANEL_TYPE PANEL_FAMILY
 
 # -----------------------------------------------------------------------------
+# 3.2 Architecture & Distro Assurance (works wherever the panel is hosted)
+# -----------------------------------------------------------------------------
+# * ARCH: exported for all runtime scripts; any CPU (amd64/arm64/armv7/ppc64le/
+#   s390x/riscv64/...) proceeds - engines self-check upstream availability.
+# * Cross-distro containers: if this egg is run on a foreign base image
+#   (alpine yolks, debian slim, fedora, ...), make sure the handful of core
+#   tools our launcher needs actually exist. Root gets them installed via the
+#   detected package manager; non-root gets a precise, actionable notice.
+export ARCH
+ARCH="$(uname -m 2>/dev/null || echo unknown)"
+
+ensure_core_tools() {
+    local need="" t
+    for t in curl tar unzip; do
+        command -v "${t}" >/dev/null 2>&1 || need="${need} ${t}"
+    done
+    command -v jq >/dev/null 2>&1 || need="${need} jq"
+    # busybox tar cannot read .tar.xz -> xz binary required on alpine-like bases
+    command -v xz >/dev/null 2>&1 || need="${need} xz"
+    [ -z "${need}" ] && return 0
+
+    local pkgs="curl tar unzip jq xz ca-certificates bash"
+    if [ "$(id -u)" = "0" ]; then
+        info "Installing core tools:${need} ..."
+        if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq >/dev/null 2>&1 || true
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ${pkgs} >/dev/null 2>&1 || true
+        elif command -v apk >/dev/null 2>&1; then
+            apk add --no-cache ${pkgs} >/dev/null 2>&1 || true
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y -q ${pkgs} >/dev/null 2>&1 || true
+        elif command -v yum >/dev/null 2>&1; then
+            yum install -y -q ${pkgs} >/dev/null 2>&1 || true
+        elif command -v zypper >/dev/null 2>&1; then
+            zypper --non-interactive install ${pkgs} >/dev/null 2>&1 || true
+        fi
+    else
+        warn "Base image lacks core tools:${need} and we are non-root, so they cannot be auto-installed."
+        warn "Ask your panel admin to pick the official Multi-Language image, or add these packages to a custom image."
+    fi
+}
+ensure_core_tools
+
+# -----------------------------------------------------------------------------
 # 3.5 Production Reliability: Console Mirroring, Version Stamp, Safety Checks
 # -----------------------------------------------------------------------------
 # Mirror the entire boot + runtime console into .logs/console.log so users can
@@ -155,7 +199,7 @@ if [ -f "/etc/potenfyr-version" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 4. Universal Toolchain & PATH Configuration
+# 4. Toolchain & PATH Configuration (Multi-Panel)
 # -----------------------------------------------------------------------------
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
 export PATH="${ACTIVE_WORK_DIR}/.runtimes/bin:${ACTIVE_WORK_DIR}/.local/bin:${ACTIVE_WORK_DIR}/bin:${ACTIVE_WORK_DIR}/node_modules/.bin:${ACTIVE_WORK_DIR}/custom/bin:${PATH}"
@@ -278,7 +322,7 @@ AUTO_ENV_INJECT="${AUTO_ENV_INJECT:-1}"
 if [ "${AUTO_ENV_INJECT}" = "1" ]; then
     if [ ! -f ".env" ]; then
         cat << EOF > .env
-# Auto-generated by PotenFYR Universal Programming Language Eggs
+# Auto-generated by PotenFYR Multi-Language Eggs
 PORT=${ACTIVE_PORT}
 SERVER_PORT=${ACTIVE_PORT}
 FEATHER_PORT=${ACTIVE_PORT}
@@ -317,7 +361,7 @@ print_banner() {
     printf "${C_BLUE}${C_BOLD}%s${C_RESET}\n" "/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          "
     printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "/_/  /_/\\__,_/_/\\__/_/     /_____/\\__,_/_/ /_/\\__, /          "
     printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "                                             /____/           "
-    printf "${C_YELLOW}${C_BOLD}  » Universal Multi-Language Runtime Environment${C_RESET}\n"
+    printf "${C_YELLOW}${C_BOLD}  » Multi-Language Runtime Environment${C_RESET}\n"
     printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
 
     printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
@@ -327,6 +371,7 @@ print_banner() {
     print_card_row "Host Platform"   "${PANEL_TYPE}" "${C_BLUE}"
     print_card_row "Memory Tuning"   "${AUTO_TUNE_INFO}" "${C_MAGENTA}"
     print_card_row "Port Allocation" "${ACTIVE_PORT} (0.0.0.0)" "${C_GREEN}"
+    print_card_row "Architecture"   "${ARCH} ($(uname -s 2>/dev/null || echo linux))" "${C_CYAN}"
     print_card_row "Working Dir"     "${ACTIVE_WORK_DIR}" "${C_DIM}"
     printf " ${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 }
@@ -457,7 +502,7 @@ case "${MODIFIED_STARTUP}" in
         ;;
     *)
         # If server was migrated from another egg (e.g. startup was 'node index.js' or 'python main.py'),
-        # route it safely through the universal launcher as CUSTOM_COMMAND so
+        # route it safely through the multi-language launcher as CUSTOM_COMMAND so
         # the user's original command still runs, with all launcher features.
         if [ -n "${MODIFIED_STARTUP}" ] && [ "${MODIFIED_STARTUP}" != "${LAUNCHER_SCRIPT}" ] && [ "${MODIFIED_STARTUP}" != "bash ${LAUNCHER_SCRIPT}" ]; then
             export CUSTOM_COMMAND="${MODIFIED_STARTUP}"

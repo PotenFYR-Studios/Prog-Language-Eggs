@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-#  Universal Programming Language Eggs - Runtime Version Resolver & Validator
+#  Multi-Language Eggs - Runtime Version Resolver & Validator
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
 #  Resolves user-facing version requests into concrete versions/toolchains,

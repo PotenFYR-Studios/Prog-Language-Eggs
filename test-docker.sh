@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-#  Universal Programming Language Eggs - Automated Docker Test Suite
+#  Multi-Language Eggs - Automated Docker Test Suite
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
 #  Validates:
@@ -87,7 +87,7 @@ run_and_verify_http() {
     docker rm -f "${container_id}" >/dev/null 2>&1 || true
 }
 
-test_log "Starting Universal Multi-Panel & Multi-Language Docker Test Suite..."
+test_log "Starting Multi-Panel & Multi-Language Docker Test Suite..."
 printf "Testing Docker Image: %s\n\n" "${IMAGE_NAME}"
 
 # -----------------------------------------------------------------------------
@@ -324,7 +324,7 @@ run_and_verify_http "Procfile Multi-Process Supervisor" "${DIR_PROC}" "8092" ""
 rm -rf "${TEST_DIR}"
 
 printf "\n===============================================================================\n"
-printf "${C_BOLD}  UNIVERSAL DOCKER TEST SUITE RESULTS${C_RESET}\n"
+printf "${C_BOLD}  DOCKER TEST SUITE RESULTS${C_RESET}\n"
 printf "===============================================================================\n"
 printf "  ${C_GREEN}${C_BOLD}✔ PASSED: %d${C_RESET}\n" "${PASSED_TESTS}"
 if [ "${FAILED_TESTS}" -gt 0 ]; then
