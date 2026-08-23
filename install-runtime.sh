@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-#  Universal Programming Language Eggs - Toolchain & Runtime Installer
+#  Multi-Language Eggs - Toolchain & Runtime Installer
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 #
 #  Usage:
@@ -42,27 +42,59 @@ if [ -z "${LANG_REQ}" ]; then
     fail "No language specified. Usage: install-runtime.sh <language> [version]"
 fi
 
-# Detect system architecture
+# Detect system architecture (tolerant: ANY arch proceeds; each engine then
+# checks its own upstream availability, so the egg works on every host CPU a
+# panel can be hosted on - amd64, arm64, armv7 SBCs, ppc64le, s390x, riscv64).
 ARCH=$(uname -m)
 case "${ARCH}" in
     x86_64|amd64)
-        ARCH_ALT="x64"
-        ARCH_DEB="amd64"
-        ARCH_JAVA="x64"
-        ARCH_RUST="x86_64-unknown-linux-gnu"
-        ARCH_GO="amd64"
+        ARCH_FAMILY="amd64"; ARCH_ALT="x64";   ARCH_DEB="amd64";   ARCH_JAVA="x64"
+        ARCH_RUST="x86_64-unknown-linux-gnu";  ARCH_GO="amd64";    ARCH_NODE="x64"
         ;;
     aarch64|arm64)
-        ARCH_ALT="arm64"
-        ARCH_DEB="arm64"
-        ARCH_JAVA="aarch64"
-        ARCH_RUST="aarch64-unknown-linux-gnu"
-        ARCH_GO="arm64"
+        ARCH_FAMILY="arm64"; ARCH_ALT="arm64"; ARCH_DEB="arm64";   ARCH_JAVA="aarch64"
+        ARCH_RUST="aarch64-unknown-linux-gnu"; ARCH_GO="arm64";    ARCH_NODE="arm64"
+        ;;
+    armv7l|armv8l|armhf)
+        ARCH="armv7l"
+        ARCH_FAMILY="armv7"; ARCH_ALT="armv7l"; ARCH_DEB="armhf";  ARCH_JAVA="arm"
+        ARCH_RUST="armv7-unknown-linux-gnueabihf"; ARCH_GO="armv6l"; ARCH_NODE="armv7l"
+        ;;
+    ppc64le)
+        ARCH_FAMILY="ppc64le"; ARCH_ALT="ppc64le"; ARCH_DEB="ppc64el"; ARCH_JAVA="ppc64le"
+        ARCH_RUST="powerpc64le-unknown-linux-gnu"; ARCH_GO="ppc64le";  ARCH_NODE="ppc64le"
+        ;;
+    s390x)
+        ARCH_FAMILY="s390x"; ARCH_ALT="s390x"; ARCH_DEB="s390x";  ARCH_JAVA="s390x"
+        ARCH_RUST="s390x-unknown-linux-gnu";  ARCH_GO="s390x";   ARCH_NODE="s390x"
+        ;;
+    riscv64)
+        ARCH_FAMILY="riscv64"; ARCH_ALT="riscv64"; ARCH_DEB="riscv64"; ARCH_JAVA="riscv64"
+        ARCH_RUST="riscv64gc-unknown-linux-gnu"; ARCH_GO="riscv64";   ARCH_NODE="riscv64"
         ;;
     *)
-        fail "Unsupported architecture: ${ARCH}"
+        # Unknown/unheard-of arch: continue with raw uname values as tokens and
+        # let per-engine availability checks produce precise guidance.
+        ARCH_FAMILY="${ARCH}"
+        ARCH_ALT="${ARCH}"; ARCH_DEB="${ARCH}"; ARCH_JAVA="${ARCH}"
+        ARCH_RUST="${ARCH}"; ARCH_GO="${ARCH}"; ARCH_NODE="${ARCH}"
+        warn "Unrecognized architecture '${ARCH}'. Attempting best-effort install."
         ;;
 esac
+
+# engine_arch_supported <engine> <supported families...>
+# Emits an actionable message and returns 1 when this engine cannot be
+# provisioned on the current architecture. Never aborts other engines.
+engine_arch_supported() {
+    local engine="$1"; shift
+    local f
+    for f in "$@"; do
+        [ "${f}" = "${ARCH_FAMILY}" ] && return 0
+    done
+    warn "'${engine}' has no official build for ${ARCH} (${ARCH_FAMILY})."
+    warn "Fully supported on: $* . On this host use one of those engines, or run the panel node on amd64/arm64."
+    return 1
+}
 
 USER_AGENT="ProgLanguageEggs/1.0 (PotenFYR Studios; Linux ${ARCH})"
 
@@ -161,6 +193,8 @@ case "${LANG_LOWER}" in
     # Node.js / JavaScript / TypeScript
     # -------------------------------------------------------------------------
     node|nodejs|javascript|js)
+        # Official dists: x64, arm64, armv7l, ppc64le, s390x (+ riscv64 experimental)
+        engine_arch_supported node amd64 arm64 armv7 ppc64le s390x || exit 0
         if command -v node >/dev/null 2>&1 && [ "${VERSION_REQ}" = "latest" -o "${VERSION_REQ}" = "default" -o -z "${VERSION_REQ}" ]; then
             ok "Node.js $(node -v 2>/dev/null) is already installed and ready"
             exit 0
@@ -183,13 +217,13 @@ case "${LANG_LOWER}" in
         if [ -x "${DEST_DIR}/bin/node" ]; then
             ok "Node.js ${NODE_VER} is already installed at ${DEST_DIR}"
         else
-            log "Downloading Node.js ${NODE_VER} for ${ARCH_ALT}..."
-            TAR_URL="${NODE_BASE}/${NODE_VER}/node-${NODE_VER}-linux-${ARCH_ALT}.tar.xz"
+            log "Downloading Node.js ${NODE_VER} for ${ARCH_NODE}..."
+            TAR_URL="${NODE_BASE}/${NODE_VER}/node-${NODE_VER}-linux-${ARCH_NODE}.tar.xz"
             TMP_TAR="/tmp/node.tar.xz"
             download "${TAR_URL}" "${TMP_TAR}"
             # Verify against the official SHASUMS256.txt published beside the tarball
             NODE_SHA=$(curl -fsSL --max-time 30 "${NODE_BASE}/${NODE_VER}/SHASUMS256.txt" 2>/dev/null \
-                | awk -v f="node-${NODE_VER}-linux-${ARCH_ALT}.tar.xz" '$2 == f {print $1}')
+                | awk -v f="node-${NODE_VER}-linux-${ARCH_NODE}.tar.xz" '$2 == f {print $1}')
             verify_sha256 "${TMP_TAR}" "${NODE_SHA}" "Node.js ${NODE_VER}"
             mkdir -p "${DEST_DIR}"
             tar -xJf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
@@ -204,6 +238,7 @@ case "${LANG_LOWER}" in
     # -------------------------------------------------------------------------
     # Bun
     bun)
+        engine_arch_supported bun amd64 arm64 || exit 0
         if command -v bun >/dev/null 2>&1; then
             ok "Bun $(bun -v 2>/dev/null || true) is already available"
             exit 0
@@ -243,6 +278,7 @@ case "${LANG_LOWER}" in
     # -------------------------------------------------------------------------
     # Deno
     deno)
+        engine_arch_supported deno amd64 arm64 || exit 0
         if command -v deno >/dev/null 2>&1; then
             ok "Deno $(deno -V 2>/dev/null || true) is already available"
             exit 0
@@ -270,6 +306,11 @@ case "${LANG_LOWER}" in
     # Python & Package Managers (pip, poetry, uv, pipenv)
     # -------------------------------------------------------------------------
     python|python3|py)
+        # uv ships x86_64/aarch64 only; other arches fall back to apt system python3/pip
+        if ! engine_arch_supported uv amd64 arm64; then
+            warn "Skipping uv - using the distro python3 already present in the image."
+            exit 0
+        fi
         log "Setting up Python environment and tools (uv, poetry, pipenv)..."
         DEST_DIR="${TARGET_BASE}/python"
         mkdir -p "${DEST_DIR}/bin"
@@ -301,6 +342,7 @@ case "${LANG_LOWER}" in
     # Java (Adoptium Temurin OpenJDK 8, 11, 17, 21, 25, 26+)
     # -------------------------------------------------------------------------
     java|jdk|openjdk)
+        engine_arch_supported java amd64 arm64 armv7 ppc64le s390x riscv64 || exit 0
         JV="${VERSION_REQ}"
         [ "${JV}" = "latest" ] && JV="21"
         JV="${JV#java}"
@@ -332,6 +374,7 @@ case "${LANG_LOWER}" in
     # Go (Golang)
     # -------------------------------------------------------------------------
     go|golang)
+        engine_arch_supported golang amd64 arm64 armv7 ppc64le s390x riscv64 || exit 0
         log "Resolving Go toolchain (version: ${VERSION_REQ})..."
         if [ "${VERSION_REQ}" = "latest" ] || [ -z "${VERSION_REQ}" ]; then
             GO_VER=$(curl -fsSL 'https://go.dev/dl/?mode=json' | jq -r '.[0].version')
@@ -377,6 +420,7 @@ case "${LANG_LOWER}" in
     # Zig
     # -------------------------------------------------------------------------
     zig)
+        engine_arch_supported zig amd64 arm64 || exit 0
         log "Resolving Zig compiler (version: ${VERSION_REQ})..."
         ZIG_ARCH="${ARCH}"
         [ "${ZIG_ARCH}" = "arm64" ] && ZIG_ARCH="aarch64"
@@ -402,6 +446,8 @@ case "${LANG_LOWER}" in
     # .NET SDK (C#, F#, VB.NET)
     # -------------------------------------------------------------------------
     dotnet|csharp|fsharp|vb)
+        # .NET supports linux x64/arm64/arm(32)/s390x/ppc64le - not riscv64
+        engine_arch_supported dotnet amd64 arm64 armv7 ppc64le s390x || exit 0
         log "Setting up .NET SDK (channel: ${VERSION_REQ:-LTS})..."
         DEST_DIR="${TARGET_BASE}/dotnet"
         mkdir -p "${DEST_DIR}"
@@ -464,6 +510,7 @@ case "${LANG_LOWER}" in
     # Dart
     # -------------------------------------------------------------------------
     dart)
+        engine_arch_supported dart amd64 arm64 || exit 0
         log "Resolving Dart SDK..."
         DEST_DIR="${TARGET_BASE}/dart-sdk"
         DART_ARCH="${ARCH}"

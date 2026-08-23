@@ -1,5 +1,5 @@
 # =============================================================================
-#  Universal Programming Language Eggs - Automated Docker Test Suite (PowerShell)
+#  Multi-Language Eggs - Automated Docker Test Suite (PowerShell)
 #  By PotenFYR Studios (https://github.com/PotenFYR-Studios/Prog-Language-Eggs)
 # =============================================================================
 
@@ -98,7 +98,7 @@ function Run-Test {
 }
 
 Write-Host "===============================================================================" -ForegroundColor Magenta
-Write-Host "  STARTING UNIVERSAL MULTI-PANEL AND MULTI-LANGUAGE DOCKER TEST SUITE" -ForegroundColor Cyan
+Write-Host "  STARTING MULTI-PANEL AND MULTI-LANGUAGE DOCKER TEST SUITE" -ForegroundColor Cyan
 Write-Host "  Testing Image: $ImageName" -ForegroundColor Yellow
 Write-Host "===============================================================================" -ForegroundColor Magenta
 
@@ -315,7 +315,7 @@ Run-Test -TestName "13. Procfile Multi-Process Supervision" -TestFolder "procfil
 Remove-Item -Recurse -Force $TestBaseDir -ErrorAction SilentlyContinue
 
 Write-Host "`n===============================================================================" -ForegroundColor Magenta
-Write-Host "  UNIVERSAL DOCKER TEST SUITE RESULTS" -ForegroundColor Cyan
+Write-Host "  DOCKER TEST SUITE RESULTS" -ForegroundColor Cyan
 Write-Host "===============================================================================" -ForegroundColor Magenta
 Write-Host "  PASSED: $Passed" -ForegroundColor Green
 if ($Failed -gt 0) {

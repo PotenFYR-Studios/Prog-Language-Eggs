@@ -1,4 +1,4 @@
-name: Build and Publish Multi-Arch Docker Images
+name: Build and Publish Multi-Language Docker Image
 
 on:
   push:
@@ -12,38 +12,14 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: potenfyr-studios/prog-language-eggs
 
+# ONE image, ONE tag. Every runtime ships inside a single multi-arch image;
+# language choice happens at startup via egg variables, not at build time.
 jobs:
-  build-and-push-matrix:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: all
-            tag: latest
-          - variant: bun
-            tag: bun
-          - variant: nodejs
-            tag: nodejs
-          - variant: python
-            tag: python
-          - variant: golang
-            tag: golang
-          - variant: rust
-            tag: rust
-          - variant: php
-            tag: php
-          - variant: ruby
-            tag: ruby
-          - variant: java
-            tag: java
-          - variant: dotnet
-            tag: dotnet
-          - variant: c-cpp
-            tag: c-cpp
 
     steps:
       - name: Checkout repository
@@ -65,16 +41,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push single Multi-Language image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          # amd64 (standard nodes), arm64 (Apple/Ampere/RPi64), arm/v7 (SBC-hosted panels).
+          # Other host arches still work: runtimes self-provision on demand via
+          # install-runtime.sh, which supports ppc64le/s390x/riscv64 upstreams too.
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           build-args: |
-            RUNTIME_VARIANT=${{ matrix.variant }}
+            RUNTIME_VARIANT=all
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           # Always build from a CLEAN slate: no stale layer caches are reused,
           # so every published tag reflects the exact committed sources.
           no-cache: true
