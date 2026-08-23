@@ -176,17 +176,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         maven \
     && rm -rf /var/lib/apt/lists/*
 
-# 12. .NET SDK & ASP.NET Core Runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        dotnet-sdk-8.0 \
-        aspnetcore-runtime-8.0 \
-    || ( \
-        wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb \
-        && dpkg -i /tmp/packages-microsoft-prod.deb \
-        && rm -f /tmp/packages-microsoft-prod.deb \
-        && apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 aspnetcore-runtime-8.0 \
-    ) \
-    && rm -rf /var/lib/apt/lists/*
+# 12. .NET SDK via the official installer (auto-detects amd64/arm64/arm;
+#     apt feeds do not carry armhf, so distro packages are unusable there).
+#     The SDK bundle includes the ASP.NET Core shared runtime.
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+    && bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet \
+    && rm -f /tmp/dotnet-install.sh \
+    && ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
+    && dotnet --list-sdks
 
 # 13. Interpreted languages (Lua, Perl, Tcl, Prolog)
 RUN apt-get update && apt-get install -y --no-install-recommends \
