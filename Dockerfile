@@ -15,7 +15,7 @@
 # ("Errors were encountered while processing: libc-bin"). Slimmer base too.
 FROM debian:bookworm-slim
 
-LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
+LABEL author="support@potenfyr.in" maintainer="support@potenfyr.in"
 LABEL org.opencontainers.image.source="https://github.com/potenfyr-studios/prog-language-eggs"
 LABEL org.opencontainers.image.description="Single multi-language runtime image across Pterodactyl, Pelican, Feather Panel, PufferPanel and plain Docker"
 
