@@ -45,7 +45,7 @@
 - 🔄 **Procfile Multi-Process Supervision**: Run web servers, bots, and background workers concurrently in a single container with colored log streams.
 - 🔥 **Native Dev Watch Mode (`DEV_MODE=1`)**: Hot-reloads your application on code changes for instant developer feedback.
 - 📱 **Static Frontend & SPA Hosting**: Automatic static web server with client-side SPA routing fallback for React, Vue, Vite, and HTML.
-- 🧙 **Interactive First-Run Wizard**: Start with an empty directory — the launcher interactively prompts you for your language choice and bootstraps a starter template (with non-interactive fallback for automated panel provisioning).
+- 🧙 **Interactive First-Run Wizard**: Start with an empty directory - the launcher interactively prompts you for your language choice and bootstraps a starter template (with non-interactive fallback for automated panel provisioning).
 - 🔄 **Git Synchronization**: Automated Git repository cloning and live auto-pull on container boot (`GIT_REPO`, `GIT_BRANCH`, and private token support).
 - 💻 **Cross-Platform Multi-Arch**: Full native support for both `linux/amd64` (Intel/AMD) and `linux/arm64` (Apple Silicon, Ampere, Raspberry Pi).
 
@@ -73,7 +73,7 @@ for scripts that need to branch on it.
 | **Standalone Docker / Podman** | Docker / Standalone | docker | `/home/container` or `$PWD` | `PORT` / `HTTP_PORT` |
 
 The single universal egg imports cleanly into every PTDL_v2-compatible panel (Pterodactyl, Pelican, Feather,
-Jexactyl, Wisp, Emerald, Convoy) — one egg file covers them all.
+Jexactyl, Wisp, Emerald, Convoy) - one egg file covers them all.
 
 ---
 
@@ -156,7 +156,7 @@ Prog-Language-Eggs/
 > **One egg. One image.** All previous per-language eggs (`eggs/egg-*.json`) have been consolidated into
 > `egg-programming-universal.json`. The target language and its exact version are chosen at startup via
 > variables (`LANGUAGE`, `RUNTIME_VERSION`, `EXTRA_RUNTIMES=name@version`, ...) and the runtime is downloaded
-> **inside your container** on demand — fully isolated, rootless, nothing pre-baked.
+> **inside your container** on demand - fully isolated, rootless, nothing pre-baked.
 
 ---
 
@@ -196,7 +196,7 @@ There is exactly **one** egg to maintain:
 
 ## Version Selection & Channels (`RUNTIME_VERSION`)
 
-Version requests are **validated and resolved from live upstream feeds** before anything downloads — invalid
+Version requests are **validated and resolved from live upstream feeds** before anything downloads - invalid
 input fails fast with clear guidance instead of a broken install. No hardcoded pins.
 
 | Request | Example | Behaviour |
@@ -207,7 +207,7 @@ input fails fast with clear guidance instead of a broken install. No hardcoded p
 | `alpha`, `beta`, `rc`, `preview`, `pre` | `RUNTIME_VERSION=beta` | Pre-release channel where upstream publishes one (Go beta/rc, Deno pre-releases, .NET STS preview, Dart beta, Java EA, Zig latest, Rust `beta`). Falls back to newest stable with a console notice when no pre-release exists. |
 | `nightly`, `dev`, `canary`, `tip`, `edge` | `RUNTIME_VERSION=nightly` | Nightly/canary line (Node nightly CDN, Rust `nightly`, Zig `master`, .NET daily, Dart dev, Bun canary, Java tip-EA). |
 | Concrete | `22`, `20.11`, `v22.1.4`, `3.12`, `1.22`, `17`, `9.0` | Resolved to the newest matching release from the feed; unknown series are rejected with the list of valid ones. |
-| Invalid input | `22.abc!!` | **Rejected before any download** — exit 64 with accepted-form examples. |
+| Invalid input | `22.abc!!` | **Rejected before any download** - exit 64 with accepted-form examples. |
 
 Companion runtimes accept a **per-component version**: `EXTRA_RUNTIMES=python@3.12,bun@1.1,java@21`.
 
@@ -217,7 +217,7 @@ Resolution diagnostics are logged to `.logs/version-resolver.log`.
 
 ## Per-Language Environment Isolation & Data Retention
 
-Everything installs **inside your container** (workspace `.runtimes/`) — rootless, isolated from the host.
+Everything installs **inside your container** (workspace `.runtimes/`) - rootless, isolated from the host.
 Each language + major-version series gets its own environment folder so switching never conflicts or deletes:
 
 ```text
@@ -234,8 +234,8 @@ Each language + major-version series gets its own environment folder so switchin
 
 | Change | What happens |
 |---|---|
-| Same language, same major series (e.g. patch update) | ✅ Compatible — same environment folder reused. Console: info message. |
-| Same language, new major series (e.g. Node 22 → 24) | ⚠️ Breaking boundary — **new** folder created; previous folder preserved untouched; yellow console warning shows both paths. |
+| Same language, same major series (e.g. patch update) | ✅ Compatible - same environment folder reused. Console: info message. |
+| Same language, new major series (e.g. Node 22 → 24) | ⚠️ Breaking boundary - **new** folder created; previous folder preserved untouched; yellow console warning shows both paths. |
 | Different language (e.g. Python → Go) | ⚠️ Separate subtree created; previous language's environment fully retained; console warning lists it. |
 
 Retained environments are listed in the console with their sizes on every boot, including instructions to
@@ -270,20 +270,20 @@ after boot until it answers (default budget 60s). With `HEALTH_STRICT=1`, a fail
 so panels mark the server unhealthy instead of silently running.
 
 ### Speed & Efficiency
-* **Parallel companion installs** — `EXTRA_RUNTIMES=a,b,c` download simultaneously; each stream logged to
+* **Parallel companion installs** - `EXTRA_RUNTIMES=a,b,c` download simultaneously; each stream logged to
   `.logs/runtime-install-<name>.log`.
-* **Resolver TTL cache** — version lookups are cached under `.cache/version-resolver/` for 6h
+* **Resolver TTL cache** - version lookups are cached under `.cache/version-resolver/` for 6h
   (`RESOLVER_CACHE_TTL` seconds, `0` disables) so warm boots skip upstream feeds entirely.
-* **Idempotent installs** — already-downloaded runtimes short-circuit before any network I/O.
+* **Idempotent installs** - already-downloaded runtimes short-circuit before any network I/O.
 
 ### Security Posture
-* **Checksum verification** — Node.js tarballs verified against official `SHASUMS256.txt`; Zig against the
+* **Checksum verification** - Node.js tarballs verified against official `SHASUMS256.txt`; Zig against the
   published `shasum`; mismatch aborts the install loudly.
-* **URL validation** — `GIT_REPO`, `CUSTOM_RUNTIME_URL` must be well-formed https/ssh/http URLs
+* **URL validation** - `GIT_REPO`, `CUSTOM_RUNTIME_URL` must be well-formed https/ssh/http URLs
   (CRLF/header-injection shapes rejected before any fetch).
-* **Secret redaction** — credentials embedded in URLs or tokens never reach console/log output.
-* **Root guard** — warns when the container runs as uid 0 (panels should use the non-root image user).
-* **Full audit trail** — every boot mirrors the complete console to `.logs/console.log`
+* **Secret redaction** - credentials embedded in URLs or tokens never reach console/log output.
+* **Root guard** - warns when the container runs as uid 0 (panels should use the non-root image user).
+* **Full audit trail** - every boot mirrors the complete console to `.logs/console.log`
   (previous boot kept as `.1`; disable with `LAUNCHER_LOG=0`), plus an image provenance stamp
   (`/etc/potenfyr-version`) printed at startup.
 
@@ -296,7 +296,7 @@ so panels mark the server unhealthy instead of silently running.
 | Version request rejected / wrong version picked | `.logs/version-resolver.log` |
 | Runtime download or extraction failure | Installer console output (each step is logged with retry counts and sizes) |
 | Environment not reused after restart | Check `.environments/active` marker contents |
-| Full step-by-step script trace | Restart with `DEBUG=1` — bash xtrace is written to log files while the console stays readable |
+| Full step-by-step script trace | Restart with `DEBUG=1` - bash xtrace is written to log files while the console stays readable |
 
 ---
 
@@ -309,7 +309,7 @@ so panels mark the server unhealthy instead of silently running.
 | **Main Entry File** | `MAIN_FILE` | `auto` | 👤 Yes | The main script or file to execute (leave 'auto' for smart detection). |
 | **Extra Runtimes** | `EXTRA_RUNTIMES` | `none` | 👤 Yes | Comma-separated auxiliary toolchains to install (e.g. `python,java,go`) with optional per-component versions (`python@3.12,bun@1.1`). |
 | **Skip Runtimes** | `SKIP_RUNTIMES` | `none` | 👤 Yes | Comma-separated runtimes to skip/disable (e.g. `python,java`). |
-| **Runtime Version** | `RUNTIME_VERSION` | `latest` | 👤 Yes | Primary runtime version: concrete (`22`, `20.11.1`) or channel keyword (`latest`, `stable`, `lts`, `alpha`, `beta`, `rc`, `preview`, `nightly`). Validated against live upstream feeds — invalid values fail fast with guidance. |
+| **Runtime Version** | `RUNTIME_VERSION` | `latest` | 👤 Yes | Primary runtime version: concrete (`22`, `20.11.1`) or channel keyword (`latest`, `stable`, `lts`, `alpha`, `beta`, `rc`, `preview`, `nightly`). Validated against live upstream feeds - invalid values fail fast with guidance. |
 | **Custom Download URL** | `CUSTOM_RUNTIME_URL` | `""` | 👤 Yes | Direct URL to download a custom runtime (.tar.gz, .zip, or standalone binary). |
 | **Package Manager** | `PACKAGE_MANAGER` | `auto` | 👤 Yes | Package manager for dependency resolution (e.g. auto, npm, pnpm, yarn, bun, pip, cargo). |
 | **Memory Auto Tune** | `MEMORY_AUTO_TUNE` | `1` | 👤 Yes | Auto-tune GC & memory limits to prevent container OOM (1 = Enabled, 0 = Disabled). |
