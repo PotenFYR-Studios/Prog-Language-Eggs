@@ -10,7 +10,10 @@
 #      work through per-engine availability checks at install time
 # =============================================================================
 
-FROM ubuntu:22.04
+# Debian bookworm: its armhf packages configure cleanly under QEMU emulation,
+# unlike Ubuntu jammy whose libc-bin/ldconfig trigger crashes on linux/arm/v7
+# ("Errors were encountered while processing: libc-bin"). Slimmer base too.
+FROM debian:bookworm-slim
 
 LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
 LABEL org.opencontainers.image.source="https://github.com/potenfyr-studios/prog-language-eggs"
