@@ -383,14 +383,84 @@ case "${LANG_NORM}" in
         [[ "${RESOLVED}" == __EXACT__* ]] && RESOLVED="${RESOLVED#__EXACT__}"
         ;;
     *)
-        # Pinned/fixed-channel languages (swift, julia, nim, gleam, odin, ...)
-        # The installer owns the concrete pin; validate + inform instead of failing.
-        case "${REQ}" in
-            latest|stable|lts|current|default|alpha|beta|rc|pre|preview|nightly|dev|tip|edge|canary)
-                v_info "INFO" "${LANG_IN}: channel '${REQ}' accepted (concrete pin managed by the installer)." ;;
-            *) : ;; # numeric form already regex-validated
+        # Previously-pinned languages now resolve dynamically too. Anything not
+        # covered below stays passthrough (validated) and the installer reports
+        # exactly what it can and cannot honor.
+        local eol="/tmp/potenfyr-eol-generic.json"
+        case "${LANG_NORM}" in
+            julia|nim|swift)
+                # Different upstream feeds per language (endoflife lacks nim/swift)
+                jf="/tmp/potenfyr-${LANG_NORM}-ver.json"
+                if [ "${LANG_NORM}" = "julia" ]; then
+                    fetch_json "https://endoflife.date/api/julia.json" "${jf}" || { RESOLVED="${REQ}"; }
+                elif [ "${LANG_NORM}" = "nim" ]; then
+                    fetch_json "https://api.github.com/repos/nim-lang/Nim/tags?per_page=60" "${jf}" || { RESOLVED="${REQ}"; }
+                else
+                    fetch_json "https://www.swift.org/api/v1/install/releases.json" "${jf}" || { RESOLVED="${REQ}"; }
+                fi
+
+                if [ -s "${jf}" ]; then
+                    case "${LANG_NORM}" in
+                        julia)
+                            case "${REQ}" in
+                                latest|stable|current|default|lts)
+                                    RESOLVED=$(jq -r '.[0].latest // empty' "${jf}" 2>>"${LOG_FILE}") ;;
+                                alpha|beta|rc|pre|preview|nightly|dev)
+                                    RESOLVED=$(jq -r '.[0].latest // empty' "${jf}" 2>>"${LOG_FILE}") ;;
+                                *)
+                                    r="${REQ#v}"
+                                    if [[ "${r}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+                                        RESOLVED=$(jq -r --arg c "${r}" '.[] | select(.cycle == $c) | .latest // empty' "${jf}" 2>>"${LOG_FILE}")
+                                    elif [[ "${r}" =~ ^[0-9]+$ ]]; then
+                                        RESOLVED=$(jq -r --arg c "${r}" '[.[] | select(.cycle | startswith($c + "."))][0].latest // empty' "${jf}" 2>>"${LOG_FILE}")
+                                    else
+                                        RESOLVED=$(jq -r --arg v "${r}" '.[].latest | select(. == $v) // empty' "${jf}" 2>>"${LOG_FILE}")
+                                    fi
+                                    ;;
+                            esac
+                            ;;
+                        nim)
+                            # First stable semver tag (skip rc/alpha/devel)
+                            RESOLVED=$(jq -r '[.[].name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))][0] // empty' "${jf}" 2>>"${LOG_FILE}" | sed 's/^v//')
+                            if [[ "${REQ}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+                                r="${REQ#v}"
+                                RESOLVED=$(jq -r --arg p "v${r}" '[.[].name | select(test("^" + $p + "(\\.[0-9]+)?$"))][0] // empty' "${jf}" 2>>"${LOG_FILE}" | sed 's/^v//')
+                                [ -z "${RESOLVED}" ] && fail_unresolved "no Nim release starts with '${REQ}'"
+                            fi
+                            ;;
+                        swift)
+                            # entries look like {"name": "6.0.2", ...} (newest last)
+                            RESOLVED=$(jq -r '.[-1].name // empty' "${jf}" 2>>"${LOG_FILE}")
+                            if [[ "${REQ}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+                                r="${REQ#v}"
+                                RESOLVED=$(jq -r --arg p "${r}" '[.[].name | select(test("^" + $p + "(\\.[0-9]+)?$"))][-1] // empty' "${jf}" 2>>"${LOG_FILE}")
+                                [ -z "${RESOLVED}" ] && fail_unresolved "no Swift release matches '${REQ}'"
+                            fi
+                            ;;
+                    esac
+                    [ -z "${RESOLVED}" ] && fail_unresolved "no ${LANG_NORM} release matches '${REQ}'"
+                else
+                    v_warn "${LANG_NORM} feed unreachable; passing '${REQ}' to installer."
+                    RESOLVED="${REQ}"
+                fi
+                ;;
+            gleam)
+                fetch_json "https://api.github.com/repos/gleam-lang/gleam/releases/latest" "/tmp/potenfyr-gleam.json" || \
+                    fail_unresolved "GitHub feed unreachable"
+                RESOLVED=$(jq -r '.tag_name // empty' "/tmp/potenfyr-gleam.json" 2>>"${LOG_FILE}" | sed 's/^v//')
+                [ -z "${RESOLVED}" ] && fail_unresolved "could not read latest gleam tag"
+                [[ "${REQ}" =~ ^[0-9] ]] && RESOLVED="${REQ#v}"
+                ;;
+            *)
+                # Truly passthrough families (validated earlier)
+                case "${REQ}" in
+                    latest|stable|lts|current|default|alpha|beta|rc|pre|preview|nightly|dev|tip|edge|canary|master)
+                        v_info "INFO" "${LANG_IN}: channel '${REQ}' accepted." ;;
+                    *) : ;;
+                esac
+                RESOLVED="${REQ}"
+                ;;
         esac
-        RESOLVED="${REQ}"
         ;;
 esac
 

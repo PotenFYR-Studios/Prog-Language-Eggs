@@ -472,38 +472,66 @@ case "${LANG_LOWER}" in
     # Swift
     # -------------------------------------------------------------------------
     swift)
-        log "Resolving Swift toolchain..."
+        # VERSION_REQ resolved from swift.org releases feed; fall back to a known
+        # good pin ONLY if the requested build is unavailable for this platform.
+        log "Resolving Swift toolchain (version: ${VERSION_REQ:-latest})..."
         DEST_DIR="${TARGET_BASE}/swift"
-        SWIFT_VER="5.10.1"
         SWIFT_ARCH="${ARCH}"
         [ "${SWIFT_ARCH}" = "arm64" ] && SWIFT_ARCH="aarch64"
-        SWIFT_URL="https://download.swift.org/swift-${SWIFT_VER}-release/ubuntu2204/swift-${SWIFT_VER}-RELEASE/swift-${SWIFT_VER}-RELEASE-ubuntu22.04-${SWIFT_ARCH}.tar.gz"
         TMP_TAR="/tmp/swift.tar.gz"
-        if curl -fsSL -o "${TMP_TAR}" "${SWIFT_URL}"; then
-            mkdir -p "${DEST_DIR}"
-            tar -xzf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
-            rm -f "${TMP_TAR}"
-            ok "Installed Swift to ${DEST_DIR}"
-        else
-            warn "Could not download official Swift tarball directly for this target."
+        SWIFT_CANDIDATES=()
+        if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            SWIFT_BASE="${VERSION_REQ%.*}"
+            SWIFT_CANDIDATES+=("https://download.swift.org/swift-${VERSION_REQ}-release/ubuntu2204/swift-${VERSION_REQ}-RELEASE/swift-${VERSION_REQ}-RELEASE-ubuntu22.04-${SWIFT_ARCH}.tar.gz")
         fi
+        SWIFT_CANDIDATES+=("https://download.swift.org/swift-5.10.1-release/ubuntu2204/swift-5.10.1-RELEASE/swift-5.10.1-RELEASE-ubuntu22.04-${SWIFT_ARCH}.tar.gz")
+        SWIFT_OK=0
+        for SWIFT_URL in "${SWIFT_CANDIDATES[@]}"; do
+            if curl -fsSL --max-time 900 -o "${TMP_TAR}" "${SWIFT_URL}"; then
+                mkdir -p "${DEST_DIR}"
+                tar -xzf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}" \
+                    && SWIFT_OK=1 && ok "Installed Swift ($(basename "${SWIFT_URL}" | cut -d- -f2)) to ${DEST_DIR}"
+                rm -f "${TMP_TAR}"
+                [ "${SWIFT_OK}" = "1" ] && break
+            fi
+        done
+        [ "${SWIFT_OK}" = "0" ] && warn "No Swift build succeeded for ${ARCH}; skipping (system clang can still compile Swift-style C)."
         ;;
 
     # -------------------------------------------------------------------------
     # Julia
     # -------------------------------------------------------------------------
     julia)
-        log "Resolving Julia runtime..."
+        # VERSION_REQ resolved from endoflife.date julia feed; URL layout:
+        # /bin/linux/<dir>/<series>/julia-<full>-linux-<file>.tar.gz
+        log "Resolving Julia runtime (version: ${VERSION_REQ:-latest})..."
         DEST_DIR="${TARGET_BASE}/julia"
-        JULIA_ARCH="${ARCH}"
-        [ "${JULIA_ARCH}" = "arm64" ] && JULIA_ARCH="aarch64"
-        JULIA_URL="https://julialang-s3.julialang.org/bin/linux/${JULIA_ARCH}/1.10/julia-1.10.4-linux-${JULIA_ARCH}.tar.gz"
+        case "${ARCH}" in
+            x86_64|amd64) JDIR="x64";     JFILE="x86_64" ;;
+            aarch64|arm64) JDIR="aarch64"; JFILE="aarch64" ;;
+            armv7l)        JDIR="armv7l";  JFILE="armv7l" ;;
+            ppc64le)       JDIR="ppc64le"; JFILE="powerpc64le" ;;
+            *)             JDIR="x64";     JFILE="x86_64" ;;
+        esac
         TMP_TAR="/tmp/julia.tar.gz"
-        download "${JULIA_URL}" "${TMP_TAR}"
-        mkdir -p "${DEST_DIR}"
-        tar -xzf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
-        rm -f "${TMP_TAR}"
-        ok "Installed Julia to ${DEST_DIR}"
+        JULIA_CANDIDATES=()
+        if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            JSERIES="${VERSION_REQ%.*}"
+            JULIA_CANDIDATES+=("https://julialang-s3.julialang.org/bin/linux/${JDIR}/${JSERIES}/julia-${VERSION_REQ}-linux-${JFILE}.tar.gz")
+        fi
+        JULIA_CANDIDATES+=("https://julialang-s3.julialang.org/bin/linux/${JDIR}/1.10/julia-1.10.4-linux-${JFILE}.tar.gz")
+        JULIA_OK=0
+        for JULIA_URL in "${JULIA_CANDIDATES[@]}"; do
+            if download "${JULIA_URL}" "${TMP_TAR}"; then
+                mkdir -p "${DEST_DIR}"
+                if tar -xzf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"; then
+                    JULIA_OK=1; rm -f "${TMP_TAR}"; break
+                fi
+                rm -f "${TMP_TAR}"
+            fi
+        done
+        [ "${JULIA_OK}" = "1" ] && ok "Installed Julia to ${DEST_DIR}" \
+            || warn "Julia install failed for ${ARCH} (requested: ${VERSION_REQ})."
         ;;
 
     # -------------------------------------------------------------------------
@@ -544,35 +572,56 @@ case "${LANG_LOWER}" in
     # Gleam
     # -------------------------------------------------------------------------
     gleam)
-        log "Resolving Gleam compiler..."
+        # VERSION_REQ resolved from GitHub releases feed; asset uses rust triple
+        log "Resolving Gleam compiler (version: ${VERSION_REQ:-latest})..."
         DEST_DIR="${TARGET_BASE}/gleam/bin"
         mkdir -p "${DEST_DIR}"
         GLEAM_ARCH="${ARCH_RUST}"
-        GLEAM_URL="https://github.com/gleam-lang/gleam/releases/latest/download/gleam-v1.4.1-${GLEAM_ARCH}.tar.gz"
         TMP_TAR="/tmp/gleam.tar.gz"
-        if curl -fsSL -o "${TMP_TAR}" "${GLEAM_URL}"; then
-            tar -xzf "${TMP_TAR}" -C "${DEST_DIR}"
-            chmod +x "${DEST_DIR}/gleam"
-            rm -f "${TMP_TAR}"
-            ok "Installed Gleam to ${DEST_DIR}/gleam"
+        GLEAM_CANDIDATES=()
+        if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            GLEAM_CANDIDATES+=("https://github.com/gleam-lang/gleam/releases/download/v${VERSION_REQ}/gleam-v${VERSION_REQ}-${GLEAM_ARCH}.tar.gz")
         fi
+        GLEAM_CANDIDATES+=("https://github.com/gleam-lang/gleam/releases/latest/download/gleam-v1.4.1-${GLEAM_ARCH}.tar.gz")
+        GLEAM_OK=0
+        for GLEAM_URL in "${GLEAM_CANDIDATES[@]}"; do
+            if curl -fsSL --max-time 300 -o "${TMP_TAR}" "${GLEAM_URL}"; then
+                tar -xzf "${TMP_TAR}" -C "${DEST_DIR}" && GLEAM_OK=1
+                rm -f "${TMP_TAR}"
+                [ "${GLEAM_OK}" = "1" ] && chmod +x "${DEST_DIR}/gleam" 2>/dev/null && break
+            fi
+        done
+        [ "${GLEAM_OK}" = "1" ] && ok "Installed Gleam to ${DEST_DIR}/gleam" \
+            || warn "Gleam install failed for ${GLEAM_ARCH} (requested: ${VERSION_REQ})."
         ;;
 
     # -------------------------------------------------------------------------
     # Nim
     # -------------------------------------------------------------------------
     nim)
-        log "Setting up Nim..."
+        # VERSION_REQ resolved from nim-lang/Nim GitHub tags; binaries live on
+        # nim-lang.org with per-version names. Falls back to known-good pin.
+        log "Setting up Nim (version: ${VERSION_REQ:-latest})..."
         DEST_DIR="${TARGET_BASE}/nim"
         NIM_ARCH="${ARCH_ALT}"
-        NIM_URL="https://nim-lang.org/download/nim-2.0.8-linux_${NIM_ARCH}.tar.xz"
         TMP_TAR="/tmp/nim.tar.xz"
-        if curl -fsSL -o "${TMP_TAR}" "${NIM_URL}"; then
-            mkdir -p "${DEST_DIR}"
-            tar -xJf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
-            rm -f "${TMP_TAR}"
-            ok "Installed Nim to ${DEST_DIR}"
+        NIM_CANDIDATES=()
+        if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            NIM_CANDIDATES+=("https://nim-lang.org/download/nim-${VERSION_REQ}-linux_${NIM_ARCH}.tar.xz")
         fi
+        NIM_CANDIDATES+=("https://nim-lang.org/download/nim-2.0.8-linux_${NIM_ARCH}.tar.xz")
+        NIM_OK=0
+        for NIM_URL in "${NIM_CANDIDATES[@]}"; do
+            if curl -fsSL --max-time 600 -o "${TMP_TAR}" "${NIM_URL}"; then
+                mkdir -p "${DEST_DIR}"
+                if tar -xJf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"; then
+                    NIM_OK=1; rm -f "${TMP_TAR}"; break
+                fi
+                rm -f "${TMP_TAR}"
+            fi
+        done
+        [ "${NIM_OK}" = "1" ] && ok "Installed Nim to ${DEST_DIR}" \
+            || warn "Nim install failed for ${ARCH} (requested: ${VERSION_REQ})."
         ;;
 
     # -------------------------------------------------------------------------
