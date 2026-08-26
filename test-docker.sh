@@ -28,19 +28,19 @@ TEST_DIR="/tmp/prog-egg-docker-tests"
 rm -rf "${TEST_DIR}"
 mkdir -p "${TEST_DIR}"
 
-C_RESET='\033[0m'
-C_BOLD='\033[1m'
-C_GREEN='\033[32m'
-C_RED='\033[31m'
-C_CYAN='\033[36m'
-C_YELLOW='\033[33m'
+C_RESET=$'\033[0m'
+C_BOLD=$'\033[1m'
+C_GREEN=$'\033[32m'
+C_RED=$'\033[31m'
+C_CYAN=$'\033[36m'
+C_YELLOW=$'\033[33m'
 
 PASSED_TESTS=0
 FAILED_TESTS=0
 
-test_log()  { printf "\n${C_CYAN}${C_BOLD}[TEST SUITE]${C_RESET} ${C_BOLD}%s${C_RESET}\n" "$*"; }
-test_pass() { printf "${C_GREEN}${C_BOLD}  ✔ PASS:${C_RESET} %s\n" "$*"; PASSED_TESTS=$((PASSED_TESTS + 1)); }
-test_fail() { printf "${C_RED}${C_BOLD}  ✘ FAIL:${C_RESET} %s\n" "$*"; FAILED_TESTS=$((FAILED_TESTS + 1)); }
+test_log()  { printf "\n%b %b\n" "${C_CYAN}${C_BOLD}[TEST SUITE]${C_RESET}" "${C_BOLD}$*${C_RESET}"; }
+test_pass() { printf "%b %s\n" "${C_GREEN}${C_BOLD}  ✔ PASS:${C_RESET}" "$*"; PASSED_TESTS=$((PASSED_TESTS + 1)); }
+test_fail() { printf "%b %s\n" "${C_RED}${C_BOLD}  ✘ FAIL:${C_RESET}" "$*"; FAILED_TESTS=$((FAILED_TESTS + 1)); }
 
 # Helper to run container in background, verify HTTP 200 response, and clean up
 run_and_verify_http() {

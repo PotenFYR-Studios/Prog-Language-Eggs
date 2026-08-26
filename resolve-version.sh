@@ -29,23 +29,23 @@
 
 set -uo pipefail
 
-C_RESET='\033[0m'; C_BOLD='\033[1m'
-C_CYAN='\033[36m'; C_GREEN='\033[32m'; C_YELLOW='\033[33m'; C_RED='\033[31m'
-C_BLUE='\033[34m'; C_DIM='\033[2m'
+C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+C_CYAN=$'\033[36m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'
+C_BLUE=$'\033[34m'; C_DIM=$'\033[2m'
 
 LOG_DIR="${WORK_DIR:-$PWD}/.logs"; mkdir -p "${LOG_DIR}" 2>/dev/null || LOG_DIR="/tmp/potenfyr-logs"
 LOG_FILE="${LOG_DIR}/version-resolver.log"
 
 _vlog() { printf '%s [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" >>"${LOG_FILE}" 2>/dev/null || true; }
-v_info() { printf "${C_BLUE}${C_BOLD}[potenfyr][ver]${C_RESET} %s\n" "$2" >&2; _vlog "$1" "$2"; }
-v_warn() { printf "${C_YELLOW}${C_BOLD}[potenfyr][ver][!]${C_RESET} %s\n" "$2" >&2; _vlog "WARN" "$2"; }
+v_info() { printf "%b %s\n" "${C_BLUE}${C_BOLD}[PotenFYR][ver]${C_RESET}" "$2" >&2; _vlog "$1" "$2"; }
+v_warn() { printf "%b %s\n" "${C_YELLOW}${C_BOLD}[PotenFYR][ver][!]${C_RESET}" "$2" >&2; _vlog "WARN" "$2"; }
 
 LANG_IN="${1:-}"
 REQ="${2:-}"
 
 fail_invalid() { # fail_invalid <detail>
     printf "\n" >&2
-    printf "${C_RED}${C_BOLD}[potenfyr][ver][X] Invalid version request: '%s'${C_RESET}\n" "${REQ}" >&2
+    printf "${C_RED}${C_BOLD}[PotenFYR][ver][X] Invalid version request: '%s'${C_RESET}\n" "${REQ}" >&2
     printf "${C_RED}  %s${C_RESET}\n" "$1" >&2
     printf "${C_YELLOW}  Accepted forms:${C_RESET}\n" >&2
     printf "${C_YELLOW}    keywords : latest, stable, lts, alpha, beta, rc, preview, nightly${C_RESET}\n" >&2
@@ -57,7 +57,7 @@ fail_invalid() { # fail_invalid <detail>
 
 fail_unresolved() {
     printf "\n" >&2
-    printf "${C_RED}${C_BOLD}[potenfyr][ver][X] Could not resolve '${REQ}' for ${LANG_IN}: %s${C_RESET}\n" "$1" >&2
+    printf "${C_RED}${C_BOLD}[PotenFYR][ver][X] Could not resolve '${REQ}' for ${LANG_IN}: %s${C_RESET}\n" "$1" >&2
     printf "${C_DIM}  Upstream feed may be down or the series retired. Check ${LOG_FILE}${C_RESET}\n" >&2
     _vlog "FAIL" "unresolved '${REQ}' for ${LANG_IN}: $1"
     exit 65

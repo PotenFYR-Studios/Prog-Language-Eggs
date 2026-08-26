@@ -13,22 +13,22 @@
 # =============================================================================
 
 # --- Visual Colors & Styling ---
-C_RESET='\033[0m'
-C_BOLD='\033[1m'
-C_CYAN='\033[36m'
-C_GREEN='\033[32m'
-C_YELLOW='\033[33m'
-C_RED='\033[31m'
-C_MAGENTA='\033[35m'
-C_BLUE='\033[34m'
-C_WHITE='\033[37m'
-C_DIM='\033[2m'
+C_RESET=$'\033[0m'
+C_BOLD=$'\033[1m'
+C_CYAN=$'\033[36m'
+C_GREEN=$'\033[32m'
+C_YELLOW=$'\033[33m'
+C_RED=$'\033[31m'
+C_MAGENTA=$'\033[35m'
+C_BLUE=$'\033[34m'
+C_WHITE=$'\033[37m'
+C_DIM=$'\033[2m'
 
-log()   { printf "${C_CYAN}${C_BOLD}[potenfyr]${C_RESET} %s\n" "$*"; }
-ok()    { printf "${C_GREEN}${C_BOLD}[potenfyr][✓]${C_RESET} %s\n" "$*"; }
-warn()  { printf "${C_YELLOW}${C_BOLD}[potenfyr][!]${C_RESET} ${C_YELLOW}%s${C_RESET}\n" "$*"; }
-error() { printf "${C_RED}${C_BOLD}[potenfyr][✗]${C_RESET} ${C_RED}%s${C_RESET}\n" "$*"; }
-info()  { printf "${C_BLUE}${C_BOLD}[potenfyr][i]${C_RESET} %s\n" "$*"; }
+log()   { printf "%b %b\n" "${C_CYAN}${C_BOLD}[PotenFYR]${C_RESET}" "$*"; }
+ok()    { printf "%b %b\n" "${C_GREEN}${C_BOLD}[PotenFYR][✓]${C_RESET}" "$*"; }
+warn()  { printf "%b %b\n" "${C_YELLOW}${C_BOLD}[PotenFYR][!]${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
+error() { printf "%b %b\n" "${C_RED}${C_BOLD}[PotenFYR][✗]${C_RESET}" "${C_RED}$*${C_RESET}"; }
+info()  { printf "%b %b\n" "${C_BLUE}${C_BOLD}[PotenFYR][i]${C_RESET}" "$*"; }
 
 # -----------------------------------------------------------------------------
 # 1. Multi-Panel Working Directory Resolution
@@ -517,7 +517,7 @@ if ! command -v bash >/dev/null 2>&1; then
 fi
 
 log "Starting application process via launcher..."
-printf "${C_DIM}>>> ${MODIFIED_STARTUP}${C_RESET}\n\n"
+printf "%b>>> %s%b\n\n" "${C_DIM}" "${MODIFIED_STARTUP}" "${C_RESET}"
 
-# Execute with signal trapping for clean container lifecycle
-eval "${MODIFIED_STARTUP}"
+# Execute launcher script replacing entrypoint process (PID 1) for direct signal handling
+exec ${MODIFIED_STARTUP}
