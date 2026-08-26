@@ -13,21 +13,126 @@
 # =============================================================================
 
 # --- Visual formatting ---
-C_RESET='\033[0m'
-C_BOLD='\033[1m'
-C_CYAN='\033[36m'
-C_GREEN='\033[32m'
-C_YELLOW='\033[33m'
-C_RED='\033[31m'
-C_MAGENTA='\033[35m'
-C_BLUE='\033[34m'
-C_DIM='\033[2m'
+C_RESET=$'\033[0m'
+C_BOLD=$'\033[1m'
+C_CYAN=$'\033[36m'
+C_GREEN=$'\033[32m'
+C_YELLOW=$'\033[33m'
+C_RED=$'\033[31m'
+C_MAGENTA=$'\033[35m'
+C_BLUE=$'\033[34m'
+C_WHITE=$'\033[37m'
+C_DIM=$'\033[2m'
 
-log()   { printf "${C_CYAN}${C_BOLD}[potenfyr]${C_RESET} %s\n" "$*"; }
-ok()    { printf "${C_GREEN}${C_BOLD}[potenfyr][✓]${C_RESET} %s\n" "$*"; }
-warn()  { printf "${C_YELLOW}${C_BOLD}[potenfyr][!]${C_RESET} ${C_YELLOW}%s${C_RESET}\n" "$*"; }
-fail()  { printf "${C_RED}${C_BOLD}[potenfyr][✗]${C_RESET} ${C_RED}%s${C_RESET}\n" "$*"; exit 1; }
-info()  { printf "${C_BLUE}${C_BOLD}[potenfyr][i]${C_RESET} %s\n" "$*"; }
+log()   { printf "%b %b\n" "${C_CYAN}${C_BOLD}[PotenFYR]${C_RESET}" "$*"; }
+ok()    { printf "%b %b\n" "${C_GREEN}${C_BOLD}[PotenFYR][✓]${C_RESET}" "$*"; }
+warn()  { printf "%b %b\n" "${C_YELLOW}${C_BOLD}[PotenFYR][!]${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
+fail()  { printf "%b %b\n" "${C_RED}${C_BOLD}[PotenFYR][✗]${C_RESET}" "${C_RED}$*${C_RESET}"; exit 1; }
+info()  { printf "%b %b\n" "${C_BLUE}${C_BOLD}[PotenFYR][i]${C_RESET}" "$*"; }
+
+# --- Process Lifecycle Management & Signal Handling ---
+RUN_LOOP=1
+CHILD_PID=0
+HEALTH_PID=""
+PROC_PIDS=""
+SLEEP_PID=0
+POST_RUN_COMMAND="${POST_RUN_COMMAND:-}"
+
+# Recursively discover all child and descendant PIDs of a process
+get_all_child_pids() {
+    local parent="$1"
+    [ -z "${parent}" ] && return 0
+    local children
+    children=$(pgrep -P "${parent}" 2>/dev/null || true)
+    if [ -z "${children}" ] && [ -d "/proc" ]; then
+        children=$(awk -v p="${parent}" '$1 == "PPid:" && $2 == p {print FILENAME}' /proc/[0-9]*/status 2>/dev/null | awk -F/ '{print $3}' || true)
+    fi
+    for child in ${children}; do
+        get_all_child_pids "${child}"
+        echo "${child}"
+    done
+}
+
+# Gracefully terminate a process and its full process tree, escalating to SIGKILL
+terminate_process_tree() {
+    local root_pid="$1"
+    local timeout="${2:-5}"
+    [ -z "${root_pid}" ] || [ "${root_pid}" -le 1 ] 2>/dev/null && return 0
+    kill -0 "${root_pid}" 2>/dev/null || return 0
+
+    local pids
+    pids="$(get_all_child_pids "${root_pid}") ${root_pid}"
+
+    # Step 1: Send SIGTERM and SIGINT for graceful stop across entire tree
+    for p in ${pids}; do
+        kill -TERM "${p}" 2>/dev/null || true
+        kill -INT "${p}" 2>/dev/null || true
+    done
+
+    # Step 2: Poll every 0.2s for graceful exit
+    local waited=0
+    local max_wait=$((timeout * 5))
+    while kill -0 "${root_pid}" 2>/dev/null && [ "${waited}" -lt "${max_wait}" ]; do
+        sleep 0.2
+        waited=$((waited + 1))
+    done
+
+    # Step 3: Escalate to SIGKILL if any process in the tree remains alive
+    if kill -0 "${root_pid}" 2>/dev/null; then
+        pids="$(get_all_child_pids "${root_pid}") ${root_pid}"
+        for p in ${pids}; do
+            kill -KILL "${p}" 2>/dev/null || true
+            kill -9 "${p}" 2>/dev/null || true
+        done
+        sleep 0.3
+    fi
+
+    # Step 4: Reap child
+    wait "${root_pid}" 2>/dev/null || true
+}
+
+handle_signal() {
+    # Ignore further signals during shutdown to prevent recursion
+    trap '' SIGTERM SIGINT SIGHUP SIGQUIT
+    RUN_LOOP=0
+    log "Received shutdown signal. Stopping application process(es)..."
+
+    # Stop restart sleep if active
+    if [ "${SLEEP_PID}" -gt 1 ] 2>/dev/null; then
+        kill -9 "${SLEEP_PID}" 2>/dev/null || true
+        SLEEP_PID=0
+    fi
+
+    # Stop Health check probe if active
+    if [ -n "${HEALTH_PID:-}" ] && [ "${HEALTH_PID}" -gt 1 ] 2>/dev/null; then
+        terminate_process_tree "${HEALTH_PID}" 2
+        HEALTH_PID=""
+    fi
+
+    # Stop Procfile supervisor children if active
+    if [ -n "${PROC_PIDS:-}" ]; then
+        for p in ${PROC_PIDS}; do
+            [ -n "${p}" ] && [ "${p}" -gt 1 ] 2>/dev/null && terminate_process_tree "${p}" 4
+        done
+        PROC_PIDS=""
+    fi
+
+    # Stop main child process tree if active
+    if [ -n "${CHILD_PID:-}" ] && [ "${CHILD_PID}" -gt 1 ] 2>/dev/null; then
+        terminate_process_tree "${CHILD_PID}" 5
+        CHILD_PID=0
+    fi
+
+    if [ -n "${POST_RUN_COMMAND:-}" ]; then
+        log "Executing POST_RUN_COMMAND: ${POST_RUN_COMMAND}..."
+        eval "${POST_RUN_COMMAND}" || true
+    fi
+
+    ok "Application process stopped cleanly"
+    exit 0
+}
+
+trap handle_signal SIGTERM SIGINT SIGHUP SIGQUIT
 
 # Determine active working directory across panels
 WORK_DIR="${WORK_DIR:-${PWD}}"
@@ -533,13 +638,10 @@ PROC_PIDS=""; PROC_NAMES=""; PROC_FAILED=""
 
 proc_shutdown_all() {
     local p
-    for p in ${PROC_PIDS}; do kill -TERM "${p}" 2>/dev/null || true; done
-    local i=0
     for p in ${PROC_PIDS}; do
-        i=0
-        while kill -0 "${p}" 2>/dev/null && [ "${i}" -lt 20 ]; do sleep 0.5; i=$((i+1)); done
-        kill -KILL "${p}" 2>/dev/null || true
+        [ -n "${p}" ] && [ "${p}" -gt 1 ] 2>/dev/null && terminate_process_tree "${p}" 4
     done
+    PROC_PIDS=""
 }
 
 run_procfile() {
@@ -576,8 +678,9 @@ run_procfile() {
     done < "${procfile}"
 
     # Supervise: restart crashed children (backoff), report, and exit when all dead
-    while :; do
+    while [ "${RUN_LOOP:-1}" -eq 1 ]; do
         sleep 1
+        [ "${RUN_LOOP:-1}" -eq 0 ] && break
         local idx=0 alive=0 new_pids="" new_names=""
         for p in ${PROC_PIDS}; do
             idx=$((idx+1))
@@ -819,7 +922,7 @@ scan_retained_environments() {
     done
     if [ -n "${found}" ]; then
         printf "\n" >&2
-        printf "${C_YELLOW}${C_BOLD}[potenfyr][!] RETAINED ENVIRONMENTS FROM PREVIOUS CONFIGURATIONS${C_RESET}\n" >&2
+        printf "${C_YELLOW}${C_BOLD}[PotenFYR][!] RETAINED ENVIRONMENTS FROM PREVIOUS CONFIGURATIONS${C_RESET}\n" >&2
         printf "${C_YELLOW}  Kept untouched on purpose (nothing is auto-deleted):%b${C_RESET}\n" "${found}" >&2
         printf "${C_DIM}    Delete any of these manually via the panel File Manager when you no longer need them.${C_RESET}\n" >&2
         printf "\n" >&2
@@ -844,14 +947,14 @@ setup_isolated_environment() {
             info "Environment reused: ${DETECTED_LANG} [${ENV_SERIES}] (compatible series)."
         elif [ "${ENV_PREV_LANG}" != "${DETECTED_LANG}" ]; then
             printf "\n" >&2
-            printf "${C_YELLOW}${C_BOLD}[potenfyr][!] LANGUAGE CHANGE DETECTED (%s -> %s)${C_RESET}\n" "${ENV_PREV_LANG}" "${DETECTED_LANG}" >&2
+            printf "${C_YELLOW}${C_BOLD}[PotenFYR][!] LANGUAGE CHANGE DETECTED (%s -> %s)${C_RESET}\n" "${ENV_PREV_LANG}" "${DETECTED_LANG}" >&2
             printf "${C_YELLOW}  A separate environment was created: .environments/%s/%s${C_RESET}\n" "${DETECTED_LANG}" "${ENV_SERIES}" >&2
             printf "${C_YELLOW}  Your previous %s environment is preserved at .environments/%s/${C_RESET}\n" "${ENV_PREV_LANG}" "${ENV_PREV_LANG}" >&2
             printf "${C_DIM}  Nothing was deleted. Remove old environments manually when no longer needed.${C_RESET}\n" >&2
             printf "\n" >&2
         else
             printf "\n" >&2
-            printf "${C_YELLOW}${C_BOLD}[potenfyr][!] BREAKING VERSION CHANGE (%s: %s -> %s)${C_RESET}\n" "${DETECTED_LANG}" "${ENV_PREV_SERIES}" "${ENV_SERIES}" >&2
+            printf "${C_YELLOW}${C_BOLD}[PotenFYR][!] BREAKING VERSION CHANGE (%s: %s -> %s)${C_RESET}\n" "${DETECTED_LANG}" "${ENV_PREV_SERIES}" "${ENV_SERIES}" >&2
             printf "${C_YELLOW}  Major-version boundaries get their OWN environment folder.${C_RESET}\n" >&2
             printf "${C_YELLOW}  New environment : .environments/%s/%s${C_RESET}\n" "${DETECTED_LANG}" "${ENV_SERIES}" >&2
             printf "${C_YELLOW}  Previous kept at: .environments/%s/%s (safe to delete manually later)${C_RESET}\n" "${DETECTED_LANG}" "${ENV_PREV_SERIES}" >&2
@@ -1932,31 +2035,6 @@ RUN_CMD=$(construct_run_cmd)
 # -----------------------------------------------------------------------------
 # 10. Execution Loop & Process Handling
 # -----------------------------------------------------------------------------
-RUN_LOOP=1
-CHILD_PID=0
-
-handle_signal() {
-    log "Received shutdown signal. Relaying to child process(es)..."
-    RUN_LOOP=0
-    # Multi-process supervisor children first (graceful, then forced)
-    [ -n "${PROC_PIDS:-}" ] && proc_shutdown_all
-    [ -n "${HEALTH_PID:-}" ] && kill "${HEALTH_PID}" 2>/dev/null || true
-    if [ "${CHILD_PID}" -ne 0 ]; then
-        kill -TERM "${CHILD_PID}" 2>/dev/null || true
-        wait "${CHILD_PID}" 2>/dev/null || true
-    fi
-    
-    if [ -n "${POST_RUN_COMMAND}" ]; then
-        log "Executing POST_RUN_COMMAND: ${POST_RUN_COMMAND}..."
-        eval "${POST_RUN_COMMAND}" || true
-    fi
-    
-    ok "Application process stopped cleanly"
-    exit 0
-}
-
-trap handle_signal SIGTERM SIGINT SIGHUP
-
 print_crash_diagnostics() {
     local exit_code="$1"
     [ "${exit_code}" -eq 0 ] && return 0
@@ -2030,7 +2108,7 @@ print_crash_diagnostics() {
 
 while [ "${RUN_LOOP}" -eq 1 ]; do
     log "Starting application process..."
-    printf "${C_GREEN}${C_BOLD}>>> %s${C_RESET}\n\n" "${RUN_CMD}"
+    printf "%b>>> %s%b\n\n" "${C_GREEN}${C_BOLD}" "${RUN_CMD}" "${C_RESET}"
 
     eval "${RUN_CMD}" &
     CHILD_PID=$!
@@ -2062,10 +2140,17 @@ while [ "${RUN_LOOP}" -eq 1 ]; do
         HEALTH_PID=$!
     fi
 
-    wait "${CHILD_PID}" 2>/dev/null
-    EXIT_CODE=$?
+    if [ -n "${CHILD_PID:-}" ] && [ "${CHILD_PID}" -gt 1 ]; then
+            wait "${CHILD_PID}" 2>/dev/null
+            EXIT_CODE=$?
+        else
+            EXIT_CODE=0
+        fi
     # Reap health-check probe before deciding on restart/exit
-    [ -n "${HEALTH_PID:-}" ] && { wait "${HEALTH_PID}" 2>/dev/null || true; }
+    if [ -n "${HEALTH_PID:-}" ] && [ "${HEALTH_PID}" -gt 1 ] 2>/dev/null; then
+        terminate_process_tree "${HEALTH_PID}" 2
+        HEALTH_PID=""
+    fi
     CHILD_PID=0
     
     if [ "${RUN_LOOP}" -eq 0 ]; then
@@ -2076,7 +2161,15 @@ while [ "${RUN_LOOP}" -eq 1 ]; do
         warn "Process exited with code ${EXIT_CODE}. AUTO_RESTART is enabled."
         print_crash_diagnostics "${EXIT_CODE}"
         log "Restarting in ${RESTART_DELAY} seconds... (Press Ctrl+C to abort)"
-        sleep "${RESTART_DELAY}"
+        local_delay="${RESTART_DELAY:-3}"
+        while [ "${local_delay}" -gt 0 ] && [ "${RUN_LOOP}" -eq 1 ]; do
+            sleep 1 &
+            SLEEP_PID=$!
+            wait "${SLEEP_PID}" 2>/dev/null || true
+            SLEEP_PID=0
+            local_delay=$((local_delay - 1))
+        done
+        [ "${RUN_LOOP}" -eq 0 ] && break
     else
         log "Process exited with code ${EXIT_CODE}."
         if [ "${EXIT_CODE}" -ne 0 ]; then
