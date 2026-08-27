@@ -38,6 +38,11 @@ info()  { printf "%b %b\n" "${C_BLUE}${C_BOLD}[PotenFYR][i]${C_RESET}" "$*"; }
 
 LANG_REQ="${1:-}"
 VERSION_REQ="${2:-latest}"
+# LANGUAGE_VERSION (panel alias, e.g. DB_VERSION-style vars) acts as a fallback
+# when no explicit version argument was supplied.
+if [ "${VERSION_REQ}" = "latest" ] && [ -n "${LANGUAGE_VERSION:-}" ]; then
+    VERSION_REQ="${LANGUAGE_VERSION}"
+fi
 TARGET_BASE="${3:-/opt/runtimes}"
 
 if [ -z "${LANG_REQ}" ]; then
