@@ -217,6 +217,13 @@ SKIP_RUNTIMES="${SKIP_RUNTIMES:-}"
 SKIP_PYTHON="${SKIP_PYTHON:-0}"
 DEBUG="${DEBUG:-0}"
 
+# LANGUAGE_VERSION (DB_VERSION-style alias used by some panels/eggs) falls back
+# to RUNTIME_VERSION when set; RUNTIME_VERSION stays the canonical variable.
+if [ -n "${LANGUAGE_VERSION:-}" ]; then
+    RUNTIME_VERSION="${RUNTIME_VERSION:-${LANGUAGE_VERSION}}"
+    export RUNTIME_VERSION
+fi
+
 [ "${DEBUG}" = "1" ] && set -x
 # Route the verbose trace to a log file instead of spamming the panel console
 if [ "${DEBUG}" = "1" ] && [ -z "${_POTENFYR_TRACE_FD:-}" ]; then
@@ -705,7 +712,7 @@ run_procfile() {
                 sleep "${count}"   # linear backoff: 1s, 2s, 3s...
                 (
                     export PROCESS_NAME="${n}"
-                    eval "$(grep -E "^${n}:" "${procfile}" | head -n1 | cut -d':' -f2- | sed 's/^[[:space:]]*//')" 2>&1 \
+                    eval "$(grep -E "^${n}:" "${procfile}" | head -n1 | sed -E 's/^[^:]+:[[:space:]]*//')" 2>&1 \
                         | while IFS= read -r line; do printf "\033[1;36m[%s]\033[0m %s\n" "${n}" "${line}"; done
                 ) &
                 new_pids="${new_pids} $!"; new_names="${new_names} ${n}"
@@ -1099,104 +1106,11 @@ build_isolated_environment() {
 
 # Ensure runtime toolchain is present in container, install locally if absent
 ensure_local_runtime() {
+    local lang="${DETECTED_LANG}"
+    local runner="${RUNNER:-auto}"
+
     build_isolated_environment
 
-    local lang="${DETECTED_LANG}"
-    local runner="${RUNNER:-auto}"
-    
-    # Check runner requirements
-    if [ "${runner}" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
-        log "Runner 'bun' selected but not found in PATH. Installing Bun locally..."
-        local inst_script=""
-        [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
-        [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
-        if [ -n "${inst_script}" ]; then
-            bash "${inst_script}" "bun" "latest" "${WORK_DIR}/.runtimes" || true
-            build_isolated_environment
-        fi
-    elif [ "${runner}" = "deno" ] && ! command -v deno >/dev/null 2>&1; then
-        log "Runner 'deno' selected but not found in PATH. Installing Deno locally..."
-        local inst_script=""
-        [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
-        [ -z "${inst_script}" ] && [ -f "/install-runtime.sh" ] && inst_script="/install-runtime.sh"
-        if [ -n "${inst_script}" ]; then
-            bash "${inst_script}" "deno" "latest" "${WORK_DIR}/.runtimes" || true
-            build_isolated_environment
-        fi
-    fi
-
-    # Check language requirements
-    local needed=0
-    case "${lang}" in
-        nodejs|javascript|js)
-            command -v node >/dev/null 2>&1 || needed=1
-            ;;
-        typescript|ts)
-            if [ "${runner}" = "bun" ]; then
-                command -v bun >/dev/null 2>&1 || needed=1
-                lang="bun"
-            elif [ "${runner}" = "deno" ]; then
-                command -v deno >/dev/null 2>&1 || needed=1
-                lang="deno"
-            else
-                command -v node >/dev/null 2>&1 || needed=1
-                lang="node"
-            fi
-            ;;
-        bun)
-            command -v bun >/dev/null 2>&1 || needed=1
-            ;;
-        python|py)
-            command -v python3 >/dev/null 2>&1 || needed=1
-            ;;
-        golang|go)
-            command -v go >/dev/null 2>&1 || needed=1
-            ;;
-        rust)
-            command -v rustc >/dev/null 2>&1 || needed=1
-            ;;
-        java)
-            command -v java >/dev/null 2>&1 || needed=1
-            ;;
-        dotnet)
-            command -v dotnet >/dev/null 2>&1 || needed=1
-            ;;
-        php)
-            command -v php >/dev/null 2>&1 || needed=1
-            ;;
-        ruby)
-            command -v ruby >/dev/null 2>&1 || needed=1
-            ;;
-        zig)
-            command -v zig >/dev/null 2>&1 || needed=1
-            ;;
-    esac
-
-    if [ "${needed}" -eq 1 ]; then
-        log "Runtime binary for '${lang}' not found in system PATH. Installing locally to container..."
-        local inst_script=""
-        if [ -f "/usr/local/bin/install-runtime.sh" ]; then
-            inst_script="/usr/local/bin/install-runtime.sh"
-        elif [ -f "/install-runtime.sh" ]; then
-            inst_script="/install-runtime.sh"
-        else
-            mkdir -p /tmp/potenfyr 2>/dev/null || true
-            curl -fsSL --retry 3 --connect-timeout 10 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
-            chmod +x /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
-            inst_script="/tmp/potenfyr/install-runtime.sh"
-        fi
-        
-        if [ -f "${inst_script}" ]; then
-            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION_RESOLVED:-${RUNTIME_VERSION:-latest}}" "${WORK_DIR}/.runtimes" || true
-            build_isolated_environment
-        fi
-    fi
-}
-
-ensure_local_runtime() {
-    local lang="${DETECTED_LANG}"
-    local runner="${RUNNER:-auto}"
-    
     # Check runner requirements (e.g. user selected bun or deno engine)
     if [ "${runner}" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
         log "Runner 'bun' selected but not found in PATH. Installing Bun locally..."
@@ -1218,47 +1132,42 @@ ensure_local_runtime() {
         fi
     fi
 
-    # Check language requirements
+    # Check language requirements (rebuild env first so installs are seen)
     local needed=0
     case "${lang}" in
-        nodejs|javascript|js)
-            command -v node >/dev/null 2>&1 || needed=1
-            ;;
+        nodejs|javascript|js)      command -v node    >/dev/null 2>&1 || needed=1 ;;
         typescript|ts)
             if [ "${runner}" = "bun" ]; then
-                command -v bun >/dev/null 2>&1 || needed=1
-                lang="bun"
+                command -v bun >/dev/null 2>&1 || needed=1; lang="bun"
             elif [ "${runner}" = "deno" ]; then
-                command -v deno >/dev/null 2>&1 || needed=1
-                lang="deno"
+                command -v deno >/dev/null 2>&1 || needed=1; lang="deno"
             else
                 command -v node >/dev/null 2>&1 || needed=1
             fi
             ;;
-        bun)
-            command -v bun >/dev/null 2>&1 || needed=1
-            ;;
-        python|py)
-            command -v python3 >/dev/null 2>&1 || needed=1
-            ;;
-        golang|go)
-            command -v go >/dev/null 2>&1 || needed=1
-            ;;
-        rust)
-            command -v rustc >/dev/null 2>&1 || needed=1
-            ;;
-        java)
-            command -v java >/dev/null 2>&1 || needed=1
-            ;;
-        dotnet)
-            command -v dotnet >/dev/null 2>&1 || needed=1
-            ;;
-        php)
-            command -v php >/dev/null 2>&1 || needed=1
-            ;;
-        ruby)
-            command -v ruby >/dev/null 2>&1 || needed=1
-            ;;
+        bun)                       command -v bun     >/dev/null 2>&1 || needed=1 ;;
+        deno)                      command -v deno    >/dev/null 2>&1 || needed=1 ;;
+        python|py)                 command -v python3 >/dev/null 2>&1 || needed=1 ;;
+        golang|go)                 command -v go      >/dev/null 2>&1 || needed=1 ;;
+        rust)                      command -v rustc   >/dev/null 2>&1 || needed=1 ;;
+        java|jdk|openjdk)          command -v java    >/dev/null 2>&1 || needed=1 ;;
+        dotnet|csharp|fsharp|vb)   command -v dotnet  >/dev/null 2>&1 || needed=1 ;;
+        php)                       command -v php     >/dev/null 2>&1 || needed=1 ;;
+        ruby)                      command -v ruby    >/dev/null 2>&1 || needed=1 ;;
+        zig)                       command -v zig     >/dev/null 2>&1 || needed=1 ;;
+        dart)                      command -v dart    >/dev/null 2>&1 || needed=1 ;;
+        swift)                     command -v swift   >/dev/null 2>&1 || needed=1 ;;
+        lua)                       command -v lua     >/dev/null 2>&1 || command -v luajit >/dev/null 2>&1 || needed=1 ;;
+        elixir)                    command -v elixir  >/dev/null 2>&1 || needed=1 ;;
+        nim)                       command -v nim     >/dev/null 2>&1 || needed=1 ;;
+        gleam)                     command -v gleam   >/dev/null 2>&1 || needed=1 ;;
+        odin)                      command -v odin    >/dev/null 2>&1 || needed=1 ;;
+        haskell)                   command -v runghc  >/dev/null 2>&1 || command -v cabal >/dev/null 2>&1 || needed=1 ;;
+        perl)                      command -v perl    >/dev/null 2>&1 || needed=1 ;;
+        r)                         command -v Rscript >/dev/null 2>&1 || needed=1 ;;
+        julia)                     command -v julia   >/dev/null 2>&1 || needed=1 ;;
+        c-cpp|cpp|c)
+            command -v gcc >/dev/null 2>&1 || command -v cc >/dev/null 2>&1 || needed=1 ;;
     esac
 
     if [ "${needed}" -eq 1 ]; then
@@ -1270,18 +1179,19 @@ ensure_local_runtime() {
             inst_script="/install-runtime.sh"
         else
             mkdir -p /tmp/potenfyr 2>/dev/null || true
-            curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
+            curl -fsSL --retry 3 --connect-timeout 10 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
             chmod +x /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
             inst_script="/tmp/potenfyr/install-runtime.sh"
         fi
-        
+
         if [ -f "${inst_script}" ]; then
             bash "${inst_script}" "${lang}" "${RUNTIME_VERSION_RESOLVED:-${RUNTIME_VERSION:-latest}}" "${WORK_DIR}/.runtimes" || true
-            export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/${lang}/bin:/opt/runtimes/${lang}/bin:${PATH}"
+            build_isolated_environment
+        else
+            warn "No runtime installer available for '${lang}'. The app may fail to start."
         fi
     fi
 }
-
 ensure_local_runtime
 
 # -----------------------------------------------------------------------------
@@ -1941,7 +1851,7 @@ construct_run_cmd() {
             ;;
 
         haskell)
-            if [ -f "*.cabal" ] || [ -f "stack.yaml" ]; then
+            if ls *.cabal >/dev/null 2>&1 || [ -f "stack.yaml" ]; then
                 echo "cabal run ${EXTRA_ARGS}"
             else
                 echo "runghc ${RESOLVED_MAIN} ${EXTRA_ARGS}"
