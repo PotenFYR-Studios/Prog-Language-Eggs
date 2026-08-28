@@ -252,10 +252,89 @@ for _key in LANGUAGE RUNNER MAIN_FILE PACKAGE_MANAGER BUILD_COMMAND \
             PRE_RUN_COMMAND POST_RUN_COMMAND CLEAN_BUILD_CACHE AUTO_ENV_INJECT \
             NODE_GYP_SUPPORT EXTRA_RUNTIMES SKIP_RUNTIMES SKIP_PYTHON \
             SUPERVISOR PROCFILE_RESTART PROCFILE_LOGS PROCFILE_MAX_RESTARTS \
-            HEALTH_CHECK_PATH HEALTH_STRICT HEALTH_TIMEOUT LAUNCHER_LOG RESOLVER_CACHE_TTL; do
+            HEALTH_CHECK_PATH HEALTH_STRICT HEALTH_TIMEOUT LAUNCHER_LOG RESOLVER_CACHE_TTL \
+            EGG_UPDATE_URL AUTO_UPDATE_EGG; do
     apply_conf "${_key}"
 done
 unset _key
+
+# -----------------------------------------------------------------------------
+# 5.5 Egg Self-Update Engine (EGG_UPDATE_URL)
+# -----------------------------------------------------------------------------
+# On startup the launcher scripts run from the image; to let users pick up
+# launcher fixes without rebuilding/reinstalling the image, EGG_UPDATE_URL can
+# point at a run.sh (or egg JSON) on GitHub. Default is this repo's own raw
+# egg JSON URL. AUTO_UPDATE_EGG=0 disables the check entirely.
+#
+# Behaviour:
+#   * URL ending in .json / the raw egg file  -> compared against
+#     /etc/potenfyr-egg-hash; on change the launcher scripts are refreshed from
+#     the same repo branch (egg JSON metadata travels with the image).
+#   * URL pointing at a run.sh                -> replaces the launcher directly.
+# Failure of any step is non-fatal: the previously installed launcher runs.
+EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/egg-programming-multi.json}"
+AUTO_UPDATE_EGG="${AUTO_UPDATE_EGG:-1}"
+
+if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
+    if [ -f /usr/local/bin/run.sh ] && command -v curl >/dev/null 2>&1; then
+        # Non-root panels (uid 988 etc.) cannot write /usr/local/bin; fall back
+        # to a user-writable override location that the launcher resolution
+        # below prefers over the image copy.
+        _egg_target="/usr/local/bin/run.sh"
+        _egg_hashfile="/etc/potenfyr-egg-hash"
+        if ! [ -w "$(dirname "${_egg_target}")" ] || [ "$(id -u 2>/dev/null || echo 1)" != "0" ]; then
+            _egg_target="${ACTIVE_WORK_DIR}/.potenfyr/run.sh"
+            _egg_hashfile="${ACTIVE_WORK_DIR}/.potenfyr/egg-hash"
+            mkdir -p "${ACTIVE_WORK_DIR}/.potenfyr" 2>/dev/null || true
+        fi
+        _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
+        if curl -fsSL --retry 2 --max-time 30 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+            _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
+            _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
+            if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
+                case "${EGG_UPDATE_URL}" in
+                    *.sh)
+                        # Direct launcher replacement
+                        if cp "${_egg_tmp}" "${_egg_target}" 2>/dev/null; then
+                            chmod +x "${_egg_target}" 2>/dev/null || true
+                            echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                            ok "Launcher self-updated from EGG_UPDATE_URL."
+                        else
+                            warn "Launcher self-update failed (target not writable): ${_egg_target}"
+                        fi
+                        ;;
+                    *)
+                        # egg JSON changed -> refresh launcher from same branch
+                        _base="${EGG_UPDATE_URL%/*}"
+                        _launcher_ok=0
+                        if curl -fsSL --retry 2 --max-time 30 "${_base}/run.sh" -o /tmp/potenfyr-run.sh 2>/dev/null && [ -s /tmp/potenfyr-run.sh ] && grep -q "PotenFYR Studios" /tmp/potenfyr-run.sh 2>/dev/null; then
+                            if head -c 2 /tmp/potenfyr-run.sh | grep -q $'\r'; then
+                                sed -i 's/\r$//' /tmp/potenfyr-run.sh 2>/dev/null || true
+                            fi
+                            if cp /tmp/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
+                                chmod +x "${_egg_target}" 2>/dev/null || true
+                                _launcher_ok=1
+                            fi
+                        fi
+                        if [ "${_launcher_ok}" = "1" ]; then
+                            echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                            ok "Egg update detected - launcher refreshed from ${_base}."
+                        else
+                            warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
+                        fi
+                        rm -f /tmp/potenfyr-run.sh 2>/dev/null || true
+                        ;;
+                esac
+            else
+                info "Egg is up to date."
+            fi
+        else
+            warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+        fi
+        rm -f "${_egg_tmp}" 2>/dev/null || true
+        unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _base _launcher_ok
+    fi
+fi
 
 # -----------------------------------------------------------------------------
 # 6. Automatic Memory Tuning & OOM Protection Engine
@@ -482,6 +561,11 @@ MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
 LAUNCHER_SCRIPT="/usr/local/bin/run.sh"
 [ ! -f "${LAUNCHER_SCRIPT}" ] && [ -f "/run.sh" ] && LAUNCHER_SCRIPT="/run.sh"
+# Prefer a user-space launcher override written by the egg self-update engine
+# (EGG_UPDATE_URL) over the image copy, so updates stick for non-root panels.
+if [ -f "${ACTIVE_WORK_DIR}/.potenfyr/run.sh" ]; then
+    LAUNCHER_SCRIPT="${ACTIVE_WORK_DIR}/.potenfyr/run.sh"
+fi
 if [ ! -f "${LAUNCHER_SCRIPT}" ]; then
     mkdir -p /tmp/potenfyr 2>/dev/null || true
     if [ ! -f "/tmp/potenfyr/run.sh" ]; then

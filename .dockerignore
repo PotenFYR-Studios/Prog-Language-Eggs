@@ -27,6 +27,8 @@ scratch/
 tmp/
 
 # Runtime data, dependencies & artifacts from local runs
+# (testing happens in Docker with the instance mounted from outside the repo,
+#  so none of these should ever exist here — ignored as a safety net)
 node_modules/
 __pycache__/
 .venv/
@@ -39,6 +41,9 @@ coverage/
 .logs/
 .environments/
 .runtimes/
+.local/
+.cache/
+.potenfyr/
 .multi-prog.conf
 .env
 *.log
