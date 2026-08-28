@@ -123,6 +123,23 @@ handle_signal() {
         CHILD_PID=0
     fi
 
+    # Container-wide sweep: catch orphaned/double-forked processes that escaped
+    # the child tree (re-parented to PID 1 or detached from any tracked pid).
+    # Without this, such strays keep serving after the panel shows "stopping".
+    # Exclude: ourselves, our direct children we already killed, the tee that
+    # mirrors the console log, and ps/pgrep/awk/sed helpers.
+    if [ -d "/proc" ]; then
+        local _me="$$" _p
+        # Sweep every PID-1 orphan (not just known children) and terminate it.
+        for _p in $(ps -eo pid=,ppid= 2>/dev/null | awk -v me="${_me}" '$2 == 1 && $1 != me {print $1}'); do
+            [ -n "${_p}" ] && [ "${_p}" -gt 1 ] 2>/dev/null || continue
+            case "$(ps -o comm= -p "${_p}" 2>/dev/null)" in
+                tee|ps|awk|sed|grep) continue ;;
+            esac
+            terminate_process_tree "${_p}" 3
+        done
+    fi
+
     if [ -n "${POST_RUN_COMMAND:-}" ]; then
         log "Executing POST_RUN_COMMAND: ${POST_RUN_COMMAND}..."
         eval "${POST_RUN_COMMAND}" || true

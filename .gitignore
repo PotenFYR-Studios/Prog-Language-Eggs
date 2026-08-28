@@ -92,6 +92,10 @@ _build/
 .environments/
 .runtimes/
 .logs/
+.local/
+.cache/
+bin/
+.potenfyr/
 .multi-prog.conf
 .env.local
 .env.*.local
