@@ -12,7 +12,10 @@
 #    - Standalone Docker & Kubernetes
 # =============================================================================
 
-# --- Visual formatting ---
+# --- Visual theme -------------------------------------------------------------
+# Default: Prog-Language Eggs agent theme (agent-style console output).
+# Restore the previous PotenFYR theme with CLI_THEME=classic.
+CLI_THEME="${CLI_THEME:-prog}"
 C_RESET=$'\033[0m'
 C_BOLD=$'\033[1m'
 C_CYAN=$'\033[36m'
@@ -23,12 +26,51 @@ C_MAGENTA=$'\033[35m'
 C_BLUE=$'\033[34m'
 C_WHITE=$'\033[37m'
 C_DIM=$'\033[2m'
+C_GOLD=$'\033[33m'
+C_LIME=$'\033[92m'
 
-log()   { printf "%b %b\n" "${C_CYAN}${C_BOLD}[PotenFYR]${C_RESET}" "$*"; }
-ok()    { printf "%b %b\n" "${C_GREEN}${C_BOLD}[PotenFYR][✓]${C_RESET}" "$*"; }
-warn()  { printf "%b %b\n" "${C_YELLOW}${C_BOLD}[PotenFYR][!]${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
-fail()  { printf "%b %b\n" "${C_RED}${C_BOLD}[PotenFYR][✗]${C_RESET}" "${C_RED}$*${C_RESET}"; exit 1; }
-info()  { printf "%b %b\n" "${C_BLUE}${C_BOLD}[PotenFYR][i]${C_RESET}" "$*"; }
+# --- Troubleshooting infrastructure ---------------------------------------------
+# phase(): clean dim section headers so boot logs are scannable top-to-bottom.
+# _egg_error_log(): central append-only error journal (egg-level failures only)
+# at .logs/launcher-errors.log - shared with the entrypoint, survives panel
+# scrollback loss. Call sites: git failures, runtime installs, dependency
+# installs, health checks, crashes.
+phase() { printf "\n%b── %s %b\n" "${C_DIM}" "$*" "────────────────────────────────────────────────${C_RESET}"; }
+
+ERROR_LOG=""
+_egg_error_log() {
+    if [ -z "${ERROR_LOG}" ]; then
+        local d="${WORK_DIR:-${PWD}}/.logs"
+        if mkdir -p "${d}" 2>/dev/null && [ -w "${d}" ]; then
+            ERROR_LOG="${d}/launcher-errors.log"
+        else
+            ERROR_LOG="/tmp/potenfyr-errors.log"
+        fi
+    fi
+    printf '[%s] [%s] [panel=%s] %s\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || date)" \
+        "${1:-launcher}" "${PANEL_TYPE:-unknown}" "${2:-unknown error}" \
+        >> "${ERROR_LOG}" 2>/dev/null || true
+}
+
+if [ "${CLI_THEME}" = "classic" ]; then
+    log()   { printf "%b %b\n" "${C_CYAN}${C_BOLD}[PotenFYR]${C_RESET}" "$*"; }
+    ok()    { printf "%b %b\n" "${C_GREEN}${C_BOLD}[PotenFYR][✓]${C_RESET}" "$*"; }
+    warn()  { printf "%b %b\n" "${C_YELLOW}${C_BOLD}[PotenFYR][!]${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
+    fail()  { printf "%b %b\n" "${C_RED}${C_BOLD}[PotenFYR][✗]${C_RESET}" "${C_RED}$*${C_RESET}"; _egg_error_log "launcher" "$*"; exit 1; }
+    info()  { printf "%b %b\n" "${C_BLUE}${C_BOLD}[PotenFYR][i]${C_RESET}" "$*"; }
+else
+    log()   { printf "%b %b\n" "${C_LIME}${C_BOLD}</> prog-language-eggs${C_RESET}${C_DIM} ▸${C_RESET}" "$*"; }
+    ok()    { printf "%b %b\n" "${C_LIME}${C_BOLD}</> prog-language-eggs ✔${C_RESET}" "${C_GREEN}$*${C_RESET}"; }
+    warn()  { printf "%b %b\n" "${C_GOLD}${C_BOLD}</> prog-language-eggs ⚠${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
+    fail()  { printf "%b %b\n" "${C_RED}${C_BOLD}</> prog-language-eggs ✖${C_RESET}" "${C_RED}$*${C_RESET}"; _egg_error_log "launcher" "$*"; exit 1; }
+    info()  { printf "%b %b\n" "${C_CYAN}${C_BOLD}</> prog-language-eggs ℹ${C_RESET}" "$*"; }
+fi
+
+# --- Security baseline ----------------------------------------------------------
+# No world-writable files from the launcher; no core dumps eating disk space.
+umask 022
+ulimit -c 0 2>/dev/null || true
 
 # --- Process Lifecycle Management & Signal Handling ---
 RUN_LOOP=1
@@ -51,6 +93,36 @@ get_all_child_pids() {
         get_all_child_pids "${child}"
         echo "${child}"
     done
+}
+
+# Container-wide sweep for orphaned processes (pm2 god daemons, detached
+# workers, double-forked helpers, background spawners) that escaped every
+# tracked process tree - they keep serving even after the main app dies.
+#   sweep_stray_processes graceful -> TERM, wait, escalate to KILL (panel stop)
+#   sweep_stray_processes quick    -> immediate SIGKILL (pre-start port cleanup)
+# Excludes: the main shell, console-mirror helpers, and the stdin watcher.
+sweep_stray_processes() {
+    local mode="${1:-graceful}" _me="$$" _p _name _killed=0
+    [ -d "/proc" ] || return 0
+    for _p in $(ps -eo pid=,ppid= 2>/dev/null | awk -v me="${_me}" '$2 == 1 && $1 != me {print $1}'); do
+        [ -n "${_p}" ] && [ "${_p}" -gt 1 ] 2>/dev/null || continue
+        [ "${_p}" = "${STOP_WATCHER_PID:-0}" ] && continue
+        _name="$(ps -o comm= -p "${_p}" 2>/dev/null || echo '')"
+        case "${_name}" in
+            tee|stdbuf|ps|awk|sed|grep) continue ;;
+        esac
+        if [ "${mode}" = "quick" ]; then
+            kill -9 "${_p}" 2>/dev/null || true
+        else
+            terminate_process_tree "${_p}" 2
+        fi
+        _killed=$((_killed + 1))
+    done
+    if [ "${_killed}" -gt 0 ]; then
+        log "Swept ${_killed} stray process(es) (pm2 daemons / detached workers)."
+        _egg_error_log "launcher" "swept ${_killed} stray process(es) during ${mode} sweep" >/dev/null 2>&1 || true
+    fi
+    return 0
 }
 
 # Gracefully terminate a process and its full process tree, escalating to SIGKILL
@@ -103,21 +175,30 @@ handle_signal() {
         SLEEP_PID=0
     fi
 
+    # Stop the stdin stop-command watcher
+    if [ "${STOP_WATCHER_PID}" -gt 1 ] 2>/dev/null; then
+        kill -9 "${STOP_WATCHER_PID}" 2>/dev/null || true
+        STOP_WATCHER_PID=0
+    fi
+
     # Stop Health check probe if active
     if [ -n "${HEALTH_PID:-}" ] && [ "${HEALTH_PID}" -gt 1 ] 2>/dev/null; then
-        terminate_process_tree "${HEALTH_PID}" 2
+        terminate_process_tree "${HEALTH_PID}" 1
         HEALTH_PID=""
     fi
 
     # Stop Procfile supervisor children if active
     if [ -n "${PROC_PIDS:-}" ]; then
         for p in ${PROC_PIDS}; do
-            [ -n "${p}" ] && [ "${p}" -gt 1 ] 2>/dev/null && terminate_process_tree "${p}" 4
+            [ -n "${p}" ] && [ "${p}" -gt 1 ] 2>/dev/null && terminate_process_tree "${p}" 2
         done
         PROC_PIDS=""
     fi
 
-    # Stop main child process tree if active
+    # Stop main child process tree if active.
+    # Panels/Wings escalate to SIGKILL ~10s after the stop request (Pelican and
+    # current Pterodactyl Wings), so the whole graceful shutdown below must stay
+    # inside that window: health 1s + procfile 2s + main child 5s + sweep 2s.
     if [ -n "${CHILD_PID:-}" ] && [ "${CHILD_PID}" -gt 1 ] 2>/dev/null; then
         terminate_process_tree "${CHILD_PID}" 5
         CHILD_PID=0
@@ -126,19 +207,7 @@ handle_signal() {
     # Container-wide sweep: catch orphaned/double-forked processes that escaped
     # the child tree (re-parented to PID 1 or detached from any tracked pid).
     # Without this, such strays keep serving after the panel shows "stopping".
-    # Exclude: ourselves, our direct children we already killed, the tee that
-    # mirrors the console log, and ps/pgrep/awk/sed helpers.
-    if [ -d "/proc" ]; then
-        local _me="$$" _p
-        # Sweep every PID-1 orphan (not just known children) and terminate it.
-        for _p in $(ps -eo pid=,ppid= 2>/dev/null | awk -v me="${_me}" '$2 == 1 && $1 != me {print $1}'); do
-            [ -n "${_p}" ] && [ "${_p}" -gt 1 ] 2>/dev/null || continue
-            case "$(ps -o comm= -p "${_p}" 2>/dev/null)" in
-                tee|ps|awk|sed|grep) continue ;;
-            esac
-            terminate_process_tree "${_p}" 3
-        done
-    fi
+    sweep_stray_processes graceful
 
     if [ -n "${POST_RUN_COMMAND:-}" ]; then
         log "Executing POST_RUN_COMMAND: ${POST_RUN_COMMAND}..."
@@ -150,6 +219,57 @@ handle_signal() {
 }
 
 trap handle_signal SIGTERM SIGINT SIGHUP SIGQUIT
+
+# --- Panel Stop Command Watcher (stdin) ---------------------------------------
+# Some daemons (Feather Panel and other Wings forks) deliver the configured
+# stop command ("^C") as console TEXT on stdin instead of raising SIGINT.
+# This launcher never read stdin, so the stop text was silently ignored and
+# the panel hung on "stopping" until the daemon force-killed the container.
+# When stdin is a pipe (every panel attaches one; interactive terminals are a
+# TTY and keep stdin for the app), a background watcher scans console input
+# and raises our own shutdown trap when a stop command is seen.
+STOP_WATCHER_PID=0
+
+panel_stop_watcher() {
+    local line trimmed
+    # Reads fd 3, a dup of the console stdin taken in the main shell below, so
+    # the watcher never races the main shell or the app for fd 0 itself.
+    while IFS= read -r -u 3 line || [ -n "${line}" ]; do
+        trimmed="${line}"
+        trimmed="${trimmed//$'\r'/}"
+        trimmed="${trimmed//[[:space:]]/}"
+        trimmed="${trimmed,,}"
+        case "${trimmed}" in
+            ^c|'^\c'|stop|/stop|kill|exit|quit|shutdown|poweroff|halt|end)
+                log "Stop command '${line}' received via console. Shutting down..."
+                kill -INT "$$" 2>/dev/null || true
+                break
+                ;;
+        esac
+    done
+    exec 3>&- 2>/dev/null || true
+}
+
+start_stop_watcher() {
+    # Only when stdin is a pipe (every panel daemon attaches one); interactive
+    # terminals (tty) keep stdin reserved for the application itself.
+    if [ ! -t 0 ] && [ "${STOP_WATCHER_PID}" -eq 0 ]; then
+        # Probe first inside a subshell: a failed exec redirection would exit
+        # the launcher itself if fd 0 were closed (bash non-interactive rule).
+        if ( exec 3<&0 ) 2>/dev/null; then
+            # Dup console stdin to fd 3 in the main shell before backgrounding
+            # - spawn-time redirections on background jobs do not survive on
+            # some daemon/container runtimes (observed EOF-on-read otherwise).
+            exec 3<&0 2>/dev/null || true
+            panel_stop_watcher &
+            STOP_WATCHER_PID=$!
+            # The watcher subshell holds its own dup; close ours so the dup is
+            # not inherited by every child the launcher spawns afterwards.
+            exec 3>&- 2>/dev/null || true
+        fi
+    fi
+}
+start_stop_watcher
 
 # Determine active working directory across panels
 WORK_DIR="${WORK_DIR:-${PWD}}"
@@ -254,8 +374,98 @@ if [ "${DEBUG}" = "1" ] && [ -z "${_POTENFYR_TRACE_FD:-}" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 1. Git Synchronization
+# 1. Egg Self-Update Engine (EGG_UPDATE_URL)
 # -----------------------------------------------------------------------------
+# The container entrypoint runs this check too; it is duplicated here so
+# panels/hosts that boot run.sh directly (custom startup, entrypoint override)
+# still self-update. Safety rules:
+#   * HTTPS-only: plain-http update URLs are rejected (tampered downloads).
+#   * Skipped when the entrypoint already ran the check this boot (EGG_UPDATE_CHECKED)
+#     so panels boot fast instead of paying for a second network round-trip.
+#   * The launcher currently executing is NEVER overwritten in place (bash
+#     reads scripts lazily - overwriting the running file corrupts execution).
+#     A newer copy is staged at .potenfyr/run.sh.update with its sha256 in
+#     .potenfyr/launcher-hash, which the entrypoint promotes & verifies on the
+#     NEXT boot.
+#   * URL ending in .sh replaces the launcher directly; any other URL is
+#     treated as the raw egg JSON and the launcher is refreshed from the same
+#     branch. Any failure is non-fatal: the installed launcher keeps running.
+if [ "${EGG_UPDATE_CHECKED:-0}" != "1" ]; then
+    EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/egg-programming-multi.json}"
+    AUTO_UPDATE_EGG="${AUTO_UPDATE_EGG:-1}"
+
+    # Servers created before these variables existed: persist the defaults so
+    # the variables show up (and stay editable) in the panel's Startup tab.
+    if ! grep -qE '^EGG_UPDATE_URL=' "${CONF_FILE}" 2>/dev/null; then
+        save_conf EGG_UPDATE_URL "${EGG_UPDATE_URL}"
+    fi
+    if ! grep -qE '^AUTO_UPDATE_EGG=' "${CONF_FILE}" 2>/dev/null; then
+        save_conf AUTO_UPDATE_EGG "${AUTO_UPDATE_EGG}"
+    fi
+
+    if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && command -v curl >/dev/null 2>&1; then
+        if [[ "${EGG_UPDATE_URL}" =~ ^https:// ]]; then
+            _self="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+            _egg_target="${WORK_DIR}/.potenfyr/run.sh"
+            _egg_stage="${WORK_DIR}/.potenfyr/run.sh.update"
+            _egg_hashfile="${WORK_DIR}/.potenfyr/egg-hash"
+            _egg_lhash="${WORK_DIR}/.potenfyr/launcher-hash"
+            mkdir -p "${WORK_DIR}/.potenfyr" 2>/dev/null || true
+            _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
+            if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+                _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
+                _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
+                if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
+                    case "${EGG_UPDATE_URL}" in
+                        *.sh)
+                            _egg_src="${_egg_tmp}"
+                            ;;
+                        *)
+                            _base="${EGG_UPDATE_URL%/*}"
+                            _egg_src=""
+                            if curl -fsSL --retry 1 --max-time 15 "${_base}/run.sh" -o "${_egg_tmp}.run" 2>/dev/null && [ -s "${_egg_tmp}.run" ] && grep -q "PotenFYR Studios" "${_egg_tmp}.run" 2>/dev/null; then
+                                sed -i 's/\r$//' "${_egg_tmp}.run" 2>/dev/null || true
+                                _egg_src="${_egg_tmp}.run"
+                            else
+                                warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
+                            fi
+                            ;;
+                    esac
+                    if [ -n "${_egg_src:-}" ]; then
+                        # Never overwrite the launcher file we are executing.
+                        if [ "${_self}" = "$(readlink -f "${_egg_target}" 2>/dev/null || echo "${_egg_target}")" ]; then
+                            _egg_target="${_egg_stage}"
+                        fi
+                        if cp "${_egg_src}" "${_egg_target}" 2>/dev/null; then
+                            chmod +x "${_egg_target}" 2>/dev/null || true
+                            echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                            # Record the launcher's own sha256 so the entrypoint
+                            # can verify integrity before ever executing it.
+                            sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
+                            ok "Egg updated from EGG_UPDATE_URL - new launcher becomes active on next start."
+                        else
+                            warn "Egg self-update failed (target not writable): ${_egg_target}"
+                        fi
+                    fi
+                    rm -f "${_egg_tmp}.run" 2>/dev/null || true
+                else
+                    info "Egg is up to date."
+                fi
+            else
+                warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+            fi
+            rm -f "${_egg_tmp}" 2>/dev/null || true
+            unset _egg_tmp _egg_src _egg_hash_new _egg_hash_old _egg_target _egg_stage _egg_hashfile _egg_lhash _base _self
+        else
+            warn "EGG_UPDATE_URL must be an https:// URL - self-update disabled for safety."
+        fi
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# 1.1 Git Synchronization
+# -----------------------------------------------------------------------------
+phase "Git Synchronization"
 if [ -n "${GIT_REPO}" ]; then
     if ! valid_git_url "${GIT_REPO}"; then
         fail "GIT_REPO is not a valid https/ssh Git URL: $(redact_url "${GIT_REPO}")"
@@ -272,12 +482,19 @@ if [ -n "${GIT_REPO}" ]; then
             ok "Repository successfully cloned"
         else
             warn "Git clone with branch ${GIT_BRANCH} failed. Attempting default clone..."
-            git clone --depth 1 "${AUTH_REPO_URL}" . || warn "Could not clone repository"
+            _egg_error_log "launcher" "git clone failed on branch ${GIT_BRANCH} (repo: $(redact_url "${GIT_REPO}")) - check URL, branch name and credentials"
+            git clone --depth 1 "${AUTH_REPO_URL}" . || {
+                warn "Could not clone repository - check network, URL and credentials, then restart."
+                _egg_error_log "launcher" "git clone failed entirely (repo: $(redact_url "${GIT_REPO}")) - verify URL, credentials (GIT_AUTH_TOKEN) and network egress"
+            }
         fi
     else
         log "Existing Git repository found. Pulling latest commits..."
         git fetch origin "${GIT_BRANCH}" --depth 1 2>/dev/null || true
-        git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git pull || warn "Could not pull updates from remote"
+        git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git pull || {
+            warn "Could not pull updates from remote"
+            _egg_error_log "launcher" "git pull failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - possible merge conflict or auth issue"
+        }
         ok "Git repository up to date"
     fi
 fi
@@ -1202,10 +1419,15 @@ ensure_local_runtime() {
         fi
 
         if [ -f "${inst_script}" ]; then
-            bash "${inst_script}" "${lang}" "${RUNTIME_VERSION_RESOLVED:-${RUNTIME_VERSION:-latest}}" "${WORK_DIR}/.runtimes" || true
+            if ! bash "${inst_script}" "${lang}" "${RUNTIME_VERSION_RESOLVED:-${RUNTIME_VERSION:-latest}}" "${WORK_DIR}/.runtimes"; then
+                warn "Runtime install failed for '${lang}' - the app may fail to start."
+                warn "Check network egress, or pin RUNTIME_VERSION to an available release, then restart."
+                _egg_error_log "launcher" "runtime install failed: ${lang} ${RUNTIME_VERSION_RESOLVED:-${RUNTIME_VERSION:-latest}}"
+            fi
             build_isolated_environment
         else
             warn "No runtime installer available for '${lang}'. The app may fail to start."
+            _egg_error_log "launcher" "no runtime installer available for '${lang}' - image may lack install-runtime.sh"
         fi
     fi
 }
@@ -1279,23 +1501,39 @@ fi
 
 # 7. Dependency Management & Package Installation
 # -----------------------------------------------------------------------------
+phase "Dependency Sync"
 if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
-    log "Synchronizing dependencies (AUTO_INSTALL_DEPS=1)..."
+    mkdir -p "${WORK_DIR}/.logs" 2>/dev/null || true
+    _dep_log="${WORK_DIR}/.logs/dependency-install.log"
+    : > "${_dep_log}" 2>/dev/null || _dep_log="/dev/null"
+    log "Synchronizing dependencies (AUTO_INSTALL_DEPS=1). Full output: .logs/dependency-install.log"
     case "${DETECTED_LANG}" in
         nodejs|javascript|js)
             if [ -f "package.json" ]; then
                 if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
                     log "Installing via pnpm..."
-                    pnpm install --frozen-lockfile 2>/dev/null || pnpm install || true
+                    pnpm install --prefer-offline --frozen-lockfile >>"${_dep_log}" 2>&1 \
+                        || pnpm install --prefer-offline >>"${_dep_log}" 2>&1 \
+                        || { warn "pnpm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pnpm install failed - see .logs/dependency-install.log"; }
                 elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
                     log "Installing via yarn..."
-                    yarn install --frozen-lockfile 2>/dev/null || yarn install || true
+                    yarn install --prefer-offline --frozen-lockfile >>"${_dep_log}" 2>&1 \
+                        || yarn install --prefer-offline >>"${_dep_log}" 2>&1 \
+                        || { warn "yarn install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "yarn install failed - see .logs/dependency-install.log"; }
                 elif [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
                     log "Installing via bun..."
-                    bun install || true
+                    bun install --prefer-offline >>"${_dep_log}" 2>&1 \
+                        || { warn "bun install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "bun install failed - see .logs/dependency-install.log"; }
+                elif [ -f "package-lock.json" ] && command -v npm >/dev/null 2>&1; then
+                    # npm ci is significantly faster & fully reproducible when a
+                    # lockfile exists; fall back to install on mismatched trees.
+                    log "Installing via npm ci (lockfile detected)..."
+                    { npm ci --no-audit --no-fund --prefer-offline || npm install --no-audit --no-fund --prefer-offline; } >>"${_dep_log}" 2>&1 \
+                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install/ci failed - see .logs/dependency-install.log"; }
                 else
                     log "Installing via npm..."
-                    npm install --no-audit --no-fund 2>/dev/null || true
+                    npm install --no-audit --no-fund --prefer-offline >>"${_dep_log}" 2>&1 \
+                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install failed - see .logs/dependency-install.log"; }
                 fi
             fi
             ;;
@@ -1303,20 +1541,24 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
         typescript|ts)
             if [ -f "package.json" ]; then
                 if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
-                    pnpm install || true
+                    pnpm install --prefer-offline || true
                 elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
-                    yarn install || true
+                    yarn install --prefer-offline || true
                 elif [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
-                    bun install || true
+                    bun install --prefer-offline || true
+                elif [ -f "package-lock.json" ]; then
+                    { npm ci --no-audit --no-fund --prefer-offline || npm install --no-audit --no-fund --prefer-offline; } >>"${_dep_log}" 2>&1 \
+                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install/ci failed (typescript) - see .logs/dependency-install.log"; }
                 else
-                    npm install --no-audit --no-fund 2>/dev/null || true
+                    npm install --no-audit --no-fund --prefer-offline >>"${_dep_log}" 2>&1 \
+                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install failed (typescript) - see .logs/dependency-install.log"; }
                 fi
             fi
             ;;
 
         bun)
             if [ -f "package.json" ]; then
-                bun install || true
+                bun install --prefer-offline || true
             fi
             ;;
 
@@ -1324,9 +1566,11 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
             if [ -f "requirements.txt" ]; then
                 log "Installing Python packages from requirements.txt..."
                 if command -v uv >/dev/null 2>&1; then
-                    uv pip install -r requirements.txt --system 2>/dev/null || pip3 install -r requirements.txt || true
+                    { uv pip install -r requirements.txt --system || pip3 install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
+                        || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip/uv install failed - see .logs/dependency-install.log"; }
                 else
-                    pip3 install -r requirements.txt --no-warn-script-location 2>/dev/null || pip install -r requirements.txt || true
+                    { pip3 install -r requirements.txt --no-warn-script-location || pip install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
+                        || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip install failed - see .logs/dependency-install.log"; }
                 fi
             elif [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
                 poetry install --no-interaction 2>/dev/null || true
@@ -1337,13 +1581,15 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
 
         golang|go)
             if [ -f "go.mod" ]; then
-                go mod download 2>/dev/null || true
+                go mod download >>"${_dep_log}" 2>&1 \
+                    || { warn "go mod download failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "go mod download failed - see .logs/dependency-install.log"; }
             fi
             ;;
 
         rust|rs)
             if [ -f "Cargo.toml" ]; then
-                cargo fetch 2>/dev/null || true
+                cargo fetch >>"${_dep_log}" 2>&1 \
+                    || { warn "cargo fetch failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "cargo fetch failed - see .logs/dependency-install.log"; }
             fi
             ;;
 
@@ -1371,10 +1617,14 @@ fi
 # -----------------------------------------------------------------------------
 # 8. Build / Compilation Step
 # -----------------------------------------------------------------------------
+phase "Build Step"
 if [ -n "${BUILD_COMMAND}" ]; then
     log "Executing BUILD_COMMAND: ${BUILD_COMMAND}..."
-    eval "${BUILD_COMMAND}" || true
-    ok "Build command completed"
+    if ! eval "${BUILD_COMMAND}"; then
+        warn "BUILD_COMMAND failed (exit $?) - check output above for the compiler error."
+        _egg_error_log "launcher" "BUILD_COMMAND failed: ${BUILD_COMMAND}"
+    fi
+    ok "Build step finished"
 fi
 
 if [ "${CLEAN_BUILD_CACHE}" = "1" ]; then
@@ -1636,6 +1886,100 @@ EOF
             ;;
     esac
 fi
+
+# -----------------------------------------------------------------------------
+# 9.1 Startup Value Sync + Runtime Details Card
+# -----------------------------------------------------------------------------
+# After detection, pin the concrete resolved values (language, engine, entry
+# point, runtime version) into .multi-prog.conf whenever the corresponding
+# startup variable still holds a placeholder (auto / latest / default / none /
+# empty). On the NEXT boot the entrypoint prefers the pinned value over the
+# placeholder, so what was decided on the first boot is what keeps running.
+# Setting a variable to "auto-detect" clears its pin (handled by the
+# entrypoint) and re-runs detection.
+is_placeholder() {
+    case "${1-}" in
+        ""|auto|Auto|AUTO|latest|Latest|LATEST|default|Default|none|None) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+sync_resolved_startup() {
+    _pin_value() { # _pin_value KEY VALUE
+        [ -n "${2:-}" ] || return 0
+        save_conf "${1}" "${2}"
+        log "Startup value pinned: ${1}=${2} (was a placeholder) - set it to 'auto-detect' in Startup to re-run detection."
+    }
+    # LANGUAGE: auto-detected language
+    is_placeholder "${LANGUAGE:-}" && _pin_value "LANGUAGE" "${DETECTED_LANG}"
+    # RUNTIME_VERSION: exact resolved version for "latest"
+    if is_placeholder "${RUNTIME_VERSION:-}" && [ -n "${RUNTIME_VERSION_RESOLVED:-}" ]; then
+        _pin_value "RUNTIME_VERSION" "${RUNTIME_VERSION_RESOLVED}"
+    fi
+    is_placeholder "${LANGUAGE_VERSION:-}" && [ -n "${RUNTIME_VERSION_RESOLVED:-}" ] && _pin_value "LANGUAGE_VERSION" "${RUNTIME_VERSION_RESOLVED}"
+    # MAIN_FILE: resolved entry point
+    if is_placeholder "${MAIN_FILE:-}" && [ -n "${RESOLVED_MAIN}" ] && [ -f "${RESOLVED_MAIN}" ]; then
+        _pin_value "MAIN_FILE" "${RESOLVED_MAIN}"
+    fi
+    # RUNNER: effective engine when on auto
+    if is_placeholder "${RUNNER:-}"; then
+        val="$(_effective_runner)"
+        [ -n "${val}" ] && _pin_value "RUNNER" "${val}"
+    fi
+    return 0
+}
+
+_effective_runner() {
+    case "${DETECTED_LANG}" in
+        nodejs|javascript|js)  echo "node" ;;
+        typescript|ts)         if command -v tsx >/dev/null 2>&1; then echo "tsx"; elif command -v bun >/dev/null 2>&1; then echo "bun"; else echo "tsx"; fi ;;
+        bun)                   echo "bun" ;;
+        deno)                  echo "deno" ;;
+        python|py)             echo "python3" ;;
+        golang|go)             echo "go" ;;
+        rust|rs)               echo "cargo" ;;
+        php)                   echo "php" ;;
+        ruby)                  echo "ruby" ;;
+        java|jdk|openjdk)      echo "java" ;;
+        dotnet|csharp|fsharp|vb) echo "dotnet" ;;
+        *)                     echo "" ;;
+    esac
+}
+
+print_card_row() {
+    local label="$1" value="$2" color="$3"
+    if [ "${#value}" -gt 48 ]; then
+        value="${value:0:45}..."
+    fi
+    printf " ${C_DIM}│${C_RESET}  ${C_LIME}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${color}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "${label}" "${value}"
+}
+
+print_runtime_card() {
+    local runner_disp="${RUNNER:-auto}"
+    if is_placeholder "${RUNNER:-}"; then
+        local eff; eff="$(_effective_runner)"
+        [ -n "${eff}" ] && runner_disp="auto → ${eff}"
+    fi
+    local ver_disp="${RUNTIME_VERSION_RESOLVED:-runtime default}"
+
+    printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
+    print_card_row "Target Language" "${DETECTED_LANG}" "${C_GREEN}"
+    print_card_row "Runtime Version" "${ver_disp}" "${C_GREEN}"
+    print_card_row "Runner / Engine" "${runner_disp}" "${C_CYAN}"
+    print_card_row "Entry Point"     "${RESOLVED_MAIN} $([ -f "${RESOLVED_MAIN}" ] || echo '(missing - stub created)')" "${C_YELLOW}"
+    print_card_row "Host Platform"   "${PANEL_TYPE:-unknown}" "${C_BLUE}"
+    print_card_row "Server UUID"     "${P_SERVER_UUID:-${SERVER_UUID:-${EMERALD_SRV_UUID:-not-provided}}}" "${C_DIM}"
+    print_card_row "Memory Tuning"   "${AUTO_TUNE_INFO:-Default}" "${C_MAGENTA}"
+    print_card_row "Port Allocation" "${SERVER_PORT} (0.0.0.0)" "${C_GREEN}"
+    print_card_row "Egg Self-Update" "$([ "${AUTO_UPDATE_EGG:-1}" = "1" ] && echo Enabled || echo Disabled)" "${C_GREEN}"
+    print_card_row "Process User"    "$(id -un 2>/dev/null || echo '?') (uid $(id -u 2>/dev/null || echo '?'))" "${C_BLUE}"
+    print_card_row "Architecture"    "${ARCH:-$(uname -m 2>/dev/null)} ($(uname -s 2>/dev/null || echo linux))" "${C_CYAN}"
+    print_card_row "Working Dir"     "${WORK_DIR}" "${C_DIM}"
+    printf " ${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
+}
+
+sync_resolved_startup
+print_runtime_card
 
 construct_run_cmd() {
     if [ -n "${CUSTOM_COMMAND}" ]; then
@@ -1962,16 +2306,19 @@ RUN_CMD=$(construct_run_cmd)
 # -----------------------------------------------------------------------------
 # 10. Execution Loop & Process Handling
 # -----------------------------------------------------------------------------
+phase "Application Launch"
 print_crash_diagnostics() {
     local exit_code="$1"
     [ "${exit_code}" -eq 0 ] && return 0
+
+    _egg_error_log "launcher" "application process crashed with exit code ${exit_code} (lang=${DETECTED_LANG}, cmd=${RUN_CMD})"
 
     printf "\n${C_RED}${C_BOLD}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
     printf "${C_RED}${C_BOLD}│ 🚨 PROCESS CRASH & DIAGNOSTIC REPORT                                     │${C_RESET}\n"
     printf "${C_RED}${C_BOLD}├──────────────────────────────────────────────────────────────────────────┤${C_RESET}\n"
     
     # 1. Exit status
-    printf " ${C_DIM}│${C_RESET}  ${C_RED}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_RED}Exit Code %-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Crash Status" "${exit_code}"
+    printf " ${C_DIM}│${C_RESET}  ${C_RED}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_RED}Exit Code %-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Crash Status" "${exit_code}"
     
     # 2. Active Runtime
     local runtime_ver="Unknown"
@@ -1988,7 +2335,7 @@ print_crash_diagnostics() {
         dotnet)               runtime_ver=$(dotnet --version 2>/dev/null || echo ".NET (not found)") ;;
         *)                    runtime_ver="${DETECTED_LANG}" ;;
     esac
-    printf " ${C_DIM}│${C_RESET}  ${C_CYAN}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_CYAN}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Active Runtime" "${runtime_ver:0:48}"
+    printf " ${C_DIM}│${C_RESET}  ${C_CYAN}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_CYAN}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Active Runtime" "${runtime_ver:0:48}"
 
     # 3. Memory Diagnostics
     local mem_info="N/A"
@@ -2017,23 +2364,35 @@ print_crash_diagnostics() {
             fi
         fi
     fi
-    printf " ${C_DIM}│${C_RESET}  ${C_MAGENTA}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_MAGENTA}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Memory Consumed" "${mem_info}"
+    printf " ${C_DIM}│${C_RESET}  ${C_MAGENTA}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_MAGENTA}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Memory Consumed" "${mem_info}"
 
     # 4. Disk Usage
     local disk_info
     disk_info=$(df -h "${WORK_DIR}" 2>/dev/null | tail -n1 | awk '{print $4 " available (" $5 " used)"}' || echo "N/A")
-    printf " ${C_DIM}│${C_RESET}  ${C_YELLOW}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_YELLOW}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Disk Space" "${disk_info}"
+    printf " ${C_DIM}│${C_RESET}  ${C_YELLOW}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_YELLOW}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Disk Space" "${disk_info}"
 
     # 5. Suggested actions
-    printf " ${C_DIM}│${C_RESET}  ${C_GREEN}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_WHITE}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Recommendation" "Check syntax, entry point, or missing deps"
+    printf " ${C_DIM}│${C_RESET}  ${C_GREEN}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_WHITE}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Recommendation" "Check syntax, entry point, or missing deps"
     printf "${C_RED}${C_BOLD}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 
-    # 5-second grace period for full WebSocket streaming before exit
+    # 6. Recent application output (before the crash) for quick diagnosis
+    local _clog="${WORK_DIR}/.logs/console.log"
+    if [ -f "${_clog}" ]; then
+        printf "${C_DIM}  ▼ last 12 console lines before the crash (%s):%b\n" "${_clog}" "${C_RESET}"
+        tail -n 12 "${_clog}" 2>/dev/null | sed 's/^/  | /'
+        printf "\n"
+    fi
+    log "Full error journal: .logs/launcher-errors.log · console mirror: .logs/console.log"
+
     log "Holding 5-second diagnostic buffer to ensure complete console log stream..."
     sleep 5
 }
 
 while [ "${RUN_LOOP}" -eq 1 ]; do
+    # Multi-process containers: kill any strays left over from a previous
+    # run/crash (pm2 daemons, detached workers) so ports are free and no stale
+    # process keeps serving between restarts.
+    sweep_stray_processes quick
     log "Starting application process..."
     printf "%b>>> %s%b\n\n" "${C_GREEN}${C_BOLD}" "${RUN_CMD}" "${C_RESET}"
 
@@ -2059,6 +2418,7 @@ while [ "${RUN_LOOP}" -eq 1 ]; do
                     sleep 2; waited=$((waited+2))
                 done
                 warn "Health check FAILED after ${timeout}s (${url}, last code ${code})."
+                _egg_error_log "launcher" "health check failed: ${url} (last HTTP code ${code}, waited ${timeout}s) - app may not listen on SERVER_PORT"
                 [ "${HEALTH_STRICT:-0}" = "1" ] && exit 1
                 return 0
             }

@@ -6,12 +6,11 @@
 > **Railway**, **Render**, and plain **Docker / Podman**.
 
 ```text
-   __  ___      ____  _       __
-  /  |/  /_  __/ / /_(_)     / /   ____ _____  ____ _
- / /|_/ / / / / / __/ /_____/ /   / __ `/ __ \/ __ `/
-/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /
-/_/  /_/\__,_/_/\__/_/     /_____/\__,_/_/ /_/\__, /
-                                              /____/
+  ____    ____     ___     ____           _          _      _   _    ____ 
+ |  _ \  |  _ \   / _ \   / ___|         | |        / \    | \ | |  / ___|
+ | |_) | | |_) | | | | | | |  _   _____  | |       / _ \   |  \| | | |  _ 
+ |  __/  |  _ <  | |_| | | |_| | |_____| | |___   / ___ \  | |\  | | |_| |
+ |_|     |_| \_\  \___/   \____| |_| \_\ /_/   \_\ |_| \_|  \____|
 ```
 
 [![CI Build](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions/workflows/docker-image.yml/badge.svg)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)
@@ -228,6 +227,18 @@ NODE_GYP_SUPPORT=1            # native addon toolchain for node modules
 Results are cached under `.cache/version-resolver/` (6h TTL, `RESOLVER_CACHE_TTL` to tune) so warm boots
 skip network round-trips.
 
+### Startup value pinning (auto → exact)
+
+Placeholders (`auto`, `latest`, `default`, empty) are resolved **once** at boot and the concrete result is
+pinned into `.multi-prog.conf` - the detected language, the effective engine, the entry point and the exact
+runtime version (e.g. `RUNTIME_VERSION=latest` pins to `v22.14.0`). On later boots the pinned value wins even
+though the panel Startup tab still shows `auto` - what was decided on the first boot is what keeps running.
+
+To re-run detection or re-resolve a version, set the variable to the literal value **`auto-detect`**: the pin
+is cleared and detection runs fresh on the next boot. The console logs every pin
+(`Startup value pinned: RUNTIME_VERSION=v22.14.0 (was a placeholder)`), and the boot card always shows the
+values actually in use.
+
 ---
 
 ## Environment Isolation & Data Retention
@@ -283,15 +294,41 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 
 ## Health Checks & Operations
 
+### Lifecycle: start / stop / kill / restart (all panels)
+
+- The launcher is **PID 1** (entrypoint uses `exec`, no interpreter layer swallowing signals) and traps
+  `SIGTERM`/`SIGINT`/`SIGHUP`/`SIGQUIT` - panels, `docker stop` and orchestrator shutdowns all get a clean,
+  fast stop (well inside the ~10s window before daemons escalate to SIGKILL).
+- **Console-text stop**: daemons that stop a server by typing the stop command into the console (Feather
+  Panel and other Wings forks) are covered by an stdin stop-command watcher - `stop`, `^C`, `kill`,
+  `shutdown`, ... all trigger the same graceful shutdown.
+- **Multi-process containers**: apps spawning daemons (pm2 god processes, detached workers, double-forked
+  helpers) are swept on stop **and** again before every start/restart, so stray processes can never hold
+  ports or keep serving after the panel shows "stopped".
+- `AUTO_RESTART=1` restarts crashed single-process apps; Procfile mode supervises multi-process apps with
+  linear backoff (see [Multi-Layer Apps](#multi-layer-apps-procfile-supervisor)).
+- Multi-port apps (main allocation + extra listeners) all stop and come back together.
+
+### Observability
+
 - `HEALTH_CHECK_PATH=/healthz` - after boot, the launcher probes `http://127.0.0.1:$SERVER_PORT<path>`
   until it answers (budget `HEALTH_TIMEOUT=60`s).
 - `HEALTH_STRICT=1` - failed probe exits non-zero so panels mark the server unhealthy instead of silently running.
 - **Console mirror** - every boot duplicates the full console into `.logs/console.log` (previous boot kept
-  as `.1`; disable with `LAUNCHER_LOG=0`).
+  as `.1`, each segment starts with a `=== boot @ timestamp | panel | arch | uid ===` header; disable with `LAUNCHER_LOG=0`).
+- **Error journal** - egg-level failures (git clone/pull, runtime installs, dependency installs, health
+  probes, crashes, stray sweeps) append timestamped entries with panel context to `.logs/launcher-errors.log`,
+  so issues are diagnosable even when panel scrollback is gone. Dependency install output is kept verbatim in
+  `.logs/dependency-install.log`.
+- **Boot card** - after detection the console prints a card with the values actually in use: target language,
+  exact runtime version, effective engine, entry point, panel, server UUID, memory tuning, port, process user,
+  architecture, working dir.
+- **Agent console theme** - glyph-prefixed phase headers (`── Dependency Sync ──`) and status lines.
+  `CLI_THEME=prog` (default) or `classic` for the legacy PotenFYR look.
 - **Trace mode** - `DEBUG=1` writes bash xtrace to `.logs/launcher-trace.log`; console stays readable.
 - **Provenance** - `/etc/potenfyr-version` stamp printed at boot (variant + build date).
 - **Crash diagnostics** - non-zero exits trigger a report card: exit code, active runtime version, memory
-  usage vs limit, disk space, recommendations.
+  usage vs limit, disk space, the last 12 console lines before the crash, and a pointer to the error journal.
 
 ---
 
@@ -304,7 +341,11 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | Secret redaction | Credentials embedded in URLs and tokens never reach console or logs |
 | Root guard | Warns when the container runs as uid 0 (panels should use the non-root image user) |
 | Least privilege | All installs happen inside the workspace as the container user; no host access |
-| Audit trail | Console mirror + per-installer logs + resolver logs give full replay of what ran and why |
+| Launcher integrity | The user-writable `.potenfyr/run.sh` override only executes when its sha256 matches the hash the self-update engine recorded; tampered copies are discarded |
+| Update channel hardening | `EGG_UPDATE_URL` is enforced https-only; update failures are always non-fatal |
+| File denylist | The egg denylists `.potenfyr/**` and launcher scripts from panel file-manager edits/plants |
+| Process hygiene | `umask 022` (no world-writable files), core dumps disabled, orphaned processes swept on stop and start |
+| Audit trail | Console mirror + error journal + per-installer logs + resolver logs give full replay of what ran and why |
 
 ---
 
@@ -314,6 +355,12 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
   `.logs/runtime-install-<name>.log`.
 - **TTL resolver cache** - warm boots skip upstream feed lookups.
 - **Idempotent installs** - present binaries short-circuit before any network I/O.
+- **npm ci fast path** - with a lockfile present, `npm ci --prefer-offline` runs instead of a full
+  `npm install` (falls back automatically on mismatched trees).
+- **Single update round-trip** - the egg self-update check runs once per boot and is shared between
+  entrypoint and launcher (`EGG_UPDATE_CHECKED`), with tightened network budgets.
+- **Tuned tool environment** - `NPM_CONFIG_UPDATE_NOTIFIER/FUND/AUDIT=false`, `PIP_DISABLE_PIP_VERSION_CHECK=1`,
+  `GOTOOLCHAIN=local` (no surprise toolchain downloads).
 - **Memory auto-tune** - computes safe heap ceilings per runtime (`NODE_OPTIONS`, `GOMEMLIMIT`, `-Xmx`,
   `DOTNET_GCHeapHardLimit`, MALLOC trim) from panel memory limits to prevent OOM kills.
 - **Build-cache cleanup** - `CLEAN_BUILD_CACHE=1` purges compiler/package caches after builds.
@@ -325,11 +372,11 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 ### Core selection
 | Variable | Default | Editable | Description |
 |---|---|---|---|
-| `LANGUAGE` | `auto` | Yes | Target language or auto-detect |
-| `RUNNER` | `auto` | Yes | Engine override (bun, deno, tsx, uvicorn, pm2, ...) |
-| `MAIN_FILE` | `auto` | Yes | Entry point override |
+| `LANGUAGE` | `auto` | Yes | Target language or auto-detect; resolved value pinned after first boot (`auto-detect` re-arms) |
+| `RUNNER` | `auto` | Yes | Engine override (bun, deno, tsx, uvicorn, pm2, ...); `auto` pins to the effective engine |
+| `MAIN_FILE` | `auto` | Yes | Entry point override; `auto` pins to the detected entry point |
 | `PACKAGE_MANAGER` | `auto` | Yes | Dependency manager override |
-| `RUNTIME_VERSION` | `latest` | Yes | Primary runtime version or channel keyword |
+| `RUNTIME_VERSION` | `latest` | Yes | Primary runtime version or channel keyword; `latest` pins to the exact resolved version |
 | `CUSTOM_COMMAND` | empty | Yes | Replace launcher command entirely |
 | `BUILD_COMMAND` | empty | Yes | Optional build step before run |
 | `EXTRA_ARGS` | empty | Yes | Extra CLI args passed to your app |
@@ -379,6 +426,9 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | `DEBUG` | `0` | Yes | Bash trace to `.logs/launcher-trace.log` |
 | `LAUNCHER_LOG` | `1` | Yes | Console mirroring toggle |
 | `RESOLVER_CACHE_TTL` | `21600` | Yes | Version cache seconds (0 disables) |
+| `CLI_THEME` | `prog` | Yes | Console theme: `prog` (agent theme) or `classic` (legacy PotenFYR) |
+| `AUTO_UPDATE_EGG` | `1` | Yes | Self-update the launcher from `EGG_UPDATE_URL` on boot |
+| `EGG_UPDATE_URL` | repo raw egg URL | Admin | https-only update source; hash-verified, staged, integrity-checked |
 | `DATABASE_*` | - | - | Reserved prefix for future companion services |
 
 Admin-locked: `SERVER_PORT`. Everything else is user-editable in the panel UI.
@@ -403,6 +453,9 @@ Moving between eggs (ours or third-party) is designed to be boring:
 
 ## Image Publishing Policy (CI)
 
+- **Behavior tests gate publishing.** Every push/PR first boots the launcher in a docker mirror and drives
+  the full panel lifecycle (start, stop, kill, restart, console-text stop, crash diagnostics, multi-process
+  sweep, multi-port apps, startup-value pinning) - `tests/panel-test.sh`, 43 assertions.
 - ONE image, ONE job. Pushes to `main` build `linux/amd64` + `linux/arm64` + `linux/arm/v7`
   **with `no-cache: true`** - every tag is a clean rebuild of the exact committed sources.
 - Tags published: `latest` (moving) and `<commit-sha>` (immutable, for rollbacks/digest pinning).
@@ -418,16 +471,16 @@ ghcr.io/potenfyr-studios/prog-language-eggs:<commit-sha>
 ## Repository Layout
 
 ```
-Prog-Language-Eggs/
+ProG-Language-Eggs/
 |-- egg-programming-multi.json        THE single egg (import into any PTDL_v2 panel)
 |-- Dockerfile                        Single multi-arch image definition
-|-- entrypoint.sh                     Boot: panel detect, arch/distro assurance, banner, launch
-|-- run.sh                            Launcher: detection, isolation, supervisor, health, restarts
+|-- entrypoint.sh                     Boot: panel detect, arch/distro assurance, banner, self-update, launch
+|-- run.sh                            Launcher: detection, isolation, stop-watcher, supervisor, health, restarts
 |-- install-runtime.sh                On-demand toolchain installer (checksummed, arch-aware)
 |-- resolve-version.sh                Version validator + live-feed keyword resolver
 |-- install.sh                        Cross-panel workspace installer script
-|-- test-docker.sh / test-docker.ps1  Multi-panel simulation test suites
-`-- .github/workflows/docker-image.yml  Clean-build publish pipeline
+|-- tests/                            Docker behavior suite: Dockerfile.test + panel-test.sh (43 assertions)
+`-- .github/workflows/docker-image.yml  Behavior tests + clean-build publish pipeline
 ```
 
 ---
@@ -465,12 +518,15 @@ after a <code>DEBUG=1</code> restart.
 
 | Symptom | First place to look |
 |---|---|
+| Egg misbehaving / app crashed | `.logs/launcher-errors.log` - timestamped journal (git, installs, health, crashes) with panel context |
 | Version request rejected / wrong version picked | `.logs/version-resolver.log` |
 | Runtime download/extraction failure | Installer output (retry counts, sizes, checksum verdicts included) |
-| Wrong panel detected | Compare boot banner `Host Platform` row; open an issue with `env | grep -iE 'pterodactyl\|pelican\|puffer\|feather'` |
+| Dependency install failed | `.logs/dependency-install.log` (verbatim package manager output) |
+| Wrong panel detected | Boot header `panel=` + boot card `Host Platform` row; open an issue with `env \| grep -iE 'pterodactyl\|pelican\|puffer\|feather'` |
 | Environment not reused across restarts | Inspect `.environments/active` marker format `lang\|series\|version` |
 | Procfile process keeps dying | `.logs/processes/<name>.log` + restart counter messages |
 | Health probe failing | App binding must be `0.0.0.0:$SERVER_PORT` inside the container; check app logs first |
+| Want auto-detection back after a pin | Set the variable to `auto-detect` (Startup tab) and restart |
 | Full step replay | `DEBUG=1` then read `.logs/launcher-trace.log` top-to-bottom |
 
 ### Support

@@ -12,7 +12,10 @@
 #    - Standalone Docker & Kubernetes (Helm / Pods / Compose)
 # =============================================================================
 
-# --- Visual Colors & Styling ---
+# --- Visual theme -------------------------------------------------------------
+# Default: Prog-Language Eggs agent theme (Hermes-agent style console output).
+# Restore the previous PotenFYR theme with CLI_THEME=classic.
+CLI_THEME="${CLI_THEME:-prog}"
 C_RESET=$'\033[0m'
 C_BOLD=$'\033[1m'
 C_CYAN=$'\033[36m'
@@ -23,12 +26,58 @@ C_MAGENTA=$'\033[35m'
 C_BLUE=$'\033[34m'
 C_WHITE=$'\033[37m'
 C_DIM=$'\033[2m'
+C_GOLD=$'\033[33m'
+C_LIME=$'\033[92m'
 
-log()   { printf "%b %b\n" "${C_CYAN}${C_BOLD}[PotenFYR]${C_RESET}" "$*"; }
-ok()    { printf "%b %b\n" "${C_GREEN}${C_BOLD}[PotenFYR][✓]${C_RESET}" "$*"; }
-warn()  { printf "%b %b\n" "${C_YELLOW}${C_BOLD}[PotenFYR][!]${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
-error() { printf "%b %b\n" "${C_RED}${C_BOLD}[PotenFYR][✗]${C_RESET}" "${C_RED}$*${C_RESET}"; }
-info()  { printf "%b %b\n" "${C_BLUE}${C_BOLD}[PotenFYR][i]${C_RESET}" "$*"; }
+if [ "${CLI_THEME}" = "classic" ]; then
+    log()   { printf "%b %b\n" "${C_CYAN}${C_BOLD}[PotenFYR]${C_RESET}" "$*"; }
+    ok()    { printf "%b %b\n" "${C_GREEN}${C_BOLD}[PotenFYR][✓]${C_RESET}" "$*"; }
+    warn()  { printf "%b %b\n" "${C_YELLOW}${C_BOLD}[PotenFYR][!]${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
+    error() { printf "%b %b\n" "${C_RED}${C_BOLD}[PotenFYR][✗]${C_RESET}" "${C_RED}$*${C_RESET}"; _egg_error_log "entrypoint" "$*"; }
+    info()  { printf "%b %b\n" "${C_BLUE}${C_BOLD}[PotenFYR][i]${C_RESET}" "$*"; }
+else
+    log()   { printf "%b %b\n" "${C_LIME}${C_BOLD}</> prog-language-eggs${C_RESET}${C_DIM} ▸${C_RESET}" "$*"; }
+    ok()    { printf "%b %b\n" "${C_LIME}${C_BOLD}</> prog-language-eggs ✔${C_RESET}" "${C_GREEN}$*${C_RESET}"; }
+    warn()  { printf "%b %b\n" "${C_GOLD}${C_BOLD}</> prog-language-eggs ⚠${C_RESET}" "${C_YELLOW}$*${C_RESET}"; }
+    error() { printf "%b %b\n" "${C_RED}${C_BOLD}</> prog-language-eggs ✖${C_RESET}" "${C_RED}$*${C_RESET}"; _egg_error_log "entrypoint" "$*"; }
+    info()  { printf "%b %b\n" "${C_CYAN}${C_BOLD}</> prog-language-eggs ℹ${C_RESET}" "$*"; }
+fi
+
+# --- Troubleshooting infrastructure ---------------------------------------------
+# phase(): clean dim section headers so boot logs are scannable top-to-bottom.
+# _egg_error_log(): central append-only error journal (egg-level failures only)
+# at .logs/launcher-errors.log so failures can be diagnosed after the fact even
+# when panel scrollback is gone. Both the entrypoint and the launcher append
+# here; every styled error line is journalled automatically as well.
+phase() { printf "\n%b── %s %b\n" "${C_DIM}" "$*" "────────────────────────────────────────────────${C_RESET}"; }
+
+ERROR_LOG=""
+_egg_error_log() {
+    if [ -z "${ERROR_LOG}" ]; then
+        local d="${ACTIVE_WORK_DIR:-${PWD}}/.logs"
+        if mkdir -p "${d}" 2>/dev/null && [ -w "${d}" ]; then
+            ERROR_LOG="${d}/launcher-errors.log"
+        else
+            ERROR_LOG="/tmp/potenfyr-errors.log"
+        fi
+    fi
+    printf '[%s] [%s] [panel=%s] %s\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || date)" \
+        "${1:-egg}" "${PANEL_TYPE:-unknown}" "${2:-unknown error}" \
+        >> "${ERROR_LOG}" 2>/dev/null || true
+}
+
+# --- Security baseline ----------------------------------------------------------
+# Files created by the launcher are group/other-readable but not writable; core
+# dumps are disabled so crashes cannot eat server disk space.
+umask 022
+ulimit -c 0 2>/dev/null || true
+
+export GOTOOLCHAIN="${GOTOOLCHAIN:-local}"
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+export PIP_NO_CACHE_DIR=false
+export NPM_CONFIG_UPDATE_NOTIFIER=false
+export NPM_CONFIG_FUND=false
 
 # -----------------------------------------------------------------------------
 # 1. Multi-Panel Working Directory Resolution
@@ -54,11 +103,14 @@ export WORK_DIR="${ACTIVE_WORK_DIR}"
 # -----------------------------------------------------------------------------
 # 2. Multi-Panel Port & Network Resolution
 # -----------------------------------------------------------------------------
+# Snapshot which port variables the PANEL actually injected BEFORE we
+# normalize them - used by detection below (Heroku-style check requires an
+# unset SERVER_PORT; our exports below would otherwise always poison it).
+ORIGINAL_SERVER_PORT="${SERVER_PORT:-}"
+
 ACTIVE_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-${ALLOCATED_PORT:-${HTTP_PORT:-8080}}}}}}"
 export PORT="${ACTIVE_PORT}"
 export SERVER_PORT="${ACTIVE_PORT}"
-export FEATHER_PORT="${ACTIVE_PORT}"
-export PUFFER_PORT="${ACTIVE_PORT}"
 export APP_PORT="${ACTIVE_PORT}"
 export HTTP_PORT="${ACTIVE_PORT}"
 export HOST="0.0.0.0"
@@ -92,7 +144,7 @@ elif [ -n "${RAILWAY_ENVIRONMENT:-}" ] || [ -n "${RAILWAY_PROJECT_ID:-}" ]; then
 elif [ -n "${RENDER_SERVICE_NAME:-}" ] || [ -n "${RENDER_INTERNAL_HOSTNAME:-}" ]; then
     PANEL_TYPE="Render"
     PANEL_FAMILY="paas"
-elif [ -d "/app" ] && [ -f "/app/Procfile" ] && [ -z "${SERVER_PORT:-}" ] && [ -n "${DYNO:-}" ]; then
+elif [ -d "/app" ] && [ -f "/app/Procfile" ] && [ -z "${ORIGINAL_SERVER_PORT}" ] && [ -n "${DYNO:-}" ]; then
     PANEL_TYPE="Heroku-style Dyno"
     PANEL_FAMILY="paas"
 elif [ -n "${PUFFER_PORT:-}" ] || [ -n "${PUFFER_SERVER_UUID:-}" ] || grep -qs "pufferpanel" /proc/1/cgroup 2>/dev/null; then
@@ -124,6 +176,13 @@ elif [ -n "${HOSTNAME:-}" ] && grep -qs "kubepods" /proc/1/cgroup 2>/dev/null; t
     PANEL_TYPE="Kubernetes Pod"
     PANEL_FAMILY="k8s"
 fi
+
+# Cross-panel port compatibility shims for applications that read
+# panel-specific port variables. Exported strictly AFTER panel detection -
+# exporting them earlier made the Puffer/Feather detection branches always
+# match (every container reported PufferPanel).
+export FEATHER_PORT="${ACTIVE_PORT}"
+export PUFFER_PORT="${ACTIVE_PORT}"
 
 export PANEL_TYPE PANEL_FAMILY
 
@@ -167,6 +226,7 @@ ensure_core_tools() {
     else
         warn "Base image lacks core tools:${need} and we are non-root, so they cannot be auto-installed."
         warn "Ask your panel admin to pick the official Multi-Language image, or add these packages to a custom image."
+        _egg_error_log "entrypoint" "base image lacks core tools:${need}; running as uid $(id -u 2>/dev/null || echo '?') so they cannot be auto-installed"
     fi
 }
 ensure_core_tools
@@ -185,6 +245,11 @@ if [ "${LAUNCHER_LOG:-1}" = "1" ]; then
         LAUNCH_CONSOLE_LOG="${_LOGDIR}/console.log"
         [ -f "${LAUNCH_CONSOLE_LOG}" ] && mv -f "${LAUNCH_CONSOLE_LOG}" "${LAUNCH_CONSOLE_LOG}.1" 2>/dev/null || true
         exec > >(tee -a "${LAUNCH_CONSOLE_LOG}") 2>&1
+        # Boot header written into the mirror so log segments are easy to tell
+        # apart when troubleshooting (panel, arch, uid, timestamp).
+        printf '\n=== Prog-Language Eggs boot @ %s | panel=%s | arch=%s | uid=%s ===\n' \
+            "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date)" \
+            "${PANEL_TYPE}" "${ARCH}" "$(id -u 2>/dev/null || echo '?')"
     fi
 fi
 
@@ -253,10 +318,48 @@ for _key in LANGUAGE RUNNER MAIN_FILE PACKAGE_MANAGER BUILD_COMMAND \
             NODE_GYP_SUPPORT EXTRA_RUNTIMES SKIP_RUNTIMES SKIP_PYTHON \
             SUPERVISOR PROCFILE_RESTART PROCFILE_LOGS PROCFILE_MAX_RESTARTS \
             HEALTH_CHECK_PATH HEALTH_STRICT HEALTH_TIMEOUT LAUNCHER_LOG RESOLVER_CACHE_TTL \
-            EGG_UPDATE_URL AUTO_UPDATE_EGG; do
+            EGG_UPDATE_URL AUTO_UPDATE_EGG CLI_THEME; do
     apply_conf "${_key}"
 done
 unset _key
+
+# --- Resolved Startup Value Pinning ---------------------------------------------
+# The panel cannot be modified from inside the container, so after a boot with
+# auto-detection the launcher pins the concrete resolved values (language,
+# runner, entry point, runtime version) into .multi-prog.conf. On later boots,
+# whenever a startup variable still holds a placeholder (auto / latest /
+# default / none / empty), the pinned value wins - the panel Startup tab may
+# keep showing "auto", but the exact value chosen on the first boot is reused.
+# Setting a variable to the literal value "auto-detect" re-arms detection: the
+# pin is cleared and detection runs fresh on this boot.
+is_placeholder() {
+    case "${1-}" in
+        ""|auto|Auto|AUTO|latest|Latest|LATEST|default|Default|none|None) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+for _key in LANGUAGE RUNNER MAIN_FILE RUNTIME_VERSION LANGUAGE_VERSION; do
+    _eval_cur="\${${_key}-}"
+    _cur="$(eval "printf '%s' \"${_eval_cur}\"" 2>/dev/null)"
+    case "${_cur}" in
+        auto-detect|autodetect|Auto-Detect|AUTO-DETECT)
+            # Explicit re-arm: clear the pin, fall back to the neutral default.
+            sed -i "/^${_key}=/d" "${CONF_FILE}" 2>/dev/null || true
+            case "${_key}" in
+                RUNTIME_VERSION|LANGUAGE_VERSION) eval "export ${_key}=latest" ;;
+                MAIN_FILE)                        eval "export ${_key}=auto" ;;
+                *)                                eval "export ${_key}=auto" ;;
+            esac
+            ;;
+        *)
+            _pval="$(read_conf "${_key}" 2>/dev/null || true)"
+            if [ -n "${_pval}" ] && is_placeholder "${_cur}"; then
+                eval "export ${_key}=\"${_pval}\"" 2>/dev/null || true
+            fi
+            ;;
+    esac
+done
+unset _key _cur _pval _eval_cur
 
 # -----------------------------------------------------------------------------
 # 5.5 Egg Self-Update Engine (EGG_UPDATE_URL)
@@ -272,73 +375,94 @@ unset _key
 #     the same repo branch (egg JSON metadata travels with the image).
 #   * URL pointing at a run.sh                -> replaces the launcher directly.
 # Failure of any step is non-fatal: the previously installed launcher runs.
+phase "Egg Self-Update"
 EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/egg-programming-multi.json}"
 AUTO_UPDATE_EGG="${AUTO_UPDATE_EGG:-1}"
 
+# Persist the defaults so servers created before these variables existed get
+# them too (they appear in the panel's Startup tab on next boot).
+if ! grep -qE '^EGG_UPDATE_URL=' "${CONF_FILE}" 2>/dev/null; then
+    printf 'EGG_UPDATE_URL=%s\n' "${EGG_UPDATE_URL}" >> "${CONF_FILE}" 2>/dev/null || true
+fi
+if ! grep -qE '^AUTO_UPDATE_EGG=' "${CONF_FILE}" 2>/dev/null; then
+    printf 'AUTO_UPDATE_EGG=%s\n' "${AUTO_UPDATE_EGG}" >> "${CONF_FILE}" 2>/dev/null || true
+fi
+
 if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
     if [ -f /usr/local/bin/run.sh ] && command -v curl >/dev/null 2>&1; then
-        # Non-root panels (uid 988 etc.) cannot write /usr/local/bin; fall back
-        # to a user-writable override location that the launcher resolution
-        # below prefers over the image copy.
-        _egg_target="/usr/local/bin/run.sh"
-        _egg_hashfile="/etc/potenfyr-egg-hash"
-        if ! [ -w "$(dirname "${_egg_target}")" ] || [ "$(id -u 2>/dev/null || echo 1)" != "0" ]; then
-            _egg_target="${ACTIVE_WORK_DIR}/.potenfyr/run.sh"
-            _egg_hashfile="${ACTIVE_WORK_DIR}/.potenfyr/egg-hash"
-            mkdir -p "${ACTIVE_WORK_DIR}/.potenfyr" 2>/dev/null || true
-        fi
-        _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
-        if curl -fsSL --retry 2 --max-time 30 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
-            _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
-            _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
-            if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
-                case "${EGG_UPDATE_URL}" in
-                    *.sh)
-                        # Direct launcher replacement
-                        if cp "${_egg_tmp}" "${_egg_target}" 2>/dev/null; then
-                            chmod +x "${_egg_target}" 2>/dev/null || true
-                            echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
-                            ok "Launcher self-updated from EGG_UPDATE_URL."
-                        else
-                            warn "Launcher self-update failed (target not writable): ${_egg_target}"
-                        fi
-                        ;;
-                    *)
-                        # egg JSON changed -> refresh launcher from same branch
-                        _base="${EGG_UPDATE_URL%/*}"
-                        _launcher_ok=0
-                        if curl -fsSL --retry 2 --max-time 30 "${_base}/run.sh" -o /tmp/potenfyr-run.sh 2>/dev/null && [ -s /tmp/potenfyr-run.sh ] && grep -q "PotenFYR Studios" /tmp/potenfyr-run.sh 2>/dev/null; then
-                            if head -c 2 /tmp/potenfyr-run.sh | grep -q $'\r'; then
-                                sed -i 's/\r$//' /tmp/potenfyr-run.sh 2>/dev/null || true
-                            fi
-                            if cp /tmp/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
-                                chmod +x "${_egg_target}" 2>/dev/null || true
-                                _launcher_ok=1
-                            fi
-                        fi
-                        if [ "${_launcher_ok}" = "1" ]; then
-                            echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
-                            ok "Egg update detected - launcher refreshed from ${_base}."
-                        else
-                            warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
-                        fi
-                        rm -f /tmp/potenfyr-run.sh 2>/dev/null || true
-                        ;;
-                esac
-            else
-                info "Egg is up to date."
+        if [[ "${EGG_UPDATE_URL}" =~ ^https:// ]]; then
+            # Non-root panels (uid 988 etc.) cannot write /usr/local/bin; fall back
+            # to a user-writable override location that the launcher resolution
+            # below prefers over the image copy.
+            _egg_target="/usr/local/bin/run.sh"
+            _egg_hashfile="/etc/potenfyr-egg-hash"
+            _egg_lhash=""
+            if ! [ -w "$(dirname "${_egg_target}")" ] || [ "$(id -u 2>/dev/null || echo 1)" != "0" ]; then
+                _egg_target="${ACTIVE_WORK_DIR}/.potenfyr/run.sh"
+                _egg_hashfile="${ACTIVE_WORK_DIR}/.potenfyr/egg-hash"
+                _egg_lhash="${ACTIVE_WORK_DIR}/.potenfyr/launcher-hash"
+                mkdir -p "${ACTIVE_WORK_DIR}/.potenfyr" 2>/dev/null || true
             fi
+            _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
+            if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+                _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
+                _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
+                if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
+                    case "${EGG_UPDATE_URL}" in
+                        *.sh)
+                            # Direct launcher replacement
+                            if cp "${_egg_tmp}" "${_egg_target}" 2>/dev/null; then
+                                chmod +x "${_egg_target}" 2>/dev/null || true
+                                echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                                [ -n "${_egg_lhash}" ] && sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
+                                ok "Launcher self-updated from EGG_UPDATE_URL."
+                            else
+                                warn "Launcher self-update failed (target not writable): ${_egg_target}"
+                            fi
+                            ;;
+                        *)
+                            # egg JSON changed -> refresh launcher from same branch
+                            _base="${EGG_UPDATE_URL%/*}"
+                            _launcher_ok=0
+                            if curl -fsSL --retry 1 --max-time 15 "${_base}/run.sh" -o /tmp/potenfyr-run.sh 2>/dev/null && [ -s /tmp/potenfyr-run.sh ] && grep -q "PotenFYR Studios" /tmp/potenfyr-run.sh 2>/dev/null; then
+                                if head -c 2 /tmp/potenfyr-run.sh | grep -q $'\r'; then
+                                    sed -i 's/\r$//' /tmp/potenfyr-run.sh 2>/dev/null || true
+                                fi
+                                if cp /tmp/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
+                                    chmod +x "${_egg_target}" 2>/dev/null || true
+                                    _launcher_ok=1
+                                fi
+                            fi
+                            if [ "${_launcher_ok}" = "1" ]; then
+                                echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                                [ -n "${_egg_lhash}" ] && sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
+                                ok "Egg update detected - launcher refreshed from ${_base}."
+                            else
+                                warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
+                            fi
+                            rm -f /tmp/potenfyr-run.sh 2>/dev/null || true
+                            ;;
+                    esac
+                else
+                    info "Egg is up to date."
+                fi
+            else
+                warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+            fi
+            rm -f "${_egg_tmp}" 2>/dev/null || true
+            unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_lhash _base _launcher_ok
         else
-            warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+            warn "EGG_UPDATE_URL must be an https:// URL - self-update disabled for safety."
         fi
-        rm -f "${_egg_tmp}" 2>/dev/null || true
-        unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _base _launcher_ok
     fi
 fi
+# Tell run.sh the check already ran this boot (skips a second network round-trip).
+export EGG_UPDATE_CHECKED=1
 
 # -----------------------------------------------------------------------------
 # 6. Automatic Memory Tuning & OOM Protection Engine
 # -----------------------------------------------------------------------------
+phase "Memory Tuning"
 MEMORY_AUTO_TUNE="${MEMORY_AUTO_TUNE:-1}"
 TOTAL_MEM_MB=0
 
@@ -374,7 +498,6 @@ fi
 AUTO_TUNE_INFO="Default"
 if [ "${MEMORY_AUTO_TUNE}" = "1" ] && [ "${SAFE_MEM_MB}" -gt 128 ]; then
     AUTO_TUNE_INFO="${SAFE_MEM_MB}MB (${TOTAL_MEM_MB}MB Limit -> 85% Safe Heap)"
-
     if [[ " ${NODE_OPTIONS:-} " != *"--max-old-space-size"* ]]; then
         export NODE_OPTIONS="--max-old-space-size=${SAFE_MEM_MB} ${NODE_OPTIONS:-}"
     fi
@@ -393,6 +516,7 @@ if [ "${MEMORY_AUTO_TUNE}" = "1" ] && [ "${SAFE_MEM_MB}" -gt 128 ]; then
     export MALLOC_TRIM_THRESHOLD_=100000
     export DOTNET_GCHeapHardLimit="0x$(printf '%X\n' $((SAFE_MEM_MB * 1024 * 1024)))"
 fi
+export AUTO_TUNE_INFO
 
 # -----------------------------------------------------------------------------
 # 7. Automatic .env Network Binding Injector
@@ -419,47 +543,36 @@ fi
 # -----------------------------------------------------------------------------
 # 8. Clean, Modern ANSI Gradient Banner & System Information Card
 # -----------------------------------------------------------------------------
-print_card_row() {
-    local label="$1"
-    local value="$2"
-    local color="$3"
-    
-    # Smart truncation to ensure pixel-perfect right border alignment
-    if [ "${#value}" -gt 48 ]; then
-        value="${value:0:45}..."
-    fi
-    
-    printf " ${C_DIM}│${C_RESET}  ${C_CYAN}✦${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${color}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "${label}" "${value}"
-}
-
+# -----------------------------------------------------------------------------
 print_banner() {
     printf "\n"
-    printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "   __  ___      ____  _       __                              "
-    printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "  /  |/  /_  __/ / /_(_)     / /   ____ _____  ____ _         "
-    printf "${C_BLUE}${C_BOLD}%s${C_RESET}\n" " / /|_/ / / / / / __/ /_____/ /   / __ \`/ __ \/ __ \`/         "
-    printf "${C_BLUE}${C_BOLD}%s${C_RESET}\n" "/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          "
-    printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "/_/  /_/\\__,_/_/\\__/_/     /_____/\\__,_/_/ /_/\\__, /          "
-    printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "                                             /____/           "
-    printf "${C_YELLOW}${C_BOLD}  » Multi-Language Runtime Environment${C_RESET}\n"
-    printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
-
-    printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
-    print_card_row "Target Language" "${LANGUAGE:-Auto-Detect}" "${C_GREEN}"
-    print_card_row "Runner / Engine" "${RUNNER:-Auto-Detect}" "${C_CYAN}"
-    print_card_row "Entry Point"     "${MAIN_FILE:-Auto-Detect}" "${C_YELLOW}"
-    print_card_row "Host Platform"   "${PANEL_TYPE}" "${C_BLUE}"
-    print_card_row "Memory Tuning"   "${AUTO_TUNE_INFO}" "${C_MAGENTA}"
-    print_card_row "Port Allocation" "${ACTIVE_PORT} (0.0.0.0)" "${C_GREEN}"
-    print_card_row "Architecture"   "${ARCH} ($(uname -s 2>/dev/null || echo linux))" "${C_CYAN}"
-    print_card_row "Working Dir"     "${ACTIVE_WORK_DIR}" "${C_DIM}"
-    printf " ${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
+    if [ "${CLI_THEME}" = "classic" ]; then
+        printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "   __  ___      ____  _       __                              "
+        printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "  /  |/  /_  __/ / /_(_)     / /   ____ _____  ____ _         "
+        printf "${C_BLUE}${C_BOLD}%s${C_RESET}\n" " / /|_/ / / / / / __/ /_____/ /   / __ \`/ __ \/ __ \`/         "
+        printf "${C_BLUE}${C_BOLD}%s${C_RESET}\n" "/ /  / / /_/ / / /_/ /_____/ /___/ /_/ / / / / /_/ /          "
+        printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "/_/  /_/\\__,_/_/\\__/_/     /_____/\\__,_/_/ /_/\\__, /          "
+        printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "                                             /____/           "
+        printf "${C_YELLOW}${C_BOLD}  » Multi-Language Runtime Environment${C_RESET}\n"
+        printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
+    else
+        printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "  ____    ____     ___     ____           _          _      _   _    ____ "
+        printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" " |  _ \\  |  _ \\   / _ \\   / ___|         | |        / \\    | \\ | |  / ___|"
+        printf "${C_GOLD}${C_BOLD}%s${C_RESET}\n" " | |_) | | |_) | | | | | | |  _   _____  | |       / _ \\   |  \\| | | |  _ "
+        printf "${C_GOLD}${C_BOLD}%s${C_RESET}\n" " |  __/  |  _ <  | |_| | | |_| | |_____| | |___   / ___ \\  | |\\  | | |_| |"
+        printf "${C_WHITE}${C_BOLD}%s${C_RESET}\n" " |_|     |_| \\_\\  \\___/   \\____| |_| \\_\\ /_/   \\_\\ |_| \\_|  \\____|"
+        printf "${C_LIME}${C_BOLD}  </> » Programming Languages · Multi-Language Agent Runtime${C_RESET}\n"
+        printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
+    fi
 }
 
 print_banner
+log "Agent boot sequence started — runtime details card follows detection..."
 
 # -----------------------------------------------------------------------------
 # 9. Dynamic Toolchain & Auxiliary Runtime Orchestrator (On-Demand)
 # -----------------------------------------------------------------------------
+phase "Runtime Provisioning"
 REQ_LANG="${LANGUAGE:-auto}"
 REQ_VER="${RUNTIME_VERSION:-latest}"
 
@@ -526,6 +639,7 @@ if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXT
         [ -f "${marker}" ] || continue
         _name="$(basename "${marker}" .install-failed)"; _name="${_name#.}"
         warn "Companion runtime '${_name}' FAILED to install -> ${_LOGDIR}/runtime-install-${_name}.log"
+        _egg_error_log "entrypoint" "companion runtime install failed: ${_name} - see .logs/runtime-install-${_name}.log"
         rm -f "${marker}"; _FAILED=1
     done
     for marker in "${_LOGDIR}"/.*.install-ok; do
@@ -549,6 +663,7 @@ if [ -f "./install-runtime.sh" ] && grep -q "PotenFYR Studios" "./install-runtim
     rm -f "./install-runtime.sh" 2>/dev/null || true
 fi
 
+phase "Launching Application"
 RAW_STARTUP="${STARTUP:-bash /usr/local/bin/run.sh}"
 
 # If startup command is just /entrypoint.sh or empty, default to run.sh
@@ -561,11 +676,40 @@ MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
 LAUNCHER_SCRIPT="/usr/local/bin/run.sh"
 [ ! -f "${LAUNCHER_SCRIPT}" ] && [ -f "/run.sh" ] && LAUNCHER_SCRIPT="/run.sh"
-# Prefer a user-space launcher override written by the egg self-update engine
-# (EGG_UPDATE_URL) over the image copy, so updates stick for non-root panels.
-if [ -f "${ACTIVE_WORK_DIR}/.potenfyr/run.sh" ]; then
-    LAUNCHER_SCRIPT="${ACTIVE_WORK_DIR}/.potenfyr/run.sh"
+# Promote a staged launcher written by the egg self-update engine (run.sh never
+# overwrites its own running file) before resolving which launcher to execute.
+# The staged copy is only promoted if its recorded sha256 matches, so a user
+# cannot plant an arbitrary script and have it executed as PID 1.
+_POT_DIR="${ACTIVE_WORK_DIR}/.potenfyr"
+if [ -f "${_POT_DIR}/run.sh.update" ] && [ -f "${_POT_DIR}/launcher-hash" ]; then
+    _staged_hash="$(sha256sum "${_POT_DIR}/run.sh.update" 2>/dev/null | cut -d' ' -f1)"
+    if [ -n "${_staged_hash}" ] && [ "${_staged_hash}" = "$(cat "${_POT_DIR}/launcher-hash" 2>/dev/null)" ]; then
+        mv -f "${_POT_DIR}/run.sh.update" "${_POT_DIR}/run.sh" 2>/dev/null || true
+    else
+        warn "Staged launcher update failed integrity check - discarded."
+        rm -f "${_POT_DIR}/run.sh.update" 2>/dev/null || true
+    fi
 fi
+# Prefer a user-space launcher override written by the egg self-update engine
+# (EGG_UPDATE_URL) over the image copy - but only after verifying its sha256
+# against the hash the engine recorded when it wrote the file (or, for legacy
+# overrides, after a branding sanity check). A user-writable file is never
+# blindly executed.
+if [ -f "${_POT_DIR}/run.sh" ]; then
+    _rec_hash="$(cat "${_POT_DIR}/launcher-hash" 2>/dev/null || true)"
+    if [ -n "${_rec_hash}" ]; then
+        if [ "$(sha256sum "${_POT_DIR}/run.sh" 2>/dev/null | cut -d' ' -f1)" = "${_rec_hash}" ]; then
+            LAUNCHER_SCRIPT="${_POT_DIR}/run.sh"
+        else
+            warn "User-space launcher override failed integrity check - using image launcher."
+        fi
+    elif grep -q "PotenFYR Studios" "${_POT_DIR}/run.sh" 2>/dev/null; then
+        LAUNCHER_SCRIPT="${_POT_DIR}/run.sh"
+    else
+        warn "Unrecognized launcher override at .potenfyr/run.sh - using image launcher."
+    fi
+fi
+unset _POT_DIR _staged_hash _rec_hash
 if [ ! -f "${LAUNCHER_SCRIPT}" ]; then
     mkdir -p /tmp/potenfyr 2>/dev/null || true
     if [ ! -f "/tmp/potenfyr/run.sh" ]; then

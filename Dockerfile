@@ -30,10 +30,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/home/container \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false \
     GOPATH=/home/container/go \
     CARGO_HOME=/home/container/.cargo \
     RUSTUP_HOME=/opt/rustup \
     IMAGE_VARIANT=${RUNTIME_VARIANT}
+
+# Stop contract: the launcher (PID 1) traps SIGTERM for graceful shutdown;
+# panels and docker stop both deliver SIGTERM first.
+STOPSIGNAL SIGTERM
 
 # 1. Base tools, networking, archive utilities & shared dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -150,7 +158,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
     && mkdir -p /opt/runtimes/go/bin \
     && ln -sf /usr/bin/go /opt/runtimes/go/bin/go 2>/dev/null || true \
     && rm -rf /var/lib/apt/lists/*
-
 # 8. Rust & Cargo via rustup
 RUN export RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo \
     && (curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal || true) \
