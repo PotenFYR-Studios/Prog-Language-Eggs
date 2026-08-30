@@ -341,6 +341,7 @@ MAIN_FILE="${MAIN_FILE:-auto}"
 PACKAGE_MANAGER="${PACKAGE_MANAGER:-auto}"
 BUILD_COMMAND="${BUILD_COMMAND:-}"
 CUSTOM_COMMAND="${CUSTOM_COMMAND:-}"
+CUSTOM_INSTALL_COMMAND="${CUSTOM_INSTALL_COMMAND:-}"
 CUSTOM_RUNTIME_URL="${CUSTOM_RUNTIME_URL:-}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
@@ -1515,116 +1516,147 @@ fi
 # 7. Dependency Management & Package Installation
 # -----------------------------------------------------------------------------
 phase "Dependency Sync"
+_DEP_FAILED=0
+_DEP_LIFECYCLE_SKIPPED=0
 if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
     mkdir -p "${WORK_DIR}/.logs" 2>/dev/null || true
     _dep_log="${WORK_DIR}/.logs/dependency-install.log"
     : > "${_dep_log}" 2>/dev/null || _dep_log="/dev/null"
-    log "Synchronizing dependencies (AUTO_INSTALL_DEPS=1). Full output: .logs/dependency-install.log"
-    case "${DETECTED_LANG}" in
-        nodejs|javascript|js)
-            if [ -f "package.json" ]; then
-                if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
-                    log "Installing via pnpm..."
-                    pnpm install --prefer-offline --frozen-lockfile >>"${_dep_log}" 2>&1 \
-                        || pnpm install --prefer-offline >>"${_dep_log}" 2>&1 \
-                        || { warn "pnpm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pnpm install failed - see .logs/dependency-install.log"; }
-                elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
-                    log "Installing via yarn..."
-                    yarn install --prefer-offline --frozen-lockfile >>"${_dep_log}" 2>&1 \
-                        || yarn install --prefer-offline >>"${_dep_log}" 2>&1 \
-                        || { warn "yarn install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "yarn install failed - see .logs/dependency-install.log"; }
-                elif [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
+    if [ -n "${CUSTOM_INSTALL_COMMAND}" ]; then
+        log "Running CUSTOM_INSTALL_COMMAND: ${CUSTOM_INSTALL_COMMAND} (full output: .logs/dependency-install.log)"
+        # Subshell guard: a custom command that calls `exit` must abort only
+        # the install step, never the launcher itself.
+        if ( eval "${CUSTOM_INSTALL_COMMAND}" ) >>"${_dep_log}" 2>&1; then
+            ok "Custom install command finished"
+        else
+            _dep_rc=$?
+            warn "CUSTOM_INSTALL_COMMAND failed (exit ${_dep_rc}) - see .logs/dependency-install.log"
+            _egg_error_log "launcher" "CUSTOM_INSTALL_COMMAND failed (exit ${_dep_rc}): ${CUSTOM_INSTALL_COMMAND}"
+            _DEP_FAILED=1
+        fi
+    else
+        log "Synchronizing dependencies (AUTO_INSTALL_DEPS=1). Full output: .logs/dependency-install.log"
+        # npm_try: run npm with the given args; on failure retry once with
+        # lifecycle scripts disabled. A broken postinstall (common in app
+        # repos referencing scripts that are not committed, or engines the
+        # scripts do not support) must not leave the container without deps.
+        npm_try() {
+            if npm "$@" >>"${_dep_log}" 2>&1; then
+                return 0
+            fi
+            if npm "$@" --ignore-scripts >>"${_dep_log}" 2>&1; then
+                _DEP_LIFECYCLE_SKIPPED=1
+                return 0
+            fi
+            return 1
+        }
+        _npm_install_fail() {
+            warn "npm install failed - see .logs/dependency-install.log"
+            _egg_error_log "launcher" "npm install failed - see .logs/dependency-install.log"
+            _DEP_FAILED=1
+        }
+        case "${DETECTED_LANG}" in
+            nodejs|javascript|js|typescript|ts)
+                if [ -f "package.json" ]; then
+                    if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
+                        log "Installing via pnpm..."
+                        pnpm install --prefer-offline --frozen-lockfile >>"${_dep_log}" 2>&1 \
+                            || pnpm install --prefer-offline >>"${_dep_log}" 2>&1 \
+                            || { warn "pnpm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pnpm install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                    elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
+                        log "Installing via yarn..."
+                        yarn install --prefer-offline --frozen-lockfile >>"${_dep_log}" 2>&1 \
+                            || yarn install --prefer-offline >>"${_dep_log}" 2>&1 \
+                            || { warn "yarn install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "yarn install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                    elif [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
+                        log "Installing via bun..."
+                        bun install --prefer-offline >>"${_dep_log}" 2>&1 \
+                            || { warn "bun install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "bun install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                    elif [ -f "package-lock.json" ] && command -v npm >/dev/null 2>&1; then
+                        # npm ci is significantly faster & fully reproducible when a
+                        # lockfile exists; fall back to install on mismatched trees.
+                        log "Installing via npm ci (lockfile detected)..."
+                        { npm ci --no-audit --no-fund --prefer-offline \
+                            || npm install --no-audit --no-fund --prefer-offline \
+                            || npm ci --ignore-scripts --no-audit --no-fund --prefer-offline \
+                            || npm install --ignore-scripts --no-audit --no-fund --prefer-offline; } >>"${_dep_log}" 2>&1 \
+                            || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install/ci failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                    else
+                        log "Installing via npm..."
+                        npm_try install --no-audit --no-fund --prefer-offline \
+                            || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                    fi
+                fi
+                ;;
+
+            python|py)
+                if [ -f "requirements.txt" ]; then
+                    log "Installing Python packages from requirements.txt..."
+                    if command -v uv >/dev/null 2>&1; then
+                        { uv pip install -r requirements.txt --system || pip3 install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
+                            || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip/uv install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                    else
+                        { pip3 install -r requirements.txt --no-warn-script-location || pip install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
+                            || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                    fi
+                elif [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
+                    poetry install --no-interaction 2>/dev/null || true
+                elif [ -f "Pipfile" ] && command -v pipenv >/dev/null 2>&1; then
+                    pipenv install --deploy 2>/dev/null || pipenv install || true
+                fi
+                ;;
+
+            bun)
+                if [ -f "package.json" ]; then
                     log "Installing via bun..."
                     bun install --prefer-offline >>"${_dep_log}" 2>&1 \
-                        || { warn "bun install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "bun install failed - see .logs/dependency-install.log"; }
-                elif [ -f "package-lock.json" ] && command -v npm >/dev/null 2>&1; then
-                    # npm ci is significantly faster & fully reproducible when a
-                    # lockfile exists; fall back to install on mismatched trees.
-                    log "Installing via npm ci (lockfile detected)..."
-                    { npm ci --no-audit --no-fund --prefer-offline || npm install --no-audit --no-fund --prefer-offline; } >>"${_dep_log}" 2>&1 \
-                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install/ci failed - see .logs/dependency-install.log"; }
-                else
-                    log "Installing via npm..."
-                    npm install --no-audit --no-fund --prefer-offline >>"${_dep_log}" 2>&1 \
-                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install failed - see .logs/dependency-install.log"; }
+                        || { warn "bun install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "bun install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
                 fi
-            fi
-            ;;
+                ;;
 
-        typescript|ts)
-            if [ -f "package.json" ]; then
-                if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
-                    pnpm install --prefer-offline || true
-                elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
-                    yarn install --prefer-offline || true
-                elif [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
-                    bun install --prefer-offline || true
-                elif [ -f "package-lock.json" ]; then
-                    { npm ci --no-audit --no-fund --prefer-offline || npm install --no-audit --no-fund --prefer-offline; } >>"${_dep_log}" 2>&1 \
-                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install/ci failed (typescript) - see .logs/dependency-install.log"; }
-                else
-                    npm install --no-audit --no-fund --prefer-offline >>"${_dep_log}" 2>&1 \
-                        || { warn "npm install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "npm install failed (typescript) - see .logs/dependency-install.log"; }
+            golang|go)
+                if [ -f "go.mod" ]; then
+                    go mod download >>"${_dep_log}" 2>&1 \
+                        || { warn "go mod download failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "go mod download failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
                 fi
-            fi
-            ;;
+                ;;
 
-        bun)
-            if [ -f "package.json" ]; then
-                bun install --prefer-offline || true
-            fi
-            ;;
-
-        python|py)
-            if [ -f "requirements.txt" ]; then
-                log "Installing Python packages from requirements.txt..."
-                if command -v uv >/dev/null 2>&1; then
-                    { uv pip install -r requirements.txt --system || pip3 install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
-                        || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip/uv install failed - see .logs/dependency-install.log"; }
-                else
-                    { pip3 install -r requirements.txt --no-warn-script-location || pip install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
-                        || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip install failed - see .logs/dependency-install.log"; }
+            rust|rs)
+                if [ -f "Cargo.toml" ]; then
+                    cargo fetch >>"${_dep_log}" 2>&1 \
+                        || { warn "cargo fetch failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "cargo fetch failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
                 fi
-            elif [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
-                poetry install --no-interaction 2>/dev/null || true
-            elif [ -f "Pipfile" ] && command -v pipenv >/dev/null 2>&1; then
-                pipenv install --deploy 2>/dev/null || pipenv install || true
-            fi
-            ;;
+                ;;
 
-        golang|go)
-            if [ -f "go.mod" ]; then
-                go mod download >>"${_dep_log}" 2>&1 \
-                    || { warn "go mod download failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "go mod download failed - see .logs/dependency-install.log"; }
-            fi
-            ;;
+            php)
+                if [ -f "composer.json" ] && command -v composer >/dev/null 2>&1; then
+                    composer install --no-interaction --prefer-dist --optimize-autoloader 2>/dev/null || composer install || true
+                fi
+                ;;
 
-        rust|rs)
-            if [ -f "Cargo.toml" ]; then
-                cargo fetch >>"${_dep_log}" 2>&1 \
-                    || { warn "cargo fetch failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "cargo fetch failed - see .logs/dependency-install.log"; }
-            fi
-            ;;
+            ruby)
+                if [ -f "Gemfile" ] && command -v bundle >/dev/null 2>&1; then
+                    bundle install 2>/dev/null || true
+                fi
+                ;;
 
-        php)
-            if [ -f "composer.json" ] && command -v composer >/dev/null 2>&1; then
-                composer install --no-interaction --prefer-dist --optimize-autoloader 2>/dev/null || composer install || true
-            fi
-            ;;
-
-        ruby)
-            if [ -f "Gemfile" ] && command -v bundle >/dev/null 2>&1; then
-                bundle install 2>/dev/null || true
-            fi
-            ;;
-
-        dotnet)
-            if ls *.csproj 1>/dev/null 2>&1 || ls *.sln 1>/dev/null 2>&1; then
-                dotnet restore 2>/dev/null || true
-            fi
-            ;;
-    esac
-    ok "Dependencies ready"
+            dotnet)
+                if ls *.csproj 1>/dev/null 2>&1 || ls *.sln 1>/dev/null 2>&1; then
+                    dotnet restore 2>/dev/null || true
+                fi
+                ;;
+        esac
+        # Honest end-of-step status: never claim success when installs failed,
+        # and surface silently-skipped lifecycle scripts (postinstall guard).
+        if [ "${_DEP_FAILED}" = "1" ]; then
+            warn "Dependency installation reported errors - see .logs/dependency-install.log (continuing)"
+        elif [ "${_DEP_LIFECYCLE_SKIPPED}" = "1" ]; then
+            warn "Dependencies installed, but package lifecycle scripts (postinstall) were skipped after a failure - see .logs/dependency-install.log"
+            ok "Dependencies ready (lifecycle scripts skipped)"
+        else
+            ok "Dependencies ready"
+        fi
+    fi
 fi
 
 # -----------------------------------------------------------------------------
@@ -1960,11 +1992,13 @@ _effective_runner() {
 }
 
 print_card_row() {
+    # 68-col card: panel consoles are ~70-80 cols; the old 78-col card wrapped
+    # and rendered doubled/garbled on narrower panel consoles.
     local label="$1" value="$2" color="$3"
-    if [ "${#value}" -gt 48 ]; then
-        value="${value:0:45}..."
+    if [ "${#value}" -gt 42 ]; then
+        value="${value:0:39}..."
     fi
-    printf " ${C_DIM}│${C_RESET}  ${C_LIME}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${color}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "${label}" "${value}"
+    printf " ${C_DIM}│${C_RESET}  ${C_LIME}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${color}%-42s${C_RESET} ${C_DIM}│${C_RESET}\n" "${label}" "${value}"
 }
 
 print_runtime_card() {
@@ -1975,7 +2009,7 @@ print_runtime_card() {
     fi
     local ver_disp="${RUNTIME_VERSION_RESOLVED:-runtime default}"
 
-    printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
+    printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────┐${C_RESET}\n"
     print_card_row "Target Language" "${DETECTED_LANG}" "${C_GREEN}"
     print_card_row "Runtime Version" "${ver_disp}" "${C_GREEN}"
     print_card_row "Runner / Engine" "${runner_disp}" "${C_CYAN}"
@@ -1988,7 +2022,7 @@ print_runtime_card() {
     print_card_row "Process User"    "$(id -un 2>/dev/null || echo '?') (uid $(id -u 2>/dev/null || echo '?'))" "${C_BLUE}"
     print_card_row "Architecture"    "${ARCH:-$(uname -m 2>/dev/null)} ($(uname -s 2>/dev/null || echo linux))" "${C_CYAN}"
     print_card_row "Working Dir"     "${WORK_DIR}" "${C_DIM}"
-    printf " ${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
+    printf " ${C_DIM}└──────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 }
 
 sync_resolved_startup

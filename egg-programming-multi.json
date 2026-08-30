@@ -158,6 +158,16 @@
       "field_type": "text"
     },
     {
+      "name": "Custom Install Command",
+      "description": "Custom dependency install command that replaces the automatic one (e.g. 'bun install', 'pnpm install --no-frozen-lockfile'). Leave empty for auto-detection.",
+      "env_variable": "CUSTOM_INSTALL_COMMAND",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:500",
+      "field_type": "text"
+    },
+    {
       "name": "Extra Arguments",
       "description": "Extra CLI arguments passed to the runner or executable.",
       "env_variable": "EXTRA_ARGS",

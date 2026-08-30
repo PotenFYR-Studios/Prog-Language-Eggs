@@ -1,4 +1,4 @@
-# Prog-Language-Eggs
+﻿# Prog-Language-Eggs
 
 > **One egg. One image. Every language.** A production-grade hosting platform that installs, updates,
 > compiles and runs **50+ programming languages** inside your container - across **Pterodactyl**, **Pelican**,
@@ -6,11 +6,12 @@
 > **Railway**, **Render**, and plain **Docker / Podman**.
 
 ```text
-  ____    ____     ___     ____           _          _      _   _    ____ 
- |  _ \  |  _ \   / _ \   / ___|         | |        / \    | \ | |  / ___|
- | |_) | | |_) | | | | | | |  _   _____  | |       / _ \   |  \| | | |  _ 
- |  __/  |  _ <  | |_| | | |_| | |_____| | |___   / ___ \  | |\  | | |_| |
- |_|     |_| \_\  \___/   \____| |_| \_\ /_/   \_\ |_| \_|  \____|
+ â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—
+â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â•â•â•  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•
+â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ–ˆâ•—
+â–ˆâ–ˆâ•”â•â•â•â• â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘
+â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+â•šâ•â•     â•šâ•â•  â•šâ•â• â•šâ•â•â•â•â•â•  â•šâ•â•â•â•â•â•  â•šâ•â•â•â•â•â•â•â•šâ•â•  â•šâ•â•â•šâ•â•  â•šâ•â•â•â• â•šâ•â•â•â•â•â•
 ```
 
 [![CI Build](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions/workflows/docker-image.yml/badge.svg)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)
@@ -227,7 +228,7 @@ NODE_GYP_SUPPORT=1            # native addon toolchain for node modules
 Results are cached under `.cache/version-resolver/` (6h TTL, `RESOLVER_CACHE_TTL` to tune) so warm boots
 skip network round-trips.
 
-### Startup value pinning (auto → exact)
+### Startup value pinning (auto â†’ exact)
 
 Placeholders (`auto`, `latest`, `default`, empty) are resolved **once** at boot and the concrete result is
 pinned into `.multi-prog.conf` - the detected language, the effective engine, the entry point and the exact
@@ -299,9 +300,21 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 - The launcher is **PID 1** (entrypoint uses `exec`, no interpreter layer swallowing signals) and traps
   `SIGTERM`/`SIGINT`/`SIGHUP`/`SIGQUIT` - panels, `docker stop` and orchestrator shutdowns all get a clean,
   fast stop (well inside the ~10s window before daemons escalate to SIGKILL).
+- **Per-panel stop delivery - verified against each daemon's source code:**
+
+  | Panel | How Stop is delivered | Covered by |
+  |---|---|---|
+  | Feather Panel | literal stop command (`^C`) written as **console text into the TTY stdin** | stdin stop watcher (TTY + pipe) |
+  | Pterodactyl / Pelican / Jexactyl / Wisp | real `SIGINT` signal (eggs' `^C` is converted to a signal) | signal trap |
+  | PufferPanel / Docker / Kubernetes | `docker stop` -> `SIGTERM` to PID 1 | signal trap |
+  | Kill button | `SIGKILL` | n/a (kernel-level) |
+
 - **Console-text stop**: daemons that stop a server by typing the stop command into the console (Feather
-  Panel and other Wings forks) are covered by an stdin stop-command watcher - `stop`, `^C`, `kill`,
-  `shutdown`, ... all trigger the same graceful shutdown.
+  Panel and other Wings forks create containers with `Tty: true` and write the stop command into that TTY)
+  are covered by an stdin stop-command watcher - `stop`, `^C`, `kill`, `shutdown`, `sigint`, ... all trigger
+  the same graceful shutdown. The watcher engages on pipes **and** TTYs, starts after the interactive setup
+  wizard (so first-boot prompts keep stdin), and can be forced off with `PANEL_STOP_WATCHER=0` (or forced
+  on with `1`).
 - **Multi-process containers**: apps spawning daemons (pm2 god processes, detached workers, double-forked
   helpers) are swept on stop **and** again before every start/restart, so stray processes can never hold
   ports or keep serving after the panel shows "stopped".
@@ -320,11 +333,14 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
   probes, crashes, stray sweeps) append timestamped entries with panel context to `.logs/launcher-errors.log`,
   so issues are diagnosable even when panel scrollback is gone. Dependency install output is kept verbatim in
   `.logs/dependency-install.log`.
-- **Boot card** - after detection the console prints a card with the values actually in use: target language,
-  exact runtime version, effective engine, entry point, panel, server UUID, memory tuning, port, process user,
-  architecture, working dir.
-- **Agent console theme** - glyph-prefixed phase headers (`── Dependency Sync ──`) and status lines.
+- **Boot card** - after detection the console prints a 68-col card with the values actually in use: target
+  language, exact runtime version, effective engine, entry point, panel, server UUID, memory tuning, port,
+  process user, architecture, working dir (wraps safely on narrow consoles).
+- **Agent console theme** - glyph-prefixed phase headers (`â”€â”€ Dependency Sync â”€â”€`) and status lines.
   `CLI_THEME=prog` (default) or `classic` for the legacy PotenFYR look.
+- **Gradient banner** - block-font ASCII art with a diagonal 256-color gradient sweep, different preset
+  every boot: `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum` (set one with `CLI_BANNER_GRADIENT`,
+  or `none` for flat). Compact fallback art for narrow consoles.
 - **Trace mode** - `DEBUG=1` writes bash xtrace to `.logs/launcher-trace.log`; console stays readable.
 - **Provenance** - `/etc/potenfyr-version` stamp printed at boot (variant + build date).
 - **Crash diagnostics** - non-zero exits trigger a report card: exit code, active runtime version, memory
@@ -353,6 +369,10 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 
 - **Parallel companion installs** - `EXTRA_RUNTIMES=a,b,c` download simultaneously, each logged to
   `.logs/runtime-install-<name>.log`.
+- **Resilient dependency installs** - npm installs retry once with lifecycle scripts disabled when a
+  package's `postinstall` crashes (deps still install); `CUSTOM_INSTALL_COMMAND` replaces the whole step.
+  The console reports honestly: success, lifecycle-skipped, or failed with a pointer to
+  `.logs/dependency-install.log` - never a false "ready".
 - **TTL resolver cache** - warm boots skip upstream feed lookups.
 - **Idempotent installs** - present binaries short-circuit before any network I/O.
 - **npm ci fast path** - with a lockfile present, `npm ci --prefer-offline` runs instead of a full
@@ -378,6 +398,7 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | `PACKAGE_MANAGER` | `auto` | Yes | Dependency manager override |
 | `RUNTIME_VERSION` | `latest` | Yes | Primary runtime version or channel keyword; `latest` pins to the exact resolved version |
 | `CUSTOM_COMMAND` | empty | Yes | Replace launcher command entirely |
+| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Replace the automatic dependency install command entirely (runs in the workspace; output to `.logs/dependency-install.log`) |
 | `BUILD_COMMAND` | empty | Yes | Optional build step before run |
 | `EXTRA_ARGS` | empty | Yes | Extra CLI args passed to your app |
 
@@ -391,6 +412,16 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | `NODE_GYP_SUPPORT` | `1` | Yes | Python/build tools for native node addons |
 | `SKIP_PYTHON` | `0` | Yes | Prevent the Python companion entirely |
 | `AUTO_INSTALL_DEPS` | `1` | Yes | Auto dependency installation on boot |
+| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Replace the automatic dependency install command entirely (overrides auto-detection; output to `.logs/dependency-install.log`) |
+
+### Console & theming
+| Variable | Default | Editable | Description |
+|---|---|---|---|
+| `CLI_THEME` | `prog` | Yes | Console theme: `prog` (agent theme) or `classic` (legacy PotenFYR) |
+| `CLI_BANNER_GRADIENT` | `auto` | Yes | Banner gradient: `auto` (random each boot), `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum`, `none` |
+| `PANEL_STOP_WATCHER` | `auto` | Yes | Watch console input for the panel stop command (Wings/Feather-style daemons); `0` = off, `1` = force on |
+| `RESOLVER_CACHE_TTL` | `21600` | Yes | Version cache seconds (0 disables) |
+| `AUTO_UPDATE_EGG` | `1` | Yes | Self-update the launcher from `EGG_UPDATE_URL` on boot |
 
 ### Process behaviour
 | Variable | Default | Editable | Description |
@@ -425,9 +456,6 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | `STARTER_TEMPLATE` | `empty` | Yes | Scaffold a starter project on empty workspaces |
 | `DEBUG` | `0` | Yes | Bash trace to `.logs/launcher-trace.log` |
 | `LAUNCHER_LOG` | `1` | Yes | Console mirroring toggle |
-| `RESOLVER_CACHE_TTL` | `21600` | Yes | Version cache seconds (0 disables) |
-| `CLI_THEME` | `prog` | Yes | Console theme: `prog` (agent theme) or `classic` (legacy PotenFYR) |
-| `AUTO_UPDATE_EGG` | `1` | Yes | Self-update the launcher from `EGG_UPDATE_URL` on boot |
 | `EGG_UPDATE_URL` | repo raw egg URL | Admin | https-only update source; hash-verified, staged, integrity-checked |
 | `DATABASE_*` | - | - | Reserved prefix for future companion services |
 
@@ -454,8 +482,9 @@ Moving between eggs (ours or third-party) is designed to be boring:
 ## Image Publishing Policy (CI)
 
 - **Behavior tests gate publishing.** Every push/PR first boots the launcher in a docker mirror and drives
-  the full panel lifecycle (start, stop, kill, restart, console-text stop, crash diagnostics, multi-process
-  sweep, multi-port apps, startup-value pinning) - `tests/panel-test.sh`, 43 assertions.
+  the full panel lifecycle (start, stop, kill, restart, console-text stop, Feather-style TTY stop, SIGINT
+  stop, crash diagnostics, multi-process sweep, multi-port apps, startup-value pinning, custom install
+  command, panel detection) - `tests/panel-test.sh`, 56 assertions.
 - ONE image, ONE job. Pushes to `main` build `linux/amd64` + `linux/arm64` + `linux/arm/v7`
   **with `no-cache: true`** - every tag is a clean rebuild of the exact committed sources.
 - Tags published: `latest` (moving) and `<commit-sha>` (immutable, for rollbacks/digest pinning).
@@ -479,7 +508,7 @@ ProG-Language-Eggs/
 |-- install-runtime.sh                On-demand toolchain installer (checksummed, arch-aware)
 |-- resolve-version.sh                Version validator + live-feed keyword resolver
 |-- install.sh                        Cross-panel workspace installer script
-|-- tests/                            Docker behavior suite: Dockerfile.test + panel-test.sh (43 assertions)
+|-- tests/                            Docker behavior suite: Dockerfile.test + panel-test.sh (56 assertions) + pty stop driver
 `-- .github/workflows/docker-image.yml  Behavior tests + clean-build publish pipeline
 ```
 
@@ -488,6 +517,26 @@ ProG-Language-Eggs/
 ## Troubleshooting & FAQ
 
 ### Newbie quick answers
+
+<details>
+<summary><b>Files I uploaded via the file manager disappeared after a reinstall</b></summary>
+When <code>GIT_REPO</code> is set, every boot syncs the workspace to your git branch: a fresh install
+clones the repo, existing clones run <code>git fetch</code> + <code>git reset --hard origin/&lt;branch&gt;</code>.
+Only what is <b>committed and pushed</b> survives a server reinstall (the volume is wiped and re-cloned).
+Files uploaded via the file manager but never committed/pushed to <code>GIT_REPO</code> are untracked:
+they survive normal restarts, but a reinstall restores only the repository content. Commit your files to
+the repo (or upload them again after reinstalling).
+</details>
+
+<details>
+<summary><b>npm install fails with a postinstall error or EBADENGINE warnings</b></summary>
+The launcher retries the install once with lifecycle scripts disabled
+(<code>npm --ignore-scripts</code>), so dependencies still land when a package's <code>postinstall</code>
+is broken. The console then says <i>"lifecycle scripts skipped"</i> instead of falsely claiming success.
+To run your own install step entirely, set <code>CUSTOM_INSTALL_COMMAND</code> (e.g.
+<code>npm install --ignore-scripts</code>). <code>EBADENGINE</code> lines are warnings: your pinned
+<code>RUNTIME_VERSION</code> is older than a dependency requires - bump it or pin the engine the app wants.
+</details>
 
 <details>
 <summary><b>My server starts but says "Hello from PotenFYR" - where is my app?</b></summary>
@@ -522,6 +571,7 @@ after a <code>DEBUG=1</code> restart.
 | Version request rejected / wrong version picked | `.logs/version-resolver.log` |
 | Runtime download/extraction failure | Installer output (retry counts, sizes, checksum verdicts included) |
 | Dependency install failed | `.logs/dependency-install.log` (verbatim package manager output) |
+| Broken `postinstall` crashed npm install | Launcher auto-retries with `--ignore-scripts`; check `.logs/dependency-install.log` for the original error |
 | Wrong panel detected | Boot header `panel=` + boot card `Host Platform` row; open an issue with `env \| grep -iE 'pterodactyl\|pelican\|puffer\|feather'` |
 | Environment not reused across restarts | Inspect `.environments/active` marker format `lang\|series\|version` |
 | Procfile process keeps dying | `.logs/processes/<name>.log` + restart counter messages |
