@@ -266,6 +266,19 @@ done
 [ "$card_seen" = "1" ] && ok "boot card shows Host Platform: Feather Panel" || { bad "card Host Platform"; docker logs prog-t12 2>&1 | grep -a "Host Platform" | head -2; }
 docker rm -f prog-t12 >/dev/null 2>&1
 
+# ------------------------------------- T13: CUSTOM_INSTALL_COMMAND OVERRIDES
+echo "== T13: CUSTOM_INSTALL_COMMAND replaces auto dependency install =="
+ci_out=$(docker run --rm -v "$VOL:/home/container" \
+    -e LANGUAGE=nodejs -e AUTO_UPDATE_EGG=0 -e AUTO_INSTALL_DEPS=1 \
+    -e CUSTOM_INSTALL_COMMAND="echo CUSTOM-INSTALL-RAN > /home/container/.ci-marker; echo ok" \
+    -e SERVER_PORT=25582 "$IMG" bash -c 'timeout 60 bash /entrypoint.sh >/dev/null 2>&1; cat /home/container/.ci-marker 2>/dev/null' 2>&1 | tail -1)
+[ "$ci_out" = "CUSTOM-INSTALL-RAN" ] && ok "CUSTOM_INSTALL_COMMAND executed" || { bad "custom install command"; echo "  got: ${ci_out:-<empty>}"; }
+ci_fail=$(docker run --rm -v "$VOL:/home/container" \
+    -e LANGUAGE=nodejs -e CUSTOM_INSTALL_COMMAND="exit 7" -e AUTO_UPDATE_EGG=0 \
+    -e SERVER_PORT=25583 "$IMG" bash -c 'timeout 40 bash /entrypoint.sh' 2>&1)
+echo "$ci_fail" | grep -q "CUSTOM_INSTALL_COMMAND failed" && ok "custom install failure surfaced as warning" || bad "custom install failure hidden"
+echo "$ci_fail" | grep -q "Dependencies ready" && bad "false 'Dependencies ready' after failure" || ok "no false success after install failure"
+
 echo
 echo "=========================================="
 echo "  RESULTS: $PASS passed, $FAIL failed"
