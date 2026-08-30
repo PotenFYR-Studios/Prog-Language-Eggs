@@ -221,13 +221,17 @@ handle_signal() {
 trap handle_signal SIGTERM SIGINT SIGHUP SIGQUIT
 
 # --- Panel Stop Command Watcher (stdin) ---------------------------------------
-# Some daemons (Feather Panel and other Wings forks) deliver the configured
-# stop command ("^C") as console TEXT on stdin instead of raising SIGINT.
-# This launcher never read stdin, so the stop text was silently ignored and
-# the panel hung on "stopping" until the daemon force-killed the container.
-# When stdin is a pipe (every panel attaches one; interactive terminals are a
-# TTY and keep stdin for the app), a background watcher scans console input
-# and raises our own shutdown trap when a stop command is seen.
+# Wings-family daemons (Feather Panel, Pterodactyl, Pelican, Jexactyl, Wisp)
+# create server containers with Tty:true and deliver the configured stop
+# command ("^C" etc.) as console TEXT on that TTY stdin instead of raising a
+# signal. The literal text "^C" is not a real INTR byte, so the kernel never
+# generates SIGINT, and without a reader the stop line just sits in the tty
+# input buffer while the panel hangs on "stopping" until the daemon times out
+# and force-kills the container. This watcher scans console input (pipe OR
+# tty) and raises our own shutdown trap when a stop command is seen. It starts
+# after the interactive setup wizard so first-boot prompts still own stdin,
+# and only consumes lines that match a stop command.
+# PANEL_STOP_WATCHER=0 disables the watcher entirely; =1 forces it on.
 STOP_WATCHER_PID=0
 
 panel_stop_watcher() {
@@ -240,7 +244,7 @@ panel_stop_watcher() {
         trimmed="${trimmed//[[:space:]]/}"
         trimmed="${trimmed,,}"
         case "${trimmed}" in
-            ^c|'^\c'|stop|/stop|kill|exit|quit|shutdown|poweroff|halt|end)
+            ^c|'^\c'|stop|/stop|kill|exit|quit|shutdown|poweroff|halt|end|sigint|sigterm)
                 log "Stop command '${line}' received via console. Shutting down..."
                 kill -INT "$$" 2>/dev/null || true
                 break
@@ -251,9 +255,13 @@ panel_stop_watcher() {
 }
 
 start_stop_watcher() {
-    # Only when stdin is a pipe (every panel daemon attaches one); interactive
-    # terminals (tty) keep stdin reserved for the application itself.
-    if [ ! -t 0 ] && [ "${STOP_WATCHER_PID}" -eq 0 ]; then
+    # Panels (Tty:true containers) deliver the stop command as text on stdin,
+    # so the watcher must engage on TTYs as well as pipes. Set
+    # PANEL_STOP_WATCHER=0 to keep stdin exclusively for the application.
+    case "${PANEL_STOP_WATCHER:-auto}" in
+        0|false|off|disabled|no) return 0 ;;
+    esac
+    if [ "${STOP_WATCHER_PID}" -eq 0 ]; then
         # Probe first inside a subshell: a failed exec redirection would exit
         # the launcher itself if fd 0 were closed (bash non-interactive rule).
         if ( exec 3<&0 ) 2>/dev/null; then
@@ -269,7 +277,6 @@ start_stop_watcher() {
         fi
     fi
 }
-start_stop_watcher
 
 # Determine active working directory across panels
 WORK_DIR="${WORK_DIR:-${PWD}}"
@@ -835,6 +842,12 @@ EOF
     esac
     ok "Starter template generated"
 fi
+
+# Start the panel stop-command watcher only now: before it, stdin belongs to
+# the interactive setup wizard (first boot in an empty workspace) and to git
+# credential prompts. From here on every long phase (dep sync, build, app run)
+# is covered, and stop commands typed by the daemon land with the watcher.
+start_stop_watcher
 
 # -----------------------------------------------------------------------------
 # 4. Production Multi-Process Supervisor (Procfile support)

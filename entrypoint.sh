@@ -155,8 +155,12 @@ elif [ -n "${FEATHER_PORT:-}" ] || [ -n "${FEATHER_SERVER_ID:-}" ]; then
     PANEL_FAMILY="feather"
 elif [ -n "${P_SERVER_UUID:-}" ] || [ -n "${SERVER_UUID:-}" ] || [ -f "/etc/pterodactyl/config.json" ]; then
     # Wings-family discrimination:
+    #   Feather Panel injects P_SERVER_UUID plus a Feather-only short UUID.
     #   Pterodactyl Wings injects SERVER_UUID; Pelican uses P_SERVER_UUID.
-    if [ -n "${PELICAN_PANEL_VERSION:-}" ] || { [ -n "${P_SERVER_UUID:-}" ] && [ -z "${SERVER_UUID:-}" ]; }; then
+    if [ -n "${P_SERVER_UUID_SHORT:-}" ]; then
+        PANEL_TYPE="Feather Panel"
+        PANEL_FAMILY="feather"
+    elif [ -n "${PELICAN_PANEL_VERSION:-}" ] || { [ -n "${P_SERVER_UUID:-}" ] && [ -z "${SERVER_UUID:-}" ]; }; then
         PANEL_TYPE="Pelican Panel"
         PANEL_FAMILY="wings"
     elif [ -n "${JEXACTYL_VERSION:-}" ] || [ -f "/etc/jexactyl/config.json" ]; then
@@ -318,7 +322,7 @@ for _key in LANGUAGE RUNNER MAIN_FILE PACKAGE_MANAGER BUILD_COMMAND \
             NODE_GYP_SUPPORT EXTRA_RUNTIMES SKIP_RUNTIMES SKIP_PYTHON \
             SUPERVISOR PROCFILE_RESTART PROCFILE_LOGS PROCFILE_MAX_RESTARTS \
             HEALTH_CHECK_PATH HEALTH_STRICT HEALTH_TIMEOUT LAUNCHER_LOG RESOLVER_CACHE_TTL \
-            EGG_UPDATE_URL AUTO_UPDATE_EGG CLI_THEME; do
+            EGG_UPDATE_URL AUTO_UPDATE_EGG CLI_THEME CLI_BANNER_GRADIENT PANEL_STOP_WATCHER; do
     apply_conf "${_key}"
 done
 unset _key
@@ -543,7 +547,10 @@ fi
 # -----------------------------------------------------------------------------
 # 8. Clean, Modern ANSI Gradient Banner & System Information Card
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
+# Block-font art with a diagonal 256-color gradient sweep. Gradient presets:
+#   citrus (brand) aurora sunset ocean candy spectrum | none = flat lime
+# CLI_BANNER_GRADIENT picks one; "auto" (default) randomizes per boot.
+# Consoles narrower than 74 cols get the compact figlet art, < 62 get text.
 print_banner() {
     printf "\n"
     if [ "${CLI_THEME}" = "classic" ]; then
@@ -555,14 +562,88 @@ print_banner() {
         printf "${C_MAGENTA}${C_BOLD}%s${C_RESET}\n" "                                             /____/           "
         printf "${C_YELLOW}${C_BOLD}  » Multi-Language Runtime Environment${C_RESET}\n"
         printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
+        return 0
+    fi
+
+    local _gname _ramp=""
+    case "${CLI_BANNER_GRADIENT:-auto}" in
+        citrus|aurora|sunset|ocean|candy|spectrum) _gname="${CLI_BANNER_GRADIENT}" ;;
+        none|off|plain) _gname="none" ;;
+        auto|*)
+            case $((RANDOM % 6)) in
+                0) _gname="citrus" ;;
+                1) _gname="aurora" ;;
+                2) _gname="sunset" ;;
+                3) _gname="ocean" ;;
+                4) _gname="candy" ;;
+                5) _gname="spectrum" ;;
+            esac ;;
+    esac
+    case "${_gname}" in
+        citrus)   _ramp="22 28 34 40 46 82 118 154 190 220 214 208 202" ;;
+        aurora)   _ramp="22 28 34 41 47 48 49 50 51 45 39 33 27 21" ;;
+        sunset)   _ramp="52 88 124 160 196 202 208 214 220 226" ;;
+        ocean)    _ramp="16 17 18 19 20 26 32 38 44 50 51" ;;
+        candy)    _ramp="53 91 128 164 200 206 212 218 224 213 177 141 105" ;;
+        spectrum) _ramp="196 202 208 214 220 226 190 154 118 82 46 40 34 21 27 33 39 45 51 93 129 165 201 207 213" ;;
+    esac
+
+    if [ "${_gname}" != "none" ]; then
+        # Print one row, sweeping the ramp across columns with a slight
+        # diagonal offset per row so the gradient flows top-left to
+        # bottom-right. Spaces pass through uncolored.
+        _banner_grad_row() {
+            local row="$1" ridx="$2"
+            local -a cs
+            read -ra cs <<< "${_ramp}"
+            local n=${#cs[@]} w=${#row} out="" i ci ch span
+            span=$(( (w > 1 ? w : 2) - 1 + 30 ))
+            for ((i = 0; i < w; i++)); do
+                ch="${row:i:1}"
+                if [ "${ch}" = " " ]; then out+=" "; continue; fi
+                ci=$(( (i + ridx * 6) * (n - 1) / span ))
+                (( ci >= n )) && ci=$(( n - 1 ))
+                out+="\e[38;5;${cs[$ci]}m${ch}"
+            done
+            printf '%b%s\n' "${out}" "${C_RESET}"
+        }
+        local -a _art=(
+' ██████╗██████╗  ██████╗  ██████╗  ██╗      █████╗ ███╗   ██╗ ██████╗ '
+'██╔══██╗██╔══██╗██╔═══██╗██╔════╝  ██║     ██╔══██╗████╗  ██║██╔════╝ '
+'██████╔╝██████╔╝██║   ██║██║  ███╗ ██║     ███████║██╔██╗ ██║██║  ███╗'
+'██╔═══╝ ██╔══██╗██║   ██║██║   ██║ ██║     ██╔══██║██║╚██╗██║██║   ██║'
+'██║     ██║  ██║╚██████╔╝╚██████╔╝ ███████╗██║  ██║██║ ╚████║╚██████╔╝'
+'╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ '
+        )
+        local _w
+        _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"
+        if [ "${_w:-80}" -ge 74 ] 2>/dev/null; then
+            local r
+            for r in 0 1 2 3 4 5; do
+                _banner_grad_row "${_art[$r]}" "$r"
+            done
+        else
+            # Compact 58-col figlet fallback for narrow consoles.
+            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "  ____  ____   ___    ____ " "   _         _     _   _   ____ "
+            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|  _ \\|  _ \\  / _ \\  / ___|" "  | |       / \\   | \\ | | / ___|"
+            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "| |_) || |_) || | | || |  _ " "  | |      / _ \\  |  \\| || |  _ "
+            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|  __/ |  __/ | |_| || |_| |" "  | |___  / ___ \\ | |\\  || |_| |"
+            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|_|    |_|     \\___/  \\____|" "  |_____|/_/   \\_\\|_| \\_| \\____|"
+        fi
     else
-        printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "  ____    ____     ___     ____           _          _      _   _    ____ "
-        printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" " |  _ \\  |  _ \\   / _ \\   / ___|         | |        / \\    | \\ | |  / ___|"
-        printf "${C_GOLD}${C_BOLD}%s${C_RESET}\n" " | |_) | | |_) | | | | | | |  _   _____  | |       / _ \\   |  \\| | | |  _ "
-        printf "${C_GOLD}${C_BOLD}%s${C_RESET}\n" " |  __/  |  _ <  | |_| | | |_| | |_____| | |___   / ___ \\  | |\\  | | |_| |"
-        printf "${C_WHITE}${C_BOLD}%s${C_RESET}\n" " |_|     |_| \\_\\  \\___/   \\____| |_| \\_\\ /_/   \\_\\ |_| \\_|  \\____|"
-        printf "${C_LIME}${C_BOLD}  </> » Programming Languages · Multi-Language Agent Runtime${C_RESET}\n"
+        printf "${C_LIME}${C_BOLD}  ██████╗ ██████╗  ██████╗ ██████╗   ██╗      █████╗ ███╗   ██╗ ██████╗ ${C_RESET}\n"
+        printf "${C_LIME}${C_BOLD}  ██╔══██╗██╔══██╗██╔═══██╗██╔════╝   ██║     ██╔══██╗████╗  ██║██╔════╝ ${C_RESET}\n"
+        printf "${C_LIME}${C_BOLD}  ██████╔╝██████╔╝██║   ██║██║  ███╗  ██║     ███████║██╔██╗ ██║██║  ███╗${C_RESET}\n"
+        printf "${C_LIME}${C_BOLD}  ██╔═══╝ ██╔══██║██║   ██║██║   ██║  ██║     ██╔══██║██║╚██╗██║██║   ██║${C_RESET}\n"
+        printf "${C_LIME}${C_BOLD}  ██║     ██║  ██║╚██████╔╝╚██████╔╝  ███████╗██║  ██║██║ ╚████║╚██████╔╝${C_RESET}\n"
+        printf "${C_LIME}${C_BOLD}  ╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝   ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ${C_RESET}\n"
+    fi
+
+    printf "${C_LIME}${C_BOLD}  </> » Programming Languages · Multi-Language Agent Runtime${C_RESET}\n"
+    if [ "${_gname}" = "none" ]; then
         printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
+    else
+        printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in · gradient: %s${C_RESET}\n\n" "${_gname}"
     fi
 }
 

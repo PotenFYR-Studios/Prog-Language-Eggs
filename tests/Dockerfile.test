@@ -28,6 +28,7 @@ COPY install.sh /install.sh
 COPY install.sh /usr/local/bin/install.sh
 COPY install-runtime.sh /usr/local/bin/install-runtime.sh
 COPY resolve-version.sh /usr/local/bin/resolve-version.sh
+COPY tests/t5b-driver.py /t5b-driver.py
 
 RUN sed -i 's/\r$//' /entrypoint.sh /run.sh /install.sh /usr/local/bin/*.sh \
     && chmod +x /entrypoint.sh /run.sh /usr/local/bin/*.sh
