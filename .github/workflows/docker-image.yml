@@ -15,7 +15,23 @@ env:
 # ONE image, ONE tag. Every runtime ships inside a single multi-arch image;
 # language choice happens at startup via egg variables, not at build time.
 jobs:
+  # Fast behavior suite: boots the launcher in a docker mirror of the real
+  # image layout and drives panel lifecycle events (start/stop/kill/restart,
+  # console-text stop, crash diagnostics, multi-process sweep, multi-port apps,
+  # startup-value pinning). Blocks publish on failure.
+  behavior-tests:
+    name: Launcher behavior tests (docker)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run panel behavior test suite
+        run: bash tests/panel-test.sh
+
   build-and-push:
+    name: Build and publish multi-arch image
+    needs: behavior-tests
     runs-on: ubuntu-latest
     permissions:
       contents: read

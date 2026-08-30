@@ -4,17 +4,24 @@
     "version": "PTDL_v2",
     "update_url": "https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/egg-programming-multi.json"
   },
-  "exported_at": "2026-08-22T03:08:00+00:00",
-  "name": "Multi-Languages",
+  "exported_at": "2026-08-30T07:50:00+00:00",
+  "name": "Prog-Language Eggs",
   "author": "support@potenfyr.in",
-  "description": "One egg for 50+ programming languages with package managers, auto-detection, memory tuning, and Dev Watch mode.",
+  "description": "Prog-Language Eggs - one egg for 50+ programming languages with package managers, auto-detection, memory tuning, and Dev Watch mode.",
   "features": [
     "pid_limit"
   ],
   "docker_images": {
     "Multi-Language (50+ Languages)": "ghcr.io/potenfyr-studios/prog-language-eggs:latest"
   },
-  "file_denylist": [],
+  "file_denylist": [
+    "^\\.potenfyr($|/)",
+    "^/?run\\.sh$",
+    "^/?entrypoint\\.sh$",
+    "^/?install\\.sh$",
+    "^/?install-runtime\\.sh$",
+    "^/?resolve-version\\.sh$"
+  ],
   "startup": "bash /usr/local/bin/run.sh",
   "config": {
     "files": "{\".env\":{\"parser\":\"file\",\"find\":{\"PORT=\":\"PORT={{server.build.default.port}}\",\"SERVER_PORT=\":\"SERVER_PORT={{server.build.default.port}}\"}},\"config.json\":{\"parser\":\"json\",\"find\":{\"port\":\"{{server.build.default.port}}\"}}}",
@@ -32,7 +39,7 @@
   "variables": [
     {
       "name": "Target Language",
-      "description": "Target language or 'auto' for intelligent file auto-detection.",
+      "description": "Target language or 'auto' for intelligent file auto-detection. After the first boot the detected value is pinned; set to 'auto-detect' to clear the pin and re-run detection.",
       "env_variable": "LANGUAGE",
       "default_value": "auto",
       "user_viewable": true,
@@ -42,7 +49,7 @@
     },
     {
       "name": "Execution Runner",
-      "description": "Runner or engine to use (e.g. auto, node, bun, tsx, uvicorn, cargo, go).",
+      "description": "Runner or engine to use (e.g. auto, node, bun, tsx, uvicorn, cargo, go). 'auto' resolves to the effective engine on first boot and is pinned; set to 'auto-detect' to re-arm.",
       "env_variable": "RUNNER",
       "default_value": "auto",
       "user_viewable": true,
@@ -52,7 +59,7 @@
     },
     {
       "name": "Main Entry Point File",
-      "description": "The main script or file to execute (leave 'auto' for smart detection).",
+      "description": "The main script or file to execute (leave 'auto' for smart detection). 'auto' resolves to the concrete entry point on first boot and is pinned; set to 'auto-detect' to re-arm.",
       "env_variable": "MAIN_FILE",
       "default_value": "auto",
       "user_viewable": true,
@@ -272,7 +279,7 @@
     },
     {
       "name": "Runtime Version",
-      "description": "Version of the primary runtime: 22 | 22.1 | 22.1.4 or keywords latest, stable, lts, alpha, beta, rc, preview, nightly. Validated & resolved from live upstream feeds.",
+      "description": "Version of the primary runtime: 22 | 22.1 | 22.1.4 or keywords latest, stable, lts, alpha, beta, rc, preview, nightly. Validated & resolved from live upstream feeds. 'latest' resolves once, then pins to the exact version; set to 'auto-detect' to re-resolve.",
       "env_variable": "RUNTIME_VERSION",
       "default_value": "latest",
       "user_viewable": true,
@@ -398,6 +405,16 @@
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|boolean",
+      "field_type": "text"
+    },
+    {
+      "name": "CLI Theme",
+      "description": "Console output theme for the launcher (prog = Prog-Language Eggs agent theme, classic = legacy PotenFYR theme).",
+      "env_variable": "CLI_THEME",
+      "default_value": "prog",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|in:prog,minecraft,classic",
       "field_type": "text"
     }
   ]
