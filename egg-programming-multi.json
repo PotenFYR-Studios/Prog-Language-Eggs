@@ -416,6 +416,26 @@
       "user_editable": true,
       "rules": "nullable|string|in:prog,minecraft,classic",
       "field_type": "text"
+    },
+    {
+      "name": "Panel Stop Watcher",
+      "description": "Watch console input for the panel stop command (^C, stop, kill...) so Stop works on Wings/Feather-style daemons that send stop as console text (auto = enabled except when stdin must stay with the app; 0 = disabled, 1 = forced on).",
+      "env_variable": "PANEL_STOP_WATCHER",
+      "default_value": "auto",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|in:auto,0,1",
+      "field_type": "text"
+    },
+    {
+      "name": "Banner Gradient",
+      "description": "Console banner color gradient: auto (random each boot), citrus, aurora, sunset, ocean, candy, spectrum, or none.",
+      "env_variable": "CLI_BANNER_GRADIENT",
+      "default_value": "auto",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|in:auto,citrus,aurora,sunset,ocean,candy,spectrum,none",
+      "field_type": "text"
     }
   ]
 }

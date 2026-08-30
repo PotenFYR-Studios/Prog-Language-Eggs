@@ -17,7 +17,7 @@ PASS=0; FAIL=0
 ok()  { echo "  PASS: $1"; PASS=$((PASS+1)); }
 bad() { echo "  FAIL: $1"; FAIL=$((FAIL+1)); }
 
-cleanup() { docker rm -f prog-t1 prog-t7 prog-t8 >/dev/null 2>&1; docker volume rm -f "$VOL" >/dev/null 2>&1; }
+cleanup() { docker rm -f prog-t1 prog-t5c prog-t7 prog-t8 prog-t12 prog-mp >/dev/null 2>&1; docker volume rm -f "$VOL" >/dev/null 2>&1; }
 trap cleanup EXIT
 
 echo "== building test image =="
@@ -95,13 +95,52 @@ code=$(docker inspect -f '{{.State.ExitCode}}' prog-t1 2>/dev/null)
 docker rm -f prog-t1 >/dev/null 2>&1
 
 # ------------------------------------------------------- T5: CONSOLE-TEXT STOP
-echo "== T5: stop via console text (Feather-style daemon) =="
+echo "== T5: stop via console text (pipe stdin daemon) =="
 out=$( (sleep 14; echo stop) | docker run -i --rm \
     -e SERVER_PORT=25566 -e STARTER_TEMPLATE=nodejs -e AUTO_UPDATE_EGG=0 "$IMG" 2>&1 )
 echo "$out" | grep -q "Stop command 'stop' received via console" \
     && ok "watcher caught console stop text" || bad "watcher missed stop text"
 echo "$out" | grep -q "stopped cleanly" && ok "text-stop ended cleanly (exit 0)" || bad "text-stop exit"
 echo "$out" | grep -q "listening on port 25566" && ok "app was serving before text-stop" || bad "app never served in T5"
+
+# ------------------------------------------- T5b: FEATHER-STYLE TTY TEXT STOP
+# Feather/Wings-family daemons create containers with Tty:true and deliver the
+# egg stop command ("^C") as literal console TEXT through the pty. The driver
+# runs the entrypoint in a real pty (stdin IS a tty) and writes "^C\n" into
+# the pty master after the app reports ready - the exact daemon delivery path.
+echo "== T5b: stop via '^C' text on a TTY stdin (Feather Panel style) =="
+tty_out=$(timeout 280 docker run -i --rm \
+    -e SERVER_PORT=25572 -e STARTER_TEMPLATE=nodejs -e AUTO_UPDATE_EGG=0 "$IMG" \
+    python3 /t5b-driver.py 2>&1)
+echo "$tty_out" | grep -aq "Stop command '\^C' received via console" \
+    && ok "watcher caught '^C' text on TTY stdin" || { bad "watcher missed '^C' on tty"; echo "$tty_out" | tail -25; }
+echo "$tty_out" | grep -aq "stopped cleanly" && ok "tty text-stop ended cleanly (exit 0)" || bad "tty text-stop exit"
+echo "$tty_out" | grep -aq "listening on port 25572" && ok "app was serving before tty stop" || bad "app never served in T5b"
+
+# ---------------------------------------------------- T5c: SIGNAL STOP (SIGINT)
+echo "== T5c: stop via SIGINT signal to PID 1 (daemon ContainerKill branch) =="
+docker rm -f prog-t5c >/dev/null 2>&1
+docker run -d --name prog-t5c -e SERVER_PORT=25573 -e STARTER_TEMPLATE=nodejs \
+    -e AUTO_UPDATE_EGG=0 "$IMG" >/dev/null
+sig_booted=0
+for i in $(seq 1 60); do
+    docker logs prog-t5c 2>&1 | grep -q "listening on port 25573" && { sig_booted=1; break; }
+    sleep 1
+done
+[ "$sig_booted" = "1" ] && ok "app booted before signal stop" || bad "app never booted before signal stop"
+docker kill --signal=SIGINT prog-t5c >/dev/null 2>&1
+sig_stopped=0
+for i in $(seq 1 30); do
+    state=$(docker inspect -f '{{.State.Running}}' prog-t5c 2>/dev/null)
+    [ "$state" = "false" ] && { sig_stopped=1; break; }
+    sleep 1
+done
+[ "$sig_stopped" = "1" ] && ok "SIGINT to PID 1 stopped the container" || bad "container survived SIGINT"
+[ "$(docker inspect -f '{{.State.ExitCode}}' prog-t5c 2>/dev/null)" = "0" ] \
+    && ok "SIGINT stop exit code 0" || bad "SIGINT stop exit code not 0"
+docker logs prog-t5c 2>&1 | grep -q "Received shutdown signal" && ok "trap logged SIGINT shutdown" || bad "no shutdown log on SIGINT"
+docker logs prog-t5c 2>&1 | grep -q "stopped cleanly" && ok "clean confirmation after SIGINT" || bad "no clean-stop confirmation"
+docker rm -f prog-t5c >/dev/null 2>&1
 
 # --------------------------------------------------- T6: MULTI-PROCESS (pm2-ish)
 echo "== T6: multi-process container (detached daemon + workers) =="
@@ -209,6 +248,23 @@ docker kill prog-mp >/dev/null 2>&1
 kcode=$(docker inspect -f '{{.State.ExitCode}}' prog-mp 2>/dev/null)
 [ "$kcode" = "137" ] && ok "multi-port container kill -> 137" || bad "multi-port kill code ${kcode}"
 docker rm -f prog-mp >/dev/null 2>&1
+
+# ------------------------------------------------- T12: FEATHER PANEL DETECTION
+echo "== T12: Feather Panel detection (P_SERVER_UUID + P_SERVER_UUID_SHORT) =="
+docker rm -f prog-t12 >/dev/null 2>&1
+docker run -d --name prog-t12 \
+    -e P_SERVER_UUID=530617d9-f5fa-411b-9fea-d2cf3c6286d4 -e P_SERVER_UUID_SHORT=530617d9 \
+    -e SERVER_PORT=25574 -e STARTER_TEMPLATE=nodejs -e AUTO_UPDATE_EGG=0 "$IMG" >/dev/null
+fw_seen=0
+card_seen=0
+for i in $(seq 1 90); do
+    docker logs prog-t12 2>&1 | grep -q "panel=Feather Panel" && fw_seen=1
+    docker logs prog-t12 2>&1 | grep "Host Platform" | grep -q "Feather Panel" && { card_seen=1; break; }
+    sleep 1
+done
+[ "$fw_seen" = "1" ] && ok "Feather Panel detected via P_SERVER_UUID_SHORT" || { bad "panel detection (Feather)"; docker logs prog-t12 2>&1 | grep -iE "panel=|Host Platform" | head -3; }
+[ "$card_seen" = "1" ] && ok "boot card shows Host Platform: Feather Panel" || { bad "card Host Platform"; docker logs prog-t12 2>&1 | grep -a "Host Platform" | head -2; }
+docker rm -f prog-t12 >/dev/null 2>&1
 
 echo
 echo "=========================================="
