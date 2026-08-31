@@ -414,11 +414,20 @@ if [ "${EGG_UPDATE_CHECKED:-0}" != "1" ]; then
     if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && command -v curl >/dev/null 2>&1; then
         if [[ "${EGG_UPDATE_URL}" =~ ^https:// ]]; then
             _self="$(readlink -f "$0" 2>/dev/null || echo "$0")"
-            _egg_target="${WORK_DIR}/.potenfyr/run.sh"
-            _egg_stage="${WORK_DIR}/.potenfyr/run.sh.update"
-            _egg_hashfile="${WORK_DIR}/.potenfyr/egg-hash"
-            _egg_lhash="${WORK_DIR}/.potenfyr/launcher-hash"
-            mkdir -p "${WORK_DIR}/.potenfyr" 2>/dev/null || true
+            # Stage updates in /opt/potenfyr - container-local, user-writable,
+            # and outside the user's data volume so launcher internals never
+            # appear under /home/container. Older images without the dir fall
+            # back to the workspace path (entrypoint migrates it out on boot).
+            _egg_state="/opt/potenfyr"
+            mkdir -p "${_egg_state}" 2>/dev/null || true
+            if ! [ -w "${_egg_state}" ]; then
+                _egg_state="${WORK_DIR}/.potenfyr"
+                mkdir -p "${_egg_state}" 2>/dev/null || true
+            fi
+            _egg_target="${_egg_state}/run.sh"
+            _egg_stage="${_egg_state}/run.sh.update"
+            _egg_hashfile="${_egg_state}/egg-hash"
+            _egg_lhash="${_egg_state}/launcher-hash"
             _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
             if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
                 _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
@@ -463,7 +472,7 @@ if [ "${EGG_UPDATE_CHECKED:-0}" != "1" ]; then
                 warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
             fi
             rm -f "${_egg_tmp}" 2>/dev/null || true
-            unset _egg_tmp _egg_src _egg_hash_new _egg_hash_old _egg_target _egg_stage _egg_hashfile _egg_lhash _base _self
+            unset _egg_tmp _egg_src _egg_hash_new _egg_hash_old _egg_target _egg_stage _egg_hashfile _egg_lhash _egg_state _base _self
         else
             warn "EGG_UPDATE_URL must be an https:// URL - self-update disabled for safety."
         fi

@@ -394,17 +394,26 @@ fi
 if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
     if [ -f /usr/local/bin/run.sh ] && command -v curl >/dev/null 2>&1; then
         if [[ "${EGG_UPDATE_URL}" =~ ^https:// ]]; then
-            # Non-root panels (uid 988 etc.) cannot write /usr/local/bin; fall back
-            # to a user-writable override location that the launcher resolution
-            # below prefers over the image copy.
+            # Non-root panels (uid 988 etc.) cannot write /usr/local/bin; the
+            # override lives in /opt/potenfyr - container-local and user-
+            # writable, but OUTSIDE the user's data volume so launcher
+            # internals are never exposed under /home/container. A workspace
+            # path is used only if /opt/potenfyr is not writable (very old
+            # images); such copies are migrated back out of the volume by the
+            # launcher-resolution step below.
             _egg_target="/usr/local/bin/run.sh"
             _egg_hashfile="/etc/potenfyr-egg-hash"
             _egg_lhash=""
             if ! [ -w "$(dirname "${_egg_target}")" ] || [ "$(id -u 2>/dev/null || echo 1)" != "0" ]; then
-                _egg_target="${ACTIVE_WORK_DIR}/.potenfyr/run.sh"
-                _egg_hashfile="${ACTIVE_WORK_DIR}/.potenfyr/egg-hash"
-                _egg_lhash="${ACTIVE_WORK_DIR}/.potenfyr/launcher-hash"
-                mkdir -p "${ACTIVE_WORK_DIR}/.potenfyr" 2>/dev/null || true
+                _egg_state="/opt/potenfyr"
+                mkdir -p "${_egg_state}" 2>/dev/null || true
+                if ! [ -w "${_egg_state}" ]; then
+                    _egg_state="${ACTIVE_WORK_DIR}/.potenfyr"
+                fi
+                mkdir -p "${_egg_state}" 2>/dev/null || true
+                _egg_target="${_egg_state}/run.sh"
+                _egg_hashfile="${_egg_state}/egg-hash"
+                _egg_lhash="${_egg_state}/launcher-hash"
             fi
             _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
             if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
@@ -453,7 +462,7 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
                 warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
             fi
             rm -f "${_egg_tmp}" 2>/dev/null || true
-            unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_lhash _base _launcher_ok
+            unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_lhash _egg_state _base _launcher_ok
         else
             warn "EGG_UPDATE_URL must be an https:// URL - self-update disabled for safety."
         fi
@@ -735,13 +744,15 @@ fi
 # -----------------------------------------------------------------------------
 # 10. Execute Startup Command & Clean User Workspace
 # -----------------------------------------------------------------------------
-# Clean up any leftover launcher script files so user directory only contains project files
-if [ -f "./run.sh" ] && grep -q "PotenFYR Studios" "./run.sh" 2>/dev/null; then
-    rm -f "./run.sh" 2>/dev/null || true
-fi
-if [ -f "./install-runtime.sh" ] && grep -q "PotenFYR Studios" "./install-runtime.sh" 2>/dev/null; then
-    rm -f "./install-runtime.sh" 2>/dev/null || true
-fi
+# Clean up any leftover launcher script files so the user directory only
+# contains project files. Signature-gated (must contain the studio header),
+# so user files with the same name are never touched.
+for _egg_script in run.sh entrypoint.sh install.sh install-runtime.sh resolve-version.sh; do
+    if [ -f "./${_egg_script}" ] && grep -q "PotenFYR Studios" "./${_egg_script}" 2>/dev/null; then
+        rm -f "./${_egg_script}" 2>/dev/null || true
+    fi
+done
+unset _egg_script
 
 phase "Launching Application"
 RAW_STARTUP="${STARTUP:-bash /usr/local/bin/run.sh}"
@@ -756,11 +767,34 @@ MODIFIED_STARTUP=$(echo -e "${RAW_STARTUP}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 
 LAUNCHER_SCRIPT="/usr/local/bin/run.sh"
 [ ! -f "${LAUNCHER_SCRIPT}" ] && [ -f "/run.sh" ] && LAUNCHER_SCRIPT="/run.sh"
+
+# Launcher state lives OUTSIDE the user's data volume: /opt/potenfyr is
+# container-local and user-writable, but never visible under /home/container
+# (panel file manager or SFTP). Any legacy workspace copy (.potenfyr/) from
+# older egg versions is migrated here when it passes integrity, or discarded
+# when it does not - the user volume must never hold executable egg code.
+_POT_DIR="/opt/potenfyr"
+_LEGACY_POT="${ACTIVE_WORK_DIR}/.potenfyr"
+mkdir -p "${_POT_DIR}" 2>/dev/null || true
+if [ -d "${_LEGACY_POT}" ]; then
+    if [ -f "${_LEGACY_POT}/run.sh" ]; then
+        _lh="$(cat "${_LEGACY_POT}/launcher-hash" 2>/dev/null || true)"
+        if [ -n "${_lh}" ] && [ "$(sha256sum "${_LEGACY_POT}/run.sh" 2>/dev/null | cut -d' ' -f1)" = "${_lh}" ]; then
+            cp "${_LEGACY_POT}/run.sh" "${_POT_DIR}/run.sh" 2>/dev/null || true
+            printf '%s\n' "${_lh}" > "${_POT_DIR}/launcher-hash" 2>/dev/null || true
+            ok "Launcher override moved out of the user workspace (now /opt/potenfyr)."
+        else
+            warn "Old .potenfyr launcher override failed integrity check - discarded."
+        fi
+    fi
+    rm -rf "${_LEGACY_POT}" 2>/dev/null || true
+fi
+unset _LEGACY_POT
+
 # Promote a staged launcher written by the egg self-update engine (run.sh never
 # overwrites its own running file) before resolving which launcher to execute.
 # The staged copy is only promoted if its recorded sha256 matches, so a user
 # cannot plant an arbitrary script and have it executed as PID 1.
-_POT_DIR="${ACTIVE_WORK_DIR}/.potenfyr"
 if [ -f "${_POT_DIR}/run.sh.update" ] && [ -f "${_POT_DIR}/launcher-hash" ]; then
     _staged_hash="$(sha256sum "${_POT_DIR}/run.sh.update" 2>/dev/null | cut -d' ' -f1)"
     if [ -n "${_staged_hash}" ] && [ "${_staged_hash}" = "$(cat "${_POT_DIR}/launcher-hash" 2>/dev/null)" ]; then

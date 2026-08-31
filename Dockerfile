@@ -205,10 +205,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 14. Multi-panel working directories and non-root container user
+#     /opt/potenfyr: egg-owned state dir (self-updated launcher + hashes).
+#     It is writable by the container user but lives OUTSIDE the user's data
+#     volume, so launcher internals are never exposed in /home/container.
 RUN groupadd -g 988 container 2>/dev/null || true \
     && useradd -d /home/container -m -u 988 -g 988 container 2>/dev/null || true \
-    && mkdir -p /opt/runtimes /home/container /server /app /mnt/server \
-    && chmod -R 777 /opt/runtimes /home/container /server /app /mnt/server /tmp
+    && mkdir -p /opt/runtimes /opt/potenfyr /home/container /server /app /mnt/server \
+    && chmod -R 777 /opt/runtimes /home/container /server /app /mnt/server /tmp \
+    && chown -R 988:988 /opt/potenfyr
 
 # 15. Runtime orchestration & installation scripts
 COPY entrypoint.sh /entrypoint.sh
