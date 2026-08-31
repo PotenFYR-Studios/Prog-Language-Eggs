@@ -279,6 +279,31 @@ ci_fail=$(docker run --rm -v "$VOL:/home/container" \
 echo "$ci_fail" | grep -q "CUSTOM_INSTALL_COMMAND failed" && ok "custom install failure surfaced as warning" || bad "custom install failure hidden"
 echo "$ci_fail" | grep -q "Dependencies ready" && bad "false 'Dependencies ready' after failure" || ok "no false success after install failure"
 
+# ----------------------------------------------- T14: LAUNCHER FILE ISOLATION
+echo "== T14: egg scripts isolated out of the user workspace =="
+# Plant a legacy workspace override (correctly hash-signed) + a stray egg
+# script with the studio signature, like old egg versions left behind.
+docker run --rm -v "$VOL:/home/container" "$IMG" bash -c '
+    mkdir -p /home/container/.potenfyr
+    cp /usr/local/bin/run.sh /home/container/.potenfyr/run.sh
+    sha256sum /home/container/.potenfyr/run.sh | cut -d" " -f1 > /home/container/.potenfyr/launcher-hash
+    echo "# PotenFYR Studios stray" > /home/container/install-runtime.sh
+' >/dev/null 2>&1
+iso_out=$(docker run --rm -v "$VOL:/home/container" \
+    -e LANGUAGE=nodejs -e AUTO_UPDATE_EGG=0 -e AUTO_INSTALL_DEPS=0 -e SERVER_PORT=25584 "$IMG" \
+    bash -c 'timeout 60 bash /entrypoint.sh >/dev/null 2>&1
+        echo "potenfyr-dir: $([ -d /home/container/.potenfyr ] && echo present || echo gone)"
+        echo "stray-script: $([ -f /home/container/install-runtime.sh ] && echo present || echo gone)"
+        echo "opt-launcher: $([ -f /opt/potenfyr/run.sh ] && echo present || echo missing)"
+        for s in run.sh entrypoint.sh install.sh install-runtime.sh resolve-version.sh; do
+            [ -f "/home/container/$s" ] && echo "stray: $s"
+        done
+        echo done' 2>&1)
+echo "$iso_out" | grep -aq "potenfyr-dir: gone" && ok ".potenfyr migrated out of user workspace" || bad ".potenfyr still in workspace"
+echo "$iso_out" | grep -aq "stray-script: gone" && ok "stray egg script removed from workspace" || bad "stray egg script kept"
+echo "$iso_out" | grep -aq "opt-launcher: present" && ok "launcher override migrated to /opt/potenfyr" || bad "migration to /opt/potenfyr failed"
+echo "$iso_out" | grep -aq "^stray:" && bad "unexpected egg scripts in workspace" || ok "no egg scripts in workspace root"
+
 echo
 echo "=========================================="
 echo "  RESULTS: $PASS passed, $FAIL failed"

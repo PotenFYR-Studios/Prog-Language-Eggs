@@ -357,9 +357,9 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | Secret redaction | Credentials embedded in URLs and tokens never reach console or logs |
 | Root guard | Warns when the container runs as uid 0 (panels should use the non-root image user) |
 | Least privilege | All installs happen inside the workspace as the container user; no host access |
-| Launcher integrity | The user-writable `.potenfyr/run.sh` override only executes when its sha256 matches the hash the self-update engine recorded; tampered copies are discarded |
+| Launcher integrity | Self-updated launchers live in `/opt/potenfyr` (container-local, user-writable but outside your data volume, never visible under `/home/container`) and only execute when their sha256 matches the hash the self-update engine recorded; tampered copies are discarded, and legacy workspace copies (`.potenfyr/`) are migrated out or discarded on boot |
 | Update channel hardening | `EGG_UPDATE_URL` is enforced https-only; update failures are always non-fatal |
-| File denylist | The egg denylists `.potenfyr/**` and launcher scripts from panel file-manager edits/plants |
+| File denylist | The egg denylists `.potenfyr/**` and launcher scripts from panel file-manager edits/plants; the boot also sweeps signature-matching egg scripts (`run.sh`, `entrypoint.sh`, `install.sh`, `install-runtime.sh`, `resolve-version.sh`) out of the workspace root |
 | Process hygiene | `umask 022` (no world-writable files), core dumps disabled, orphaned processes swept on stop and start |
 | Audit trail | Console mirror + error journal + per-installer logs + resolver logs give full replay of what ran and why |
 
@@ -484,7 +484,7 @@ Moving between eggs (ours or third-party) is designed to be boring:
 - **Behavior tests gate publishing.** Every push/PR first boots the launcher in a docker mirror and drives
   the full panel lifecycle (start, stop, kill, restart, console-text stop, Feather-style TTY stop, SIGINT
   stop, crash diagnostics, multi-process sweep, multi-port apps, startup-value pinning, custom install
-  command, panel detection) - `tests/panel-test.sh`, 56 assertions.
+  command, panel detection) - `tests/panel-test.sh`, 60 assertions.
 - ONE image, ONE job. Pushes to `main` build `linux/amd64` + `linux/arm64` + `linux/arm/v7`
   **with `no-cache: true`** - every tag is a clean rebuild of the exact committed sources.
 - Tags published: `latest` (moving) and `<commit-sha>` (immutable, for rollbacks/digest pinning).
@@ -508,7 +508,7 @@ ProG-Language-Eggs/
 |-- install-runtime.sh                On-demand toolchain installer (checksummed, arch-aware)
 |-- resolve-version.sh                Version validator + live-feed keyword resolver
 |-- install.sh                        Cross-panel workspace installer script
-|-- tests/                            Docker behavior suite: Dockerfile.test + panel-test.sh (56 assertions) + pty stop driver
+|-- tests/                            Docker behavior suite: Dockerfile.test + panel-test.sh (60 assertions) + pty stop driver
 `-- .github/workflows/docker-image.yml  Behavior tests + clean-build publish pipeline
 ```
 
