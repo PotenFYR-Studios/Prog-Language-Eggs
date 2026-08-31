@@ -1,4 +1,4 @@
-﻿# Prog-Language-Eggs
+# Prog-Language-Eggs
 
 > **One egg. One image. Every language.** A production-grade hosting platform that installs, updates,
 > compiles and runs **50+ programming languages** inside your container - across **Pterodactyl**, **Pelican**,
@@ -6,12 +6,12 @@
 > **Railway**, **Render**, and plain **Docker / Podman**.
 
 ```text
- â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—
-â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â•â•â•  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•
-â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ–ˆâ•—
-â–ˆâ–ˆâ•”â•â•â•â• â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘
-â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
-â•šâ•â•     â•šâ•â•  â•šâ•â• â•šâ•â•â•â•â•â•  â•šâ•â•â•â•â•â•  â•šâ•â•â•â•â•â•â•â•šâ•â•  â•šâ•â•â•šâ•â•  â•šâ•â•â•â• â•šâ•â•â•â•â•â•
+ ██████╗██████╗  ██████╗  ██████╗  ██╗      █████╗ ███╗   ██╗ ██████╗
+██╔══██╗██╔══██╗██╔═══██╗██╔════╝  ██║     ██╔══██╗████╗  ██║██╔════╝
+██████╔╝██████╔╝██║   ██║██║  ███╗ ██║     ███████║██╔██╗ ██║██║  ███╗
+██╔═══╝ ██╔══██╗██║   ██║██║   ██║ ██║     ██╔══██║██║╚██╗██║██║   ██║
+██║     ██║  ██║╚██████╔╝╚██████╔╝  ███████╗██║  ██║██║ ╚████║╚██████╔╝
+╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝
 ```
 
 [![CI Build](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions/workflows/docker-image.yml/badge.svg)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)
@@ -228,7 +228,7 @@ NODE_GYP_SUPPORT=1            # native addon toolchain for node modules
 Results are cached under `.cache/version-resolver/` (6h TTL, `RESOLVER_CACHE_TTL` to tune) so warm boots
 skip network round-trips.
 
-### Startup value pinning (auto â†’ exact)
+### Startup value pinning (auto → exact)
 
 Placeholders (`auto`, `latest`, `default`, empty) are resolved **once** at boot and the concrete result is
 pinned into `.multi-prog.conf` - the detected language, the effective engine, the entry point and the exact
@@ -336,7 +336,7 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 - **Boot card** - after detection the console prints a 68-col card with the values actually in use: target
   language, exact runtime version, effective engine, entry point, panel, server UUID, memory tuning, port,
   process user, architecture, working dir (wraps safely on narrow consoles).
-- **Agent console theme** - glyph-prefixed phase headers (`â”€â”€ Dependency Sync â”€â”€`) and status lines.
+- **Agent console theme** - glyph-prefixed phase headers (`── Dependency Sync ──`) and status lines.
   `CLI_THEME=prog` (default) or `classic` for the legacy PotenFYR look.
 - **Gradient banner** - block-font ASCII art with a diagonal 256-color gradient sweep, different preset
   every boot: `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum` (set one with `CLI_BANNER_GRADIENT`,
@@ -398,7 +398,7 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | `PACKAGE_MANAGER` | `auto` | Yes | Dependency manager override |
 | `RUNTIME_VERSION` | `latest` | Yes | Primary runtime version or channel keyword; `latest` pins to the exact resolved version |
 | `CUSTOM_COMMAND` | empty | Yes | Replace launcher command entirely |
-| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Replace the automatic dependency install command entirely (runs in the workspace; output to `.logs/dependency-install.log`) |
+| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Replace the automatic dependency install command entirely (overrides package-manager detection; output to `.logs/dependency-install.log`) |
 | `BUILD_COMMAND` | empty | Yes | Optional build step before run |
 | `EXTRA_ARGS` | empty | Yes | Extra CLI args passed to your app |
 
@@ -412,7 +412,7 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | `NODE_GYP_SUPPORT` | `1` | Yes | Python/build tools for native node addons |
 | `SKIP_PYTHON` | `0` | Yes | Prevent the Python companion entirely |
 | `AUTO_INSTALL_DEPS` | `1` | Yes | Auto dependency installation on boot |
-| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Replace the automatic dependency install command entirely (overrides auto-detection; output to `.logs/dependency-install.log`) |
+| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Full control over the dependency install step (see Core selection) |
 
 ### Console & theming
 | Variable | Default | Editable | Description |
@@ -420,8 +420,6 @@ Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagn
 | `CLI_THEME` | `prog` | Yes | Console theme: `prog` (agent theme) or `classic` (legacy PotenFYR) |
 | `CLI_BANNER_GRADIENT` | `auto` | Yes | Banner gradient: `auto` (random each boot), `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum`, `none` |
 | `PANEL_STOP_WATCHER` | `auto` | Yes | Watch console input for the panel stop command (Wings/Feather-style daemons); `0` = off, `1` = force on |
-| `RESOLVER_CACHE_TTL` | `21600` | Yes | Version cache seconds (0 disables) |
-| `AUTO_UPDATE_EGG` | `1` | Yes | Self-update the launcher from `EGG_UPDATE_URL` on boot |
 
 ### Process behaviour
 | Variable | Default | Editable | Description |
@@ -482,9 +480,8 @@ Moving between eggs (ours or third-party) is designed to be boring:
 ## Image Publishing Policy (CI)
 
 - **Behavior tests gate publishing.** Every push/PR first boots the launcher in a docker mirror and drives
-  the full panel lifecycle (start, stop, kill, restart, console-text stop, Feather-style TTY stop, SIGINT
-  stop, crash diagnostics, multi-process sweep, multi-port apps, startup-value pinning, custom install
-  command, panel detection) - `tests/panel-test.sh`, 60 assertions.
+  the full panel lifecycle (start, stop, kill, restart, console-text stop, crash diagnostics, multi-process
+  sweep, multi-port apps, startup-value pinning, custom install command, panel detection) - `tests/panel-test.sh`, 60 assertions.
 - ONE image, ONE job. Pushes to `main` build `linux/amd64` + `linux/arm64` + `linux/arm/v7`
   **with `no-cache: true`** - every tag is a clean rebuild of the exact committed sources.
 - Tags published: `latest` (moving) and `<commit-sha>` (immutable, for rollbacks/digest pinning).
@@ -571,7 +568,6 @@ after a <code>DEBUG=1</code> restart.
 | Version request rejected / wrong version picked | `.logs/version-resolver.log` |
 | Runtime download/extraction failure | Installer output (retry counts, sizes, checksum verdicts included) |
 | Dependency install failed | `.logs/dependency-install.log` (verbatim package manager output) |
-| Broken `postinstall` crashed npm install | Launcher auto-retries with `--ignore-scripts`; check `.logs/dependency-install.log` for the original error |
 | Wrong panel detected | Boot header `panel=` + boot card `Host Platform` row; open an issue with `env \| grep -iE 'pterodactyl\|pelican\|puffer\|feather'` |
 | Environment not reused across restarts | Inspect `.environments/active` marker format `lang\|series\|version` |
 | Procfile process keeps dying | `.logs/processes/<name>.log` + restart counter messages |
