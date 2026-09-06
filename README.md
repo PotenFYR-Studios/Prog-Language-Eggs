@@ -518,12 +518,24 @@ ProG-Language-Eggs/
 <details>
 <summary><b>Files I uploaded via the file manager disappeared after a reinstall</b></summary>
 When <code>GIT_REPO</code> is set, every boot syncs the workspace to your git branch: a fresh install
-clones the repo, existing clones run <code>git fetch</code> + <code>git reset --hard origin/&lt;branch&gt;</code>.
+clones the repo, existing clones run <code>git fetch</code> + <code>git reset --hard FETCH_HEAD</code>.
 Only what is <b>committed and pushed</b> survives a server reinstall (the volume is wiped and re-cloned).
 Files uploaded via the file manager but never committed/pushed to <code>GIT_REPO</code> are untracked:
 they survive normal restarts, but a reinstall restores only the repository content. Commit your files to
 the repo (or upload them again after reinstalling).
 </details>
+
+<details>
+<summary><b>My server doesn't pick up new commits I pushed to GitHub</b></summary>
+Every boot with <code>GIT_REPO</code> set re-points <code>origin</code> at the currently configured
+repo/token, fetches <code>GIT_BRANCH</code> and resets the workspace to the fetched commit — the console
+prints the old &rarr; new commit hash, subject and date so you can verify it. If a sync fails (bad token,
+wrong branch name, no network) the launcher now says so loudly in the console instead of failing silently,
+and keeps your installed code running. Before any overwrite the current codebase is archived to
+<code>.logs/code-archives/</code> (five newest kept) so a bad sync can be rolled back. A workspace that
+already holds files also gets the repository fetched <i>over</i> it — nothing is wiped.
+</details>
+
 
 <details>
 <summary><b>npm install fails with a postinstall error or EBADENGINE warnings</b></summary>

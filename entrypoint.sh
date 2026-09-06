@@ -49,7 +49,7 @@ fi
 # at .logs/launcher-errors.log so failures can be diagnosed after the fact even
 # when panel scrollback is gone. Both the entrypoint and the launcher append
 # here; every styled error line is journalled automatically as well.
-phase() { printf "\n%b── %s %b\n" "${C_DIM}" "$*" "────────────────────────────────────────────────${C_RESET}"; }
+phase() { printf "\n%b── %s %b\n" "${C_DIM}" "$*" "────────────────────────${C_RESET}"; }
 
 ERROR_LOG=""
 _egg_error_log() {
@@ -558,7 +558,9 @@ fi
 # Block-font art with a diagonal 256-color gradient sweep. Gradient presets:
 #   citrus (brand) aurora sunset ocean candy spectrum | none = flat lime
 # CLI_BANNER_GRADIENT picks one; "auto" (default) randomizes per boot.
-# Consoles narrower than 74 cols get the compact figlet art, < 62 get text.
+# Width rules: full art needs a real terminal reporting >= 74 cols; panel
+# consoles are pipes (width unknown, ~62-64 visible cols) and always get the
+# compact 60-col figlet art so the banner never wraps.
 print_banner() {
     printf "\n"
     if [ "${CLI_THEME}" = "classic" ]; then
@@ -623,15 +625,24 @@ print_banner() {
 '██║     ██║  ██║╚██████╔╝╚██████╔╝ ███████╗██║  ██║██║ ╚████║╚██████╔╝'
 '╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ '
         )
-        local _w
-        _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"
-        if [ "${_w:-80}" -ge 74 ] 2>/dev/null; then
+        # Panel daemons attach the console as a PIPE, not a TTY: COLUMNS is
+        # unset and tput cannot answer, and panel web consoles are only
+        # ~62-64 cols wide. An unknown width must therefore default to the
+        # compact art - assuming 80 here is what wrapped and garbled the
+        # banner on Feather Panel. Full art only on a real terminal that
+        # verifiably reports >= 74 cols.
+        local _w=""
+        if [ -t 1 ]; then
+            _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 0)}"
+        fi
+        case "${_w}" in ""|*[!0-9]*) _w=0 ;; esac
+        if [ "${_w}" -ge 74 ]; then
             local r
             for r in 0 1 2 3 4 5; do
                 _banner_grad_row "${_art[$r]}" "$r"
             done
         else
-            # Compact 58-col figlet fallback for narrow consoles.
+            # Compact 60-col figlet fallback for narrow/unknown consoles.
             printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "  ____  ____   ___    ____ " "   _         _     _   _   ____ "
             printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|  _ \\|  _ \\  / _ \\  / ___|" "  | |       / \\   | \\ | | / ___|"
             printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "| |_) || |_) || | | || |  _ " "  | |      / _ \\  |  \\| || |  _ "
@@ -639,19 +650,33 @@ print_banner() {
             printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|_|    |_|     \\___/  \\____|" "  |_____|/_/   \\_\\|_| \\_| \\____|"
         fi
     else
-        printf "${C_LIME}${C_BOLD}  ██████╗ ██████╗  ██████╗ ██████╗   ██╗      █████╗ ███╗   ██╗ ██████╗ ${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}  ██╔══██╗██╔══██╗██╔═══██╗██╔════╝   ██║     ██╔══██╗████╗  ██║██╔════╝ ${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}  ██████╔╝██████╔╝██║   ██║██║  ███╗  ██║     ███████║██╔██╗ ██║██║  ███╗${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}  ██╔═══╝ ██╔══██║██║   ██║██║   ██║  ██║     ██╔══██║██║╚██╗██║██║   ██║${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}  ██║     ██║  ██║╚██████╔╝╚██████╔╝  ███████╗██║  ██║██║ ╚████║╚██████╔╝${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}  ╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝   ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ${C_RESET}\n"
+        # Flat (CLI_BANNER_GRADIENT=none) - same width rules as above.
+        local _w=""
+        if [ -t 1 ]; then
+            _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 0)}"
+        fi
+        case "${_w}" in ""|*[!0-9]*) _w=0 ;; esac
+        if [ "${_w}" -ge 74 ]; then
+            printf "${C_LIME}${C_BOLD}  ██████╗ ██████╗  ██████╗ ██████╗   ██╗      █████╗ ███╗   ██╗ ██████╗ ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}  ██╔══██╗██╔══██╗██╔═══██╗██╔════╝   ██║     ██╔══██╗████╗  ██║██╔════╝ ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}  ██████╔╝██████╔╝██║   ██║██║  ███╗  ██║     ███████║██╔██╗ ██║██║  ███╗${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}  ██╔═══╝ ██╔══██║██║   ██║██║   ██║  ██║     ██╔══██║██║╚██╗██║██║   ██║${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}  ██║     ██║  ██║╚██████╔╝╚██████╔╝  ███████╗██║  ██║██║ ╚████║╚██████╔╝${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}  ╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝   ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ${C_RESET}\n"
+        else
+            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "  ____  ____   ___    ____    _         _     _   _   ____ "
+            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "|  _ \\|  _ \\  / _ \\  / ___|  | |       / \\   | \\ | | / ___|"
+            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "| |_) || |_) || | | || |  _   | |      / _ \\  |  \\| || |  _ "
+            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "|  __/ |  __/ | |_| || |_| |  | |___  / ___ \\ | |\\  || |_| |"
+            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "|_|    |_|     \\___/  \\____|  |_____|/_/   \\_\\|_| \\_| \\____|"
+        fi
     fi
 
     printf "${C_LIME}${C_BOLD}  </> » Programming Languages · Multi-Language Agent Runtime${C_RESET}\n"
     if [ "${_gname}" = "none" ]; then
         printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
     else
-        printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in · gradient: %s${C_RESET}\n\n" "${_gname}"
+        printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in [%s]${C_RESET}\n\n" "${_gname}"
     fi
 }
 
