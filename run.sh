@@ -35,7 +35,7 @@ C_LIME=$'\033[92m'
 # at .logs/launcher-errors.log - shared with the entrypoint, survives panel
 # scrollback loss. Call sites: git failures, runtime installs, dependency
 # installs, health checks, crashes.
-phase() { printf "\n%b── %s %b\n" "${C_DIM}" "$*" "────────────────────────────────────────────────${C_RESET}"; }
+phase() { printf "\n%b── %s %b\n" "${C_DIM}" "$*" "────────────────────────${C_RESET}"; }
 
 ERROR_LOG=""
 _egg_error_log() {
@@ -334,6 +334,137 @@ valid_git_url() {
     [[ "$u" =~ $re_ssh ]]
 }
 
+# -----------------------------------------------------------------------------
+# sync_git_repo: converge the workspace onto the latest commit of GIT_BRANCH.
+#   * Inputs are trimmed - panel startup forms often add stray spaces/newlines
+#     to GIT_REPO / GIT_AUTH_TOKEN / GIT_BRANCH, which silently broke clones.
+#   * Fetch/reset errors are shown (token-redacted) instead of being swallowed.
+#   * reset --hard FETCH_HEAD (not origin/<branch>): shallow single-branch
+#     clones and branch switches leave the origin/<branch> ref stale/missing,
+#     which permanently pinned servers to the first cloned commit.
+#   * origin is re-pointed at the CURRENT GIT_REPO/token every boot so repo or
+#     credential edits in the Startup tab take effect on the next restart.
+#   * Before any overwrite the existing codebase is archived to
+#     .logs/code-archives/ (5 newest kept) so a bad sync can be rolled back.
+#   * A workspace that already holds files (no .git) gets the repository
+#     fetched OVER it instead of failing the clone ("directory not empty").
+# -----------------------------------------------------------------------------
+_git_ws_has_files() {
+    find . -mindepth 1 -maxdepth 1 \
+        -not -name '.git' -not -name '.logs' -not -name '.potenfyr' \
+        -not -name '.multi-prog.conf' -not -name '.runtimes' \
+        -not -name '.npm' -not -name '.cache' -not -name '.environments' \
+        2>/dev/null | grep -q .
+}
+
+_git_archive_workspace() {
+    # Safety-net snapshot; never fatal (a failed backup must not block the boot).
+    local arch_dir="${WORK_DIR}/.logs/code-archives"
+    local stamp arch _old
+    mkdir -p "${arch_dir}" 2>/dev/null || return 0
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    arch="${arch_dir}/codebase-${stamp}.tar.gz"
+    tar -czf "${arch}" \
+        --exclude='./.git' --exclude='./.logs' --exclude='./.runtimes' \
+        --exclude='./.npm' --exclude='./.cache' --exclude='./.environments' \
+        --exclude='./.potenfyr' --exclude='./.multi-prog.conf' \
+        --exclude='./node_modules' \
+        -C "${WORK_DIR}" . 2>/dev/null || { rm -f "${arch}"; return 0; }
+    # Keep only the 5 newest archives.
+    ls -1t "${arch_dir}"/codebase-*.tar.gz 2>/dev/null | tail -n +6 \
+        | while IFS= read -r _old; do rm -f "${_old}" 2>/dev/null || true; done
+    info "Codebase archived before git sync: .logs/code-archives/$(basename "${arch}")"
+}
+
+_git_redact_err() {
+    # git error text can embed the credentialed URL; redact before printing.
+    redact_url "$(tr '\n' ' ' < "$1" 2>/dev/null | cut -c1-300)"
+}
+
+sync_git_repo() {
+    GIT_REPO="$(printf '%s' "${GIT_REPO:-}" | tr -d ' \t\r\n')"
+    GIT_BRANCH="$(printf '%s' "${GIT_BRANCH:-main}" | tr -d ' \t\r\n')"
+    [ -n "${GIT_BRANCH}" ] || GIT_BRANCH="main"
+    GIT_AUTH_TOKEN="$(printf '%s' "${GIT_AUTH_TOKEN:-}" | tr -d ' \t\r\n')"
+    # Never let git block the boot on an interactive credential prompt.
+    export GIT_TERMINAL_PROMPT=0
+    export GIT_ASKPASS=/bin/true
+
+    local _err _old_head _new_head _new_date _new_subj
+    _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
+
+    AUTH_REPO_URL="${GIT_REPO}"
+    if [ -n "${GIT_AUTH_TOKEN}" ] && [[ "${GIT_REPO}" =~ ^https:// ]]; then
+        AUTH_REPO_URL="https://${GIT_AUTH_TOKEN}@${GIT_REPO#https://}"
+    fi
+
+    if [ ! -d ".git" ]; then
+        if _git_ws_has_files; then
+            _git_archive_workspace
+            log "Workspace has existing files - fetching '${GIT_BRANCH}' over them (no wipe)..."
+            git init -q . 2>/dev/null || true
+            git remote remove origin 2>/dev/null || true
+            if git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" \
+                    && git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+                if git reset --hard FETCH_HEAD 2>"${_err}"; then
+                    _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+                    _new_subj="$(git log -1 --format=%s 2>/dev/null || true)"
+                    ok "Repository fetched over existing files (commit ${_new_head}: ${_new_subj:-n/a})"
+                else
+                    warn "Could not apply fetched commits: $(_git_redact_err "${_err}")"
+                    _egg_error_log "launcher" "git reset failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH})"
+                fi
+            else
+                warn "Git fetch failed - your files were kept unchanged: $(_git_redact_err "${_err}")"
+                _egg_error_log "launcher" "git fetch failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
+            fi
+        else
+            log "Cloning repository: $(redact_url "${GIT_REPO}") (branch: ${GIT_BRANCH})..."
+            if git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+                ok "Repository successfully cloned (commit $(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
+            else
+                warn "Git clone of branch '${GIT_BRANCH}' failed: $(_git_redact_err "${_err}")"
+                _egg_error_log "launcher" "git clone failed on branch ${GIT_BRANCH} (repo: $(redact_url "${GIT_REPO}")) - check URL, branch name and credentials"
+                warn "Retrying with the repository's default branch..."
+                if git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+                    ok "Repository cloned (default branch)"
+                else
+                    warn "Could not clone repository. Check network, URL and credentials, then restart."
+                    _egg_error_log "launcher" "git clone failed entirely (repo: $(redact_url "${GIT_REPO}")) - verify URL, credentials (GIT_AUTH_TOKEN) and network egress"
+                fi
+            fi
+        fi
+    else
+        log "Existing Git repository found - checking for new commits..."
+        # Re-point origin at the currently configured repo/token first: either
+        # may have been edited in the Startup tab since the first clone.
+        git remote set-url origin "${AUTH_REPO_URL}" 2>/dev/null \
+            || git remote add origin "${AUTH_REPO_URL}" 2>/dev/null || true
+        _old_head="$(git rev-parse --short HEAD 2>/dev/null || echo 'none')"
+        if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+            _git_archive_workspace
+            if git reset --hard FETCH_HEAD 2>"${_err}"; then
+                _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+                _new_date="$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M %Z' 2>/dev/null || true)"
+                _new_subj="$(git log -1 --format=%s 2>/dev/null || true)"
+                if [ "${_old_head}" != "${_new_head}" ]; then
+                    ok "Git updated: ${_old_head} -> ${_new_head} (branch ${GIT_BRANCH}, commit from ${_new_date:-unknown date})"
+                    info "Latest commit: ${_new_subj:-n/a}"
+                else
+                    ok "Already at latest commit ${_new_head} on '${GIT_BRANCH}' (from ${_new_date:-unknown date})"
+                fi
+            else
+                warn "Could not apply fetched commits - code left unchanged: $(_git_redact_err "${_err}")"
+                _egg_error_log "launcher" "git reset --hard FETCH_HEAD failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - restore from .logs/code-archives/ if needed"
+            fi
+        else
+            warn "Git fetch failed - keeping installed code: $(_git_redact_err "${_err}")"
+            _egg_error_log "launcher" "git fetch failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
+        fi
+    fi
+    rm -f "${_err}" 2>/dev/null || true
+}
+
 # --- Variables with defaults ---
 LANGUAGE="${LANGUAGE:-auto}"
 RUNNER="${RUNNER:-auto}"
@@ -488,32 +619,7 @@ if [ -n "${GIT_REPO}" ]; then
         fail "GIT_REPO is not a valid https/ssh Git URL: $(redact_url "${GIT_REPO}")"
     fi
     log "Checking Git repository integration..."
-    AUTH_REPO_URL="${GIT_REPO}"
-    if [ -n "${GIT_AUTH_TOKEN}" ] && [[ "${GIT_REPO}" =~ ^https:// ]]; then
-        AUTH_REPO_URL="https://${GIT_AUTH_TOKEN}@${GIT_REPO#https://}"
-    fi
-
-    if [ ! -d ".git" ]; then
-        log "Cloning repository: $(redact_url "${GIT_REPO}") (branch: ${GIT_BRANCH})..."
-        if git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . ; then
-            ok "Repository successfully cloned"
-        else
-            warn "Git clone with branch ${GIT_BRANCH} failed. Attempting default clone..."
-            _egg_error_log "launcher" "git clone failed on branch ${GIT_BRANCH} (repo: $(redact_url "${GIT_REPO}")) - check URL, branch name and credentials"
-            git clone --depth 1 "${AUTH_REPO_URL}" . || {
-                warn "Could not clone repository - check network, URL and credentials, then restart."
-                _egg_error_log "launcher" "git clone failed entirely (repo: $(redact_url "${GIT_REPO}")) - verify URL, credentials (GIT_AUTH_TOKEN) and network egress"
-            }
-        fi
-    else
-        log "Existing Git repository found. Pulling latest commits..."
-        git fetch origin "${GIT_BRANCH}" --depth 1 2>/dev/null || true
-        git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git pull || {
-            warn "Could not pull updates from remote"
-            _egg_error_log "launcher" "git pull failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - possible merge conflict or auth issue"
-        }
-        ok "Git repository up to date"
-    fi
+    sync_git_repo
 fi
 
 # -----------------------------------------------------------------------------
@@ -2001,13 +2107,15 @@ _effective_runner() {
 }
 
 print_card_row() {
-    # 68-col card: panel consoles are ~70-80 cols; the old 78-col card wrapped
-    # and rendered doubled/garbled on narrower panel consoles.
-    local label="$1" value="$2" color="$3"
-    if [ "${#value}" -gt 42 ]; then
-        value="${value:0:39}..."
+    # 61-col card (1 leading space + 60 box): panel web consoles are only
+    # ~62-64 cols wide (Feather Panel measured), so the old 68/69-col card
+    # wrapped its right border onto the next line and garbled the whole box.
+    # Values are truncated to the 35-col field so the border always lines up.
+    local label="$1" value="$2" color="$3" max=35
+    if [ "${#value}" -gt "$max" ]; then
+        value="${value:0:$((max-3))}..."
     fi
-    printf " ${C_DIM}│${C_RESET}  ${C_LIME}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${color}%-42s${C_RESET} ${C_DIM}│${C_RESET}\n" "${label}" "${value}"
+    printf " ${C_DIM}│${C_RESET}  ${C_LIME}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${color}%-35s${C_RESET} ${C_DIM}│${C_RESET}\n" "${label}" "${value}"
 }
 
 print_runtime_card() {
@@ -2018,11 +2126,11 @@ print_runtime_card() {
     fi
     local ver_disp="${RUNTIME_VERSION_RESOLVED:-runtime default}"
 
-    printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────┐${C_RESET}\n"
+    printf " ${C_DIM}┌──────────────────────────────────────────────────────────┐${C_RESET}\n"
     print_card_row "Target Language" "${DETECTED_LANG}" "${C_GREEN}"
     print_card_row "Runtime Version" "${ver_disp}" "${C_GREEN}"
     print_card_row "Runner / Engine" "${runner_disp}" "${C_CYAN}"
-    print_card_row "Entry Point"     "${RESOLVED_MAIN} $([ -f "${RESOLVED_MAIN}" ] || echo '(missing - stub created)')" "${C_YELLOW}"
+    print_card_row "Entry Point"     "${RESOLVED_MAIN} $([ -f "${RESOLVED_MAIN}" ] || echo '(stub created)')" "${C_YELLOW}"
     print_card_row "Host Platform"   "${PANEL_TYPE:-unknown}" "${C_BLUE}"
     print_card_row "Server UUID"     "${P_SERVER_UUID:-${SERVER_UUID:-${EMERALD_SRV_UUID:-not-provided}}}" "${C_DIM}"
     print_card_row "Memory Tuning"   "${AUTO_TUNE_INFO:-Default}" "${C_MAGENTA}"
@@ -2031,7 +2139,7 @@ print_runtime_card() {
     print_card_row "Process User"    "$(id -un 2>/dev/null || echo '?') (uid $(id -u 2>/dev/null || echo '?'))" "${C_BLUE}"
     print_card_row "Architecture"    "${ARCH:-$(uname -m 2>/dev/null)} ($(uname -s 2>/dev/null || echo linux))" "${C_CYAN}"
     print_card_row "Working Dir"     "${WORK_DIR}" "${C_DIM}"
-    printf " ${C_DIM}└──────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
+    printf " ${C_DIM}└──────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 }
 
 sync_resolved_startup
@@ -2369,13 +2477,17 @@ print_crash_diagnostics() {
 
     _egg_error_log "launcher" "application process crashed with exit code ${exit_code} (lang=${DETECTED_LANG}, cmd=${RUN_CMD})"
 
-    printf "\n${C_RED}${C_BOLD}┌──────────────────────────────────────────────────────────────────────────┐${C_RESET}\n"
-    printf "${C_RED}${C_BOLD}│ 🚨 PROCESS CRASH & DIAGNOSTIC REPORT                                     │${C_RESET}\n"
-    printf "${C_RED}${C_BOLD}├──────────────────────────────────────────────────────────────────────────┤${C_RESET}\n"
-    
+    # 61-col card, same geometry as the runtime details card (see
+    # print_card_row): panel web consoles are ~62-64 cols, the old 76-col
+    # card wrapped and garbled. Plain ASCII header (emoji are double-width
+    # and shift the right border on most console fonts).
+    printf "\n ${C_RED}${C_BOLD}┌──────────────────────────────────────────────────────────┐${C_RESET}\n"
+    printf " ${C_RED}${C_BOLD}│ PROCESS CRASH & DIAGNOSTIC REPORT                        │${C_RESET}\n"
+    printf " ${C_RED}${C_BOLD}├──────────────────────────────────────────────────────────┤${C_RESET}\n"
+
     # 1. Exit status
-    printf " ${C_DIM}│${C_RESET}  ${C_RED}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_RED}Exit Code %-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Crash Status" "${exit_code}"
-    
+    printf " ${C_DIM}│${C_RESET}  ${C_RED}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_RED}%-35s${C_RESET} ${C_DIM}│${C_RESET}\n" "Crash Status" "Exit Code ${exit_code}"
+
     # 2. Active Runtime
     local runtime_ver="Unknown"
     case "${DETECTED_LANG}" in
@@ -2391,7 +2503,8 @@ print_crash_diagnostics() {
         dotnet)               runtime_ver=$(dotnet --version 2>/dev/null || echo ".NET (not found)") ;;
         *)                    runtime_ver="${DETECTED_LANG}" ;;
     esac
-    printf " ${C_DIM}│${C_RESET}  ${C_CYAN}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_CYAN}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Active Runtime" "${runtime_ver:0:48}"
+    [ "${#runtime_ver}" -gt 35 ] && runtime_ver="${runtime_ver:0:32}..."
+    printf " ${C_DIM}│${C_RESET}  ${C_CYAN}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_CYAN}%-35s${C_RESET} ${C_DIM}│${C_RESET}\n" "Active Runtime" "${runtime_ver}"
 
     # 3. Memory Diagnostics
     local mem_info="N/A"
@@ -2420,21 +2533,21 @@ print_crash_diagnostics() {
             fi
         fi
     fi
-    printf " ${C_DIM}│${C_RESET}  ${C_MAGENTA}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_MAGENTA}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Memory Consumed" "${mem_info}"
+    printf " ${C_DIM}│${C_RESET}  ${C_MAGENTA}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_MAGENTA}%-35s${C_RESET} ${C_DIM}│${C_RESET}\n" "Memory Consumed" "${mem_info}"
 
     # 4. Disk Usage
     local disk_info
     disk_info=$(df -h "${WORK_DIR}" 2>/dev/null | tail -n1 | awk '{print $4 " available (" $5 " used)"}' || echo "N/A")
-    printf " ${C_DIM}│${C_RESET}  ${C_YELLOW}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_YELLOW}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Disk Space" "${disk_info}"
+    printf " ${C_DIM}│${C_RESET}  ${C_YELLOW}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_YELLOW}%-35s${C_RESET} ${C_DIM}│${C_RESET}\n" "Disk Space" "${disk_info:0:35}"
 
     # 5. Suggested actions
-    printf " ${C_DIM}│${C_RESET}  ${C_GREEN}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_WHITE}%-48s${C_RESET} ${C_DIM}│${C_RESET}\n" "Recommendation" "Check syntax, entry point, or missing deps"
-    printf "${C_RED}${C_BOLD}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
+    printf " ${C_DIM}│${C_RESET}  ${C_GREEN}◆${C_RESET} ${C_BOLD}%-15s${C_RESET} : ${C_WHITE}%-35s${C_RESET} ${C_DIM}│${C_RESET}\n" "Recommendation" "Check syntax, entry point, deps"
+    printf " ${C_RED}${C_BOLD}└──────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 
     # 6. Recent application output (before the crash) for quick diagnosis
     local _clog="${WORK_DIR}/.logs/console.log"
     if [ -f "${_clog}" ]; then
-        printf "${C_DIM}  ▼ last 12 console lines before the crash (%s):%b\n" "${_clog}" "${C_RESET}"
+        printf "${C_DIM}  ▼ last 12 console lines before the crash (.logs/console.log):%b\n" "${C_RESET}"
         tail -n 12 "${_clog}" 2>/dev/null | sed 's/^/  | /'
         printf "\n"
     fi

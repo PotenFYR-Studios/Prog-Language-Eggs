@@ -165,6 +165,9 @@ docker run --rm -v "$VOL:/home/container" "$IMG" bash -c 'grep -q "crashed with 
     && ok "crash recorded in .logs/launcher-errors.log" || bad "crash not journalled"
 
 # ------------------------------------------------------------- T8: GIT FAILURE
+# The test volume carries files from earlier tests, so the launcher uses the
+# fetch-over-existing-files sync path (no .git): assert BOTH sync paths' failure
+# wording so the suite stays valid on fresh and used volumes.
 echo "== T8: git failure surfaces in journal =="
 docker rm -f prog-t7 >/dev/null 2>&1
 docker run -d --name prog-t7 -v "$VOL:/home/container" \
@@ -172,13 +175,15 @@ docker run -d --name prog-t7 -v "$VOL:/home/container" \
     -e AUTO_INSTALL_DEPS=0 -e AUTO_UPDATE_EGG=0 -e SERVER_PORT=25568 "$IMG" >/dev/null
 seen=0
 for i in $(seq 1 40); do
-    docker logs prog-t7 2>&1 | grep -q "Could not clone repository" && { seen=1; break; }
+    docker logs prog-t7 2>&1 | grep -qE "Git fetch failed|Could not clone repository" && { seen=1; break; }
     sleep 1
 done
 [ "$seen" = "1" ] && ok "git failure warning on console" || bad "git failure not surfaced"
-docker logs prog-t7 2>&1 | grep -q "check network, URL" && ok "actionable git hint shown" || bad "no actionable hint"
-docker exec prog-t7 grep -q "git clone failed" /home/container/.logs/launcher-errors.log 2>/dev/null \
+docker logs prog-t7 2>&1 | grep -qE "kept unchanged|Check network, URL" && ok "actionable git hint shown" || bad "no actionable hint"
+docker exec prog-t7 grep -qE "git (fetch|clone) failed" /home/container/.logs/launcher-errors.log 2>/dev/null \
     && ok "git failure journalled" || bad "git failure not journalled"
+docker exec prog-t7 grep -q "check URL, branch name and credentials" /home/container/.logs/launcher-errors.log 2>/dev/null \
+    && ok "journal carries actionable hint" || bad "no actionable hint in journal"
 docker rm -f prog-t7 >/dev/null 2>&1
 
 # ------------------------------------------------------------ T9: HEALTH CHECK

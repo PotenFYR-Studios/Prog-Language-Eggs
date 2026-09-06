@@ -57,9 +57,23 @@ USER_AGENT="ProgLanguageEggsInstall/1.0 (PotenFYR Studios; support@potenfyr.in)"
 # -----------------------------------------------------------------------------
 # 1. Git Repository Clone
 # -----------------------------------------------------------------------------
+# Same rules as the launcher's sync_git_repo: trim panel-supplied values,
+# re-point origin at the current repo/token, fetch the configured branch and
+# reset to FETCH_HEAD (origin/<branch> is stale on single-branch clones and
+# branch switches), surface token-redacted errors, and fetch OVER an existing
+# non-empty workspace instead of failing the clone. Never wipes user files.
 if [ -n "${GIT_REPO}" ]; then
-    log "Cloning source code from Git repository: ${GIT_REPO} (branch: ${GIT_BRANCH})..."
-    
+    GIT_REPO="$(printf '%s' "${GIT_REPO}" | tr -d ' \t\r\n')"
+    GIT_BRANCH="$(printf '%s' "${GIT_BRANCH:-main}" | tr -d ' \t\r\n')"
+    [ -n "${GIT_BRANCH}" ] || GIT_BRANCH="main"
+    GIT_AUTH_TOKEN="$(printf '%s' "${GIT_AUTH_TOKEN:-}" | tr -d ' \t\r\n')"
+    export GIT_TERMINAL_PROMPT=0
+    export GIT_ASKPASS=/bin/true
+    redact_err_git() { tr '\n' ' ' < "$1" | sed -e "s#${GIT_AUTH_TOKEN}#***#g" | cut -c1-300; }
+
+    _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
+    log "Syncing source code from Git repository: ${GIT_REPO} (branch: ${GIT_BRANCH})..."
+
     AUTH_REPO_URL="${GIT_REPO}"
     if [ -n "${GIT_AUTH_TOKEN}" ]; then
         if [[ "${GIT_REPO}" =~ ^https:// ]]; then
@@ -69,14 +83,32 @@ if [ -n "${GIT_REPO}" ]; then
 
     if [ -d ".git" ]; then
         log "Updating existing Git repository..."
-        git fetch origin "${GIT_BRANCH}" 2>/dev/null || true
-        git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git pull || warn "Could not pull latest changes"
+        git remote set-url origin "${AUTH_REPO_URL}" 2>/dev/null || git remote add origin "${AUTH_REPO_URL}" 2>/dev/null || true
+        if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+            git reset --hard FETCH_HEAD 2>"${_err}" || warn "Could not apply fetched commits: $(redact_err_git "${_err}")"
+        else
+            warn "Git fetch failed: $(redact_err_git "${_err}")"
+        fi
+    elif find . -mindepth 1 -maxdepth 1 2>/dev/null | grep -q .; then
+        log "Workspace already has files - fetching repository over them (no wipe)..."
+        git init -q . 2>/dev/null || true
+        git remote remove origin 2>/dev/null || true
+        if git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" && git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+            git reset --hard FETCH_HEAD 2>"${_err}" || warn "Could not apply fetched commits"
+        else
+            warn "Git fetch failed - existing files kept: $(redact_err_git "${_err}")"
+        fi
     else
-        git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . || {
-            warn "Cloning branch ${GIT_BRANCH} failed. Attempting default clone..."
-            git clone --depth 1 "${AUTH_REPO_URL}" . || warn "Git clone failed"
-        }
+        if ! git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+            warn "Cloning branch ${GIT_BRANCH} failed: $(redact_err_git "${_err}"). Attempting default clone..."
+            git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}" || warn "Git clone failed: $(redact_err_git "${_err}")"
+        fi
     fi
+    if _head="$(git rev-parse --short HEAD 2>/dev/null)"; then
+        ok "Repository at commit ${_head}"
+    fi
+    rm -f "${_err}" 2>/dev/null || true
+    unset _err _head
     ok "Git repository initialized"
 fi
 
