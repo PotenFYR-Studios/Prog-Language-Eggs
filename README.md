@@ -1,279 +1,365 @@
-# Prog-Language-Eggs
+<div align="center">
 
-> **One egg. One image. Every language.** A production-grade hosting platform that installs, updates,
-> compiles and runs **50+ programming languages** inside your container - across **Pterodactyl**, **Pelican**,
-> **Feather Panel**, **PufferPanel**, **Jexactyl**, **Wisp**, **Emerald**, **Kubernetes**, **Fly.io**,
-> **Railway**, **Render**, and plain **Docker / Podman**.
+<!-- HEADER BANNER -->
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Prog%20Language%20Eggs&fontSize=46&fontColor=ffffff&fontAlignY=38&desc=Universal%20Multi-Language%20Runtime%20%C2%B7%2050%2B%20Languages%20%C2%B7%20Zero-Config%20Auto-Detection&descSize=16&descAlignY=60&descAlign=50" width="100%" alt="Prog Language Eggs Banner" />
 
-```text
- ██████╗██████╗  ██████╗  ██████╗  ██╗      █████╗ ███╗   ██╗ ██████╗
-██╔══██╗██╔══██╗██╔═══██╗██╔════╝  ██║     ██╔══██╗████╗  ██║██╔════╝
-██████╔╝██████╔╝██║   ██║██║  ███╗ ██║     ███████║██╔██╗ ██║██║  ███╗
-██╔═══╝ ██╔══██╗██║   ██║██║   ██║ ██║     ██╔══██║██║╚██╗██║██║   ██║
-██║     ██║  ██║╚██████╔╝╚██████╔╝  ███████╗██║  ██║██║ ╚████║╚██████╔╝
-╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝
+<!-- TYPING SVG SUBTITLE -->
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code:wght@600&size=19&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=One+Egg.+One+Image.+Every+Language.;50%2B+Programming+Languages+Supported+Out-of-the-Box;Zero-Config+Auto-Detection+%26+Dynamic+On-Demand+Installs;Procfile+Supervisor+%C2%B7+OOM+Protection+%C2%B7+Multi-Panel+Native" alt="Typing SVG" />
+</a>
+
+<br/>
+
+<!-- COMMUNITY & ORG PILL BADGES -->
+<a href="https://potenfyr.in"><img src="https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Website" /></a>
+<a href="https://discord.gg/potenfyr"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" /></a>
+<a href="mailto:support@potenfyr.in"><img src="https://img.shields.io/badge/Email-support%40potenfyr.in-ec4899?style=for-the-badge&logo=mail.ru&logoColor=white" alt="Email" /></a>
+<img src="https://komarev.com/ghpvc/?username=PotenFYR-Studios-Prog-Language-Eggs&color=ec4899&style=for-the-badge&label=VIEWS&labelColor=1c1e26" alt="Profile Views" />
+
+<br/><br/>
+
+<!-- REPOSITORY METRIC BADGES -->
+[![CI Build](https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Prog-Language-Eggs/docker-image.yml?branch=main&label=CI%20BUILD&logo=githubactions&logoColor=white&style=flat-square)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-prog--language--eggs-blue?logo=docker&logoColor=white&style=flat-square)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs)
+[![Languages](https://img.shields.io/badge/Languages-50%2B%20Supported-8b5cf6?logo=codefactor&logoColor=white&style=flat-square)](#supported-languages-50)
+[![Panels](https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-orange?style=flat-square)](#multi-panel-support)
+[![Arch](https://img.shields.io/badge/Arch-amd64%20%7C%20arm64%20%7C%20armv7-success?style=flat-square)](#runs-anywhere-cpu--os)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+
+<br/>
+
+<p align="center">
+  <b>One egg. One image. Every language.</b><br/>
+  A production-grade hosting runtime that automatically installs, updates, compiles, and supervises <b>50+ programming languages</b> inside your container — built natively for <b>Pterodactyl</b>, <b>Pelican</b>, <b>Feather Panel</b>, <b>PufferPanel</b>, <b>Jexactyl</b>, <b>Wisp</b>, <b>Emerald</b>, <b>Kubernetes</b>, and standalone <b>Docker</b>.
+</p>
+
+</div>
+
+---
+
+## ⚡ Feature Highlights
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3 align="left">🚀 Zero-Config Auto-Detection</h3>
+      <ul>
+        <li><b>Smart Workspace Inspection:</b> Scans repository files (<code>package.json</code>, <code>requirements.txt</code>, <code>Cargo.toml</code>, <code>go.mod</code>, <code>*.csproj</code>) and boots the exact stack.</li>
+        <li><b>First-Boot Pinning:</b> Pinned versions lock in <code>.multi-prog.conf</code> for predictable cold starts, with instant <code>auto-detect</code> re-arming.</li>
+        <li><b>Custom Command Overrides:</b> Full authority to override runner, entry point, build steps, or custom execution paths.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3 align="left">📦 Dynamic On-Demand Toolchains</h3>
+      <ul>
+        <li><b>Live Upstream Feeds:</b> Resolves <code>latest</code>, <code>lts</code>, <code>stable</code>, <code>nightly</code>, or exact versions from official vendor APIs with checksum verification.</li>
+        <li><b>Parallel Multi-Runtime Companion:</b> Install companion stacks (e.g. <code>EXTRA_RUNTIMES=python@3.12,bun@latest</code>) concurrently.</li>
+        <li><b>Full Isolation & Preservation:</b> Separate major versions are preserved in <code>.environments/</code>; switching stacks never deletes previous work.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3 align="left">🛡️ Dynamic Memory & OOM Protection</h3>
+      <ul>
+        <li><b>Unified Panel Limits:</b> Unifies Pterodactyl <code>SERVER_MEMORY</code>, Feather <code>FEATHER_MEMORY</code>, and cgroup ceilings automatically.</li>
+        <li><b>Automatic Heap Calculation:</b> Computes safe runtime heap bounds (V8 <code>--max-old-space-size</code>, Go <code>GOMEMLIMIT</code>, JVM <code>-Xmx</code>, .NET <code>GCHeapHardLimit</code>).</li>
+        <li><b>Glibc Malloc Trimming:</b> Reclaims unused memory aggressively to eliminate container crashes under peak loads.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3 align="left">🔄 Native Procfile Multi-Service Supervisor</h3>
+      <ul>
+        <li><b>Procfile Support:</b> Orchestrate web servers, background workers, and APIs inside a single container instance.</li>
+        <li><b>Sequential Dependency Ordering:</b> Built-in <code>wait_port &lt;host&gt; &lt;port&gt;</code> ensures databases or caches are reachable before API boot.</li>
+        <li><b>Fault-Tolerant Auto-Recovery:</b> Exponential and linear crash backoffs, signal-relayed graceful drains, and per-process logs.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+---
+
+## 📑 Table of Contents
+
+- [⚡ Feature Highlights](#-feature-highlights)
+- [🏗️ System Architecture](#️-system-architecture)
+- [🚀 Quick Start](#-quick-start)
+  - [Pterodactyl / Pelican / Feather / PufferPanel](#1-game--hosting-panels)
+  - [Plain Docker / Docker Compose](#2-plain-docker--docker-compose)
+  - [Kubernetes / Cloud PAAS](#3-kubernetes--cloud-paas)
+- [🌐 Supported Languages (50+)](#-supported-languages-50)
+- [🖥️ Multi-Panel Compatibility](#️-multi-panel-compatibility)
+- [💻 Hardware & Platform Support (Arch)](#-hardware--platform-support-arch)
+- [⚙️ Language Selection & Keyword Channels](#️-language-selection--keyword-channels)
+- [📁 Environment Isolation & Data Retention](#-environment-isolation--data-retention)
+- [🎛️ Procfile Process Supervisor](#️-procfile-process-supervisor)
+- [🛑 Panel Stop Watcher & Signal Handling](#-panel-stop-watcher--signal-handling)
+- [🧠 Dynamic Memory Auto-Tuning Engine](#-dynamic-memory-auto-tuning-engine)
+- [📋 Complete Startup Variables Reference](#-complete-startup-variables-reference)
+- [🔒 Security & Hardening Posture](#-security--hardening-posture)
+- [📂 Repository Layout](#-repository-layout)
+- [🩺 Troubleshooting & Diagnostics](#-troubleshooting--diagnostics)
+- [⭐ Star History](#-star-history)
+- [📄 License & Credits](#-license--credits)
+
+---
+
+## 🏗️ System Architecture
+
+The following diagram illustrates the boot lifecycle, environment detection, on-demand installation, memory tuning, and signal supervision:
+
+```mermaid
+flowchart TD
+    A["🚀 Container Launch\n(Pterodactyl / Pelican / Feather / Puffer / Docker)"] --> B["🔎 entrypoint.sh: Host & Arch Discovery\n• Detects panel family & cgroup bounds\n• Ensures core tools (curl, jq, tar, xz)\n• Self-update check & integrity verification"]
+    
+    B --> C["⚙️ run.sh: Workspace Detection & Configuration"]
+    C --> D{"Configured or Auto?"}
+    
+    D -- "LANGUAGE=auto" --> E["🔍 Inspect Workspace Files\n(package.json, Cargo.toml, go.mod, etc.)"]
+    D -- "Explicit LANGUAGE" --> F["📌 Target Language Selected"]
+    
+    E --> G["🗂️ Check .environments/ Cache"]
+    F --> G
+    
+    G -- "Cache Hit (Pinned)" --> H["⚡ Fast Path: Load Cached Toolchain"]
+    G -- "Cache Miss / Upgrade" --> I["📥 resolve-version.sh & install-runtime.sh\n• Query vendor live feeds\n• Verify SHA256 checksum\n• Unpack to .environments/[lang]/[version]"]
+    
+    I --> J["📦 Sync App Dependencies\n(npm/pnpm/yarn, pip/poetry/uv, cargo, go mod, composer)"]
+    H --> J
+    
+    J --> K["🧠 Apply Dynamic Memory Tuner\n• V8 max-old-space-size\n• Go GOMEMLIMIT\n• JVM -Xmx\n• .NET GCHeapHardLimit"]
+    
+    K --> L{"Procfile Detected?"}
+    L -- "Yes" --> M["🔄 Procfile Supervisor\n• Spawns web/worker/api\n• wait_port synchronization\n• Auto-restart crash recovery"]
+    L -- "No" --> N["▶️ Execute Main Process\n(Auto-restart enabled if configured)"]
+    
+    M --> O["🛑 Active Runtime & Health Watcher\n• PID 1 Signal Trap (SIGTERM/SIGINT)\n• TTY & Pipe Stdin Stop Watcher (^C / stop)\n• HTTP Health Probes (/healthz)"]
+    N --> O
 ```
 
-[![CI Build](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions/workflows/docker-image.yml/badge.svg)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)
-[![Docker Image](https://img.shields.io/badge/ghcr.io-prog--language--eggs-blue?logo=docker)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs)
-[![Platform](https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-orange)](#multi-panel-support)
-[![Arch](https://img.shields.io/badge/Arch-amd64%20%7C%20arm64%20%7C%20armv7-success)](#runs-anywhere)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+---
+
+## 🚀 Quick Start
+
+### 1. Game & Hosting Panels
+*Compatible with Pterodactyl, Pelican, Feather Panel, PufferPanel, Jexactyl, Wisp, and Emerald.*
+
+1. **Download the Egg**: Get the latest [`egg-programming-multi.json`](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/main/egg-programming-multi.json).
+2. **Import Template**:
+   - In your panel admin area, navigate to **Nests / Templates** &rarr; **Import Egg**.
+   - Select the downloaded `egg-programming-multi.json` and save.
+3. **Create Server**:
+   - Create a server using the imported egg.
+   - Under Docker Image, ensure `ghcr.io/potenfyr-studios/prog-language-eggs:latest` is selected.
+4. **Deploy**:
+   - Upload your project files (or supply a `GIT_REPO`).
+   - Leave `LANGUAGE=auto` or select your preferred language.
+   - Click **Start**!
 
 ---
 
-## Table of Contents
+### 2. Plain Docker / Docker Compose
 
-1. [What Is This? (60 seconds)](#what-is-this-60-seconds)
-2. [Quick Start](#quick-start)
-3. [Supported Languages (50+)](#supported-languages-50)
-4. [Multi-Panel Support](#multi-panel-support)
-5. [Runs Anywhere (CPU / OS)](#runs-anywhere-cpu--os)
-6. [Choosing Languages & Versions](#choosing-languages--versions)
-7. [Environment Isolation & Data Retention](#environment-isolation--data-retention)
-8. [Multi-Layer Apps (Procfile Supervisor)](#multi-layer-apps-procfile-supervisor)
-9. [Health Checks & Operations](#health-checks--operations)
-10. [Security Posture](#security-posture)
-11. [Performance & Efficiency](#performance--efficiency)
-12. [All Startup Variables Reference](#all-startup-variables-reference)
-13. [Egg Switching & Migration Guarantees](#egg-switching--migration-guarantees)
-14. [Image Publishing Policy (CI)](#image-publishing-policy-ci)
-15. [Repository Layout](#repository-layout)
-16. [Troubleshooting & FAQ](#troubleshooting--faq)
-
----
-
-## What Is This? (60 seconds)
-
-You host games, bots, APIs, websites or microservices. Instead of installing one egg per language,
-you import **one egg** and pick the language at startup:
-
-| You want | You set | Result |
-|---|---|---|
-| A Discord bot in Python | `LANGUAGE=python` | Python runs your bot, deps auto-installed |
-| A Node.js REST API | `LANGUAGE=nodejs` | npm install runs, server starts |
-| Rust web service, pinned compiler | `LANGUAGE=rust` + `RUNTIME_VERSION=stable` | cargo build --release, binary served |
-| Web + worker together | `Procfile` in workspace | Both supervised, crashes restarted |
-| Anything else | leave everything `auto` | The launcher detects your project files |
-
-The language runtime itself is downloaded **inside your container, on demand**, at whatever version you
-request (`22`, `lts`, `nightly`, ...). Nothing is pre-baked that you do not use, and nothing you created
-is ever deleted behind your back.
-
----
-
-## Quick Start
-
-### Panels (Pterodactyl / Pelican / Feather / Jexactyl / Wisp / Emerald)
-
-1. Download [`egg-programming-multi.json`](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/main/egg-programming-multi.json).
-2. Admin Area -> **Nests / Templates** -> **Import Egg** -> select the file -> Save.
-3. Create a server with the egg. Under **Docker Image** pick `Multi-Language (50+ Languages)`.
-4. Set variables if you want (or leave all `auto`). Press **Start**. Done.
-
-### Plain Docker
-
+#### Standard Docker CLI:
 ```bash
-docker run -d --name my-app \
+docker run -d \
+  --name my-app \
   -p 8080:8080 \
   -e SERVER_PORT=8080 \
   -e LANGUAGE=nodejs \
+  -e RUNTIME_VERSION=lts \
   -v "$PWD/my-project:/home/container" \
   ghcr.io/potenfyr-studios/prog-language-eggs:latest
 ```
 
-### Kubernetes / Fly.io / Railway / Render
-
-Use the same image with `PORT` env; working directory and port detection adapt automatically.
-
----
-
-## Supported Languages (50+)
-
-| # | Language / Platform | Runners / Engines | Package Managers & Build Tools |
-|---|---------------------|-------------------|--------------------------------|
-| 1 | Node.js (JavaScript) | node, nodemon, pm2 | npm, pnpm, yarn |
-| 2 | TypeScript | ts-node, tsx, bun, tsc | npm, pnpm, yarn, tsc |
-| 3 | Bun | bun run, bun test, bunx | bun install |
-| 4 | Deno | deno run, deno task | deno.json, URL imports |
-| 5 | Python | python3, uvicorn, gunicorn | uv, pip, poetry, pipenv |
-| 6 | Java | java -jar, mvnw, gradlew | maven, gradle |
-| 7 | Go | go run, ./server | go mod |
-| 8 | Rust | cargo run, ./server | cargo |
-| 9 | C | gcc, clang, make | make, cmake, ninja |
-| 10 | C++ | g++, clang++, make | make, cmake, ninja |
-| 11 | C# / .NET | dotnet run, dotnet exec | dotnet restore, nuget |
-| 12 | PHP | php -S, php artisan | composer |
-| 13 | Ruby | ruby, puma, bundle exec | gem, bundler |
-| 14 | Static Website / SPA | serve, python http.server | static files |
-| 15 | Kotlin | kotlin, kotlinc, gradle | gradle, maven |
-| 16 | Scala | scala, sbt | sbt |
-| 17 | Swift | swift run, swiftc | swift package |
-| 18 | Dart | dart run | dart pub |
-| 19 | Zig | zig run, zig build | build.zig |
-| 20 | Lua / LuaJIT | lua, luajit | luarocks |
-| 21 | Elixir | mix run, elixir | mix, hex |
-| 22 | Erlang | escript, rebar3 | rebar3 |
-| 23 | Haskell | runghc, cabal, stack | cabal, stack |
-| 24 | Perl | perl | cpanm |
-| 25 | R | Rscript | install.packages() |
-| 26 | Julia | julia | Pkg |
-| 27 | Clojure | lein run, clojure -M | leiningen, deps.edn |
-| 28 | Groovy | groovy, groovyc | gradle |
-| 29 | Crystal | crystal run | shards |
-| 30 | Nim | nim r, nimble run | nimble |
-| 31 | OCaml | ocaml, dune exec | opam, dune |
-| 32 | F# | dotnet run | nuget, dotnet |
-| 33 | Fortran | gfortran | make |
-| 34 | FreePascal | fpc | fpc |
-| 35 | COBOL | cobc (GnuCOBOL) | cobc |
-| 36 | Assembly (x86/ARM) | nasm, as, ld | make |
-| 37 | V | v run | v |
-| 38 | Odin | odin run | odin |
-| 39 | Gleam | gleam run | gleam |
-| 40 | ReScript / ReasonML | rescript, node | npm, bsb |
-| 41 | Haxe | haxe --run | haxelib |
-| 42 | Racket | racket | raco |
-| 43 | Scheme / Guile | guile, csi | chicken-install |
-| 44 | Common Lisp | sbcl --script | quicklisp |
-| 45 | D | rdmd, dub run | dub |
-| 46 | Ada | gnatmake | gprbuild |
-| 47 | Smalltalk | gst | gst-package |
-| 48 | Tcl | tclsh | tcl |
-| 49 | Prolog | swipl | swi-prolog |
-| 50 | Solidity (Dev/Node) | npx hardhat node, anvil | hardhat, foundry |
-| 51 | Bash / Shell | bash, sh | apt |
-| 52 | PowerShell | pwsh | PSGallery |
-| 53 | Visual Basic .NET | dotnet run | nuget |
-| 54 | Vala | valac | meson, ninja |
-
-Anything not listed falls through to smart file detection (`index.js`, `main.py`, `main.go`, ...) or your own
-`CUSTOM_COMMAND`.
-
----
-
-## Multi-Panel Support
-
-The entrypoint identifies its host precisely at boot and exports two variables scripts can rely on:
-`PANEL_TYPE` (human label) and `PANEL_FAMILY` (`wings | feather | puffer | k8s | paas | docker`).
-
-| Panel / Platform | Detected As | Family | Working Dir | Port Variables Unified |
-|---|---|---|---|---|
-| Pterodactyl | Pterodactyl Panel | wings | `/home/container` | `SERVER_PORT`, `PORT` |
-| Pelican | Pelican Panel | wings | `/home/container` | `SERVER_PORT`, `PORT` |
-| Feather Panel | Feather Panel | feather | `/app` or `/home/container` | `FEATHER_PORT`, `PORT` |
-| PufferPanel | PufferPanel | puffer | `/server` | `PORT`, `PUFFER_PORT` |
-| Jexactyl / Wisp / Emerald | per-panel label | wings | `/home/container` | `SERVER_PORT`, `PORT` |
-| Kubernetes / OpenShift | Kubernetes Pod | k8s | `/home/container` or `/app` | `PORT`, `HTTP_PORT` |
-| Fly.io / Railway / Render | per-platform label | paas | `$PWD` | `PORT` |
-| Heroku-style dynos | Heroku-style Dyno | paas | `/app` | `PORT` |
-| Standalone Docker / Podman | Docker / Standalone | docker | `/home/container` or `$PWD` | `PORT`, `HTTP_PORT` |
-
-Memory limits are unified too: `SERVER_MEMORY` / `MEMORY` / `FEATHER_MEMORY` / cgroup limits all feed the
-OOM-protection tuner.
-
----
-
-## Runs Anywhere (CPU / OS)
-
-| Host architecture | Status | Notes |
-|---|---|---|
-| `linux/amd64` | Full | Standard panel nodes |
-| `linux/arm64` | Full | Apple Silicon, Ampere, Raspberry Pi 4/5 (64-bit), Oracle ARM |
-| `linux/arm/v7` | Full image | SBC-hosted panels; engines lacking armv7 upstreams self-provision alternatives |
-| `ppc64le`, `s390x`, `riscv64` | On demand | Pair any distro base image with this egg: Node.js, Go, Rust, Java resolve official upstream builds automatically at boot |
-
-- **Host OS does not matter**: wherever the panel can run containers (Linux natively; Windows/macOS via
-  Docker Desktop / WSL2 backends), the egg works - the container is always Linux.
-- **Any distro inside the container**: `ensure_core_tools()` detects alpine/debian/fedora/suse-style bases
-  and installs missing essentials (`curl jq xz unzip tar`) when root, or prints exact guidance when not.
-- **Per-engine availability checks**: nothing hard-fails on unusual CPUs; each engine reports precisely
-  what ships for your platform (see `.logs/db-install.log` naming under [.logs/](#troubleshooting--faq)).
-
----
-
-## Choosing Languages & Versions
-
-### Language selection
-
-- `LANGUAGE=auto` (default) - inspects your files (`package.json`, `requirements.txt`, `go.mod`,
-  `Cargo.toml`, `*.csproj`, ...) and picks the stack.
-- `LANGUAGE=<name>` - force one (`python`, `nodejs`, `rust`, ...). Aliases accepted (`py`, `js`, `ts`, `go`).
-- `RUNNER=` - engine override (`bun`, `deno`, `tsx`, `uvicorn`, `pm2`, ...).
-- `MAIN_FILE=` - explicit entry point, otherwise smart detection order applies.
-- `CUSTOM_COMMAND=` - full control: replaces the launcher's command entirely.
-
-### Version selection (`RUNTIME_VERSION`)
-
-Versions are resolved from **live upstream feeds** before anything downloads; garbage fails fast with
-accepted-form guidance. No hardcoded pins anywhere.
-
-| Request | Example | Behaviour |
-|---|---|---|
-| `latest` | default | Newest stable/GA release |
-| `stable` | `stable` | Newest LTS/stable line (Node -> newest LTS, Rust -> stable, .NET -> LTS channel) |
-| `lts` | `lts` | Newest LTS cycle (Node, Java/Adoptium, .NET) |
-| `alpha` `beta` `rc` `pre` `preview` | `beta` | Pre-release channel when upstream publishes one; otherwise newest stable with a notice |
-| `nightly` `dev` `canary` `tip` `edge` `master` | `nightly` | Nightly/canary line (Node nightly CDN, Rust nightly, Zig master, .NET daily, Dart dev, Bun canary, Java EA) |
-| Concrete | `22`, `20.11`, `v20.11.1`, `3.12`, `1.22`, `17`, `9.0` | Newest matching release verified against the feed; unknown series rejected with valid options |
-
-Companion runtimes take their own versions:
-
-```
-EXTRA_RUNTIMES=python@3.12,bun@1.1,java@21
-SKIP_RUNTIMES=python          # opt out entirely
-NODE_GYP_SUPPORT=1            # native addon toolchain for node modules
+#### Docker Compose (`docker-compose.yml`):
+```yaml
+version: "3.8"
+services:
+  app:
+    image: ghcr.io/potenfyr-studios/prog-language-eggs:latest
+    container_name: multi-lang-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - LANGUAGE=python
+      - RUNTIME_VERSION=3.12
+      - AUTO_INSTALL_DEPS=1
+      - MEMORY_AUTO_TUNE=1
+    volumes:
+      - ./app:/home/container
 ```
 
-Results are cached under `.cache/version-resolver/` (6h TTL, `RESOLVER_CACHE_TTL` to tune) so warm boots
-skip network round-trips.
+---
 
-### Startup value pinning (auto → exact)
+### 3. Kubernetes / Cloud PAAS
+The image natively detects Heroku-style dynos, Kubernetes pods, and cloud container environments:
 
-Placeholders (`auto`, `latest`, `default`, empty) are resolved **once** at boot and the concrete result is
-pinned into `.multi-prog.conf` - the detected language, the effective engine, the entry point and the exact
-runtime version (e.g. `RUNTIME_VERSION=latest` pins to `v22.14.0`). On later boots the pinned value wins even
-though the panel Startup tab still shows `auto` - what was decided on the first boot is what keeps running.
-
-To re-run detection or re-resolve a version, set the variable to the literal value **`auto-detect`**: the pin
-is cleared and detection runs fresh on the next boot. The console logs every pin
-(`Startup value pinned: RUNTIME_VERSION=v22.14.0 (was a placeholder)`), and the boot card always shows the
-values actually in use.
+```bash
+# Railway / Render / Fly.io:
+# Simply bind PORT and supply your project repo. Working directory and port bindings adapt automatically.
+```
 
 ---
 
-## Environment Isolation & Data Retention
+## 🌐 Supported Languages (50+)
 
-Every language + major-version series gets its own environment folder. Switching languages or upgrading
-majors never destroys anything:
+The platform features an intelligent multi-ecosystem resolver with zero pre-baked bloat. Runtimes install on-demand, cache permanently in `.environments/`, and verify cryptographic signatures before execution.
+
+<details open>
+<summary><b>✨ View the Complete 54-Language Matrix</b></summary>
+<br/>
+
+| # | Language / Stack | Runners / Engines | Package Managers & Toolchains | Auto-Detect File Triggers |
+|:---:|:---|:---|:---|:---|
+| **1** | **Node.js (JavaScript)** | `node`, `nodemon`, `pm2` | `npm`, `pnpm`, `yarn` | `package.json`, `server.js`, `index.js`, `app.js` |
+| **2** | **TypeScript** | `ts-node`, `tsx`, `bun`, `tsc` | `npm`, `pnpm`, `yarn`, `tsc` | `tsconfig.json`, `index.ts`, `server.ts` |
+| **3** | **Bun** | `bun run`, `bun test`, `bunx` | `bun install` | `bun.lockb`, `bunfig.toml` |
+| **4** | **Deno** | `deno run`, `deno task` | URL imports, `deno.json` | `deno.json`, `deno.jsonc`, `deno.lock` |
+| **5** | **Python** | `python3`, `uvicorn`, `gunicorn` | `uv`, `pip`, `poetry`, `pipenv` | `requirements.txt`, `pyproject.toml`, `Pipfile`, `main.py` |
+| **6** | **Java** | `java -jar`, `mvnw`, `gradlew` | `maven`, `gradle` | `pom.xml`, `build.gradle`, `build.gradle.kts`, `*.jar` |
+| **7** | **Go** | `go run`, `./server` | `go mod` | `go.mod`, `go.sum`, `main.go` |
+| **8** | **Rust** | `cargo run`, `./server` | `cargo` | `Cargo.toml`, `Cargo.lock`, `main.rs` |
+| **9** | **C** | `gcc`, `clang`, `make` | `make`, `cmake`, `ninja` | `Makefile`, `CMakeLists.txt`, `main.c` |
+| **10** | **C++** | `g++`, `clang++`, `make` | `make`, `cmake`, `ninja` | `CMakeLists.txt`, `main.cpp`, `main.cc` |
+| **11** | **C# / .NET** | `dotnet run`, `dotnet exec` | `dotnet restore`, `nuget` | `*.csproj`, `*.sln`, `Program.cs` |
+| **12** | **PHP** | `php -S`, `php artisan` | `composer` | `composer.json`, `index.php` |
+| **13** | **Ruby** | `ruby`, `puma`, `bundle exec` | `gem`, `bundler` | `Gemfile`, `config.ru`, `app.rb` |
+| **14** | **Static Website / SPA** | `serve`, `python http.server` | Static Web Assets | `index.html` |
+| **15** | **Kotlin** | `kotlin`, `kotlinc`, `gradle` | `gradle`, `maven` | `build.gradle.kts`, `Main.kt` |
+| **16** | **Scala** | `scala`, `sbt` | `sbt` | `build.sbt` |
+| **17** | **Swift** | `swift run`, `swiftc` | `swift package` | `Package.swift`, `main.swift` |
+| **18** | **Dart** | `dart run` | `dart pub` | `pubspec.yaml`, `main.dart` |
+| **19** | **Zig** | `zig run`, `zig build` | `build.zig` | `build.zig`, `main.zig` |
+| **20** | **Lua / LuaJIT** | `lua`, `luajit` | `luarocks` | `main.lua`, `rockspec` |
+| **21** | **Elixir** | `mix run`, `elixir` | `mix`, `hex` | `mix.exs` |
+| **22** | **Erlang** | `escript`, `rebar3` | `rebar3` | `rebar.config` |
+| **23** | **Haskell** | `runghc`, `cabal`, `stack` | `cabal`, `stack` | `*.cabal`, `stack.yaml` |
+| **24** | **Perl** | `perl` | `cpanm` | `cpanfile`, `main.pl` |
+| **25** | **R** | `Rscript` | `install.packages()` | `main.R`, `description` |
+| **26** | **Julia** | `julia` | `Pkg` | `Project.toml`, `main.jl` |
+| **27** | **Clojure** | `lein run`, `clojure -M` | `leiningen`, `deps.edn` | `project.clj`, `deps.edn` |
+| **28** | **Groovy** | `groovy`, `groovyc` | `gradle` | `build.gradle`, `main.groovy` |
+| **29** | **Crystal** | `crystal run` | `shards` | `shard.yml`, `main.cr` |
+| **30** | **Nim** | `nim r`, `nimble run` | `nimble` | `*.nimble`, `main.nim` |
+| **31** | **OCaml** | `ocaml`, `dune exec` | `opam`, `dune` | `dune-project`, `dune` |
+| **32** | **F#** | `dotnet run` | `nuget`, `dotnet` | `*.fsproj` |
+| **33** | **Fortran** | `gfortran` | `make` | `Makefile`, `main.f90` |
+| **34** | **FreePascal** | `fpc` | `fpc` | `main.pas` |
+| **35** | **COBOL** | `cobc (GnuCOBOL)` | `cobc` | `main.cob`, `main.cbl` |
+| **36** | **Assembly (x86/ARM)** | `nasm`, `as`, `ld` | `make` | `Makefile`, `*.asm`, `*.s` |
+| **37** | **V** | `v run` | `v` | `v.mod`, `main.v` |
+| **38** | **Odin** | `odin run` | `odin` | `main.odin` |
+| **39** | **Gleam** | `gleam run` | `gleam` | `gleam.toml` |
+| **40** | **ReScript / ReasonML** | `rescript`, `node` | `npm`, `bsb` | `bsconfig.json` |
+| **41** | **Haxe** | `haxe --run` | `haxelib` | `build.hxml` |
+| **42** | **Racket** | `racket` | `raco` | `main.rkt`, `info.rkt` |
+| **43** | **Scheme / Guile** | `guile`, `csi` | `chicken-install` | `main.scm` |
+| **44** | **Common Lisp** | `sbcl --script` | `quicklisp` | `main.lisp`, `*.asd` |
+| **45** | **D** | `rdmd`, `dub run` | `dub` | `dub.json`, `dub.sdl` |
+| **46** | **Ada** | `gnatmake` | `gprbuild` | `default.gpr`, `main.adb` |
+| **47** | **Smalltalk** | `gst` | `gst-package` | `main.st` |
+| **48** | **Tcl** | `tclsh` | `tcl` | `main.tcl` |
+| **49** | **Prolog** | `swipl` | `swi-prolog` | `main.pl`, `main.pro` |
+| **50** | **Solidity (Dev/Node)** | `npx hardhat node`, `anvil` | `hardhat`, `foundry` | `hardhat.config.js`, `foundry.toml` |
+| **51** | **Bash / Shell** | `bash`, `sh` | `apt` | `main.sh`, `entrypoint.sh` |
+| **52** | **PowerShell** | `pwsh` | `PSGallery` | `main.ps1` |
+| **53** | **Visual Basic .NET** | `dotnet run` | `nuget` | `*.vbproj` |
+| **54** | **Vala** | `valac` | `meson`, `ninja` | `meson.build`, `main.vala` |
+
+</details>
+
+---
+
+## 🖥️ Multi-Panel Compatibility
+
+The launcher autodetects host architecture, daemon mechanics, and environment variables on boot, exporting `PANEL_TYPE` and `PANEL_FAMILY` (`wings | feather | puffer | k8s | paas | docker`).
+
+| Hosting Panel / Platform | Family | Status | Working Directory | Unified Port Variables |
+|:---|:---:|:---:|:---|:---|
+| **Pterodactyl Panel** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
+| **Pelican Panel** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
+| **Feather Panel** | `feather` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/app` or `/home/container` | `FEATHER_PORT`, `PORT` |
+| **PufferPanel** | `puffer` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/server` | `PORT`, `PUFFER_PORT` |
+| **Jexactyl / Wisp / Emerald** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
+| **Kubernetes / OpenShift** | `k8s` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` or `/app` | `PORT`, `HTTP_PORT` |
+| **Fly.io / Railway / Render** | `paas` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `$PWD` | `PORT` |
+| **Docker / Podman Standalone** | `docker` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` or `$PWD` | `PORT`, `HTTP_PORT` |
+
+---
+
+## 💻 Hardware & Platform Support (Arch)
+
+Builds are clean-compiled and published multi-architecture without emulation slowdowns:
+
+| Architecture | Tier / Status | Target Systems & Hardware |
+|:---|:---:|:---|
+| `linux/amd64` | **Tier 1 (Full)** | Standard Intel/AMD 64-bit panel dedicated servers & VPS |
+| `linux/arm64` | **Tier 1 (Full)** | Apple Silicon, Ampere Altra, AWS Graviton, Oracle ARM, Raspberry Pi 4/5 |
+| `linux/arm/v7` | **Tier 2 (SBC)** | 32-bit ARM SBCs and legacy devices |
+| `ppc64le`, `s390x`, `riscv64` | **On Demand** | Node.js, Go, Rust, Java auto-resolve official upstreams dynamically |
+
+---
+
+## ⚙️ Language Selection & Keyword Channels
+
+### Version Resolution Channels (`RUNTIME_VERSION`)
+Never guess package versions. The egg dynamically checks live upstream registry channels before downloading:
+
+```text
+RUNTIME_VERSION=latest     -> Newest stable GA release
+RUNTIME_VERSION=stable     -> Production LTS/stable branch
+RUNTIME_VERSION=lts        -> Long-Term Support release line
+RUNTIME_VERSION=beta       -> Beta / Preview channel (if upstream exists)
+RUNTIME_VERSION=nightly    -> Canary / Nightly builds (Node, Rust, Zig master, Bun canary)
+RUNTIME_VERSION=22         -> Highest 22.x release matching feed
+```
+
+### Companion Runtimes
+Need Node.js for a frontend build inside a Python app? Or Bun to run tests alongside a Go API?
+```bash
+# In your Startup variables:
+EXTRA_RUNTIMES="python@3.12,bun@latest,java@21"
+NODE_GYP_SUPPORT=1     # Automatically provisions C++ build chain & Python for native node addons
+```
+
+### First-Boot Pinning (`auto` &rarr; Exact)
+To protect your production container from breaking on upstream major updates:
+- When set to `auto` or `latest`, the concrete version resolved on first boot is pinned to `.multi-prog.conf` (e.g. `RUNTIME_VERSION=v22.14.0`).
+- Subsequent cold restarts use the exact pinned binary.
+- To re-trigger auto-detection or upgrade channels, simply set the variable to **`auto-detect`** in the Startup tab!
+
+---
+
+## 📁 Environment Isolation & Data Retention
+
+The runtime isolates every programming language and major release series into separate subtrees under `.environments/`:
 
 ```text
 .environments/
-|-- active                    <- last used instance marker
-|-- nodejs/
-|   |-- node22/               <- npm/bun caches, tool state for Node 22.x
-|   `-- node24/               <- preserved if you switch to 24 and later return
-|-- python/py3.12/
-|-- golang/go1.22/
-|-- rust/rust-stable/
-`-- .resolved/<lang>          <- resolved concrete version cache
+├── active                     <- Current active environment marker
+├── nodejs/
+│   ├── node22/                <- Node 22 runtime, npm/bun global modules & cache
+│   └── node24/                <- Preserved if you switch back and forth
+├── python/
+│   └── py3.12/                <- Isolated Python virtual environment & wheels
+├── golang/
+│   └── go1.22/                <- Go SDK & mod cache
+└── rust/
+    └── rust-stable/           <- Cargo toolchain & build cache
 ```
 
-| Change | What happens |
-|---|---|
-| Same language, same major series | Compatible - folder reused, info message |
-| Same language, new major series | New folder created; old preserved; yellow console warning shows both paths |
-| Different language | Separate subtree; previous language fully retained; console warning lists it |
-
-Retained environments are listed on every boot with sizes plus manual-deletion instructions. **Nothing is
-auto-deleted, by design.**
+> [!IMPORTANT]
+> **Zero Accidental Data Deletion**: Switching languages in your panel settings never wipes your files. Previous environments remain preserved in `.environments/`. If you return to an earlier stack, it resumes immediately.
 
 ---
 
-## Multi-Layer Apps (Procfile Supervisor)
+## 🎛️ Procfile Process Supervisor
 
-Drop a `Procfile` in your workspace to run several processes in one container - ideal for
-web + API + worker architectures or tiny multi-service setups:
+For multi-service architectures (e.g. Next.js Frontend + FastAPI Backend + Background Worker), simply commit a `Procfile` in your workspace root:
 
 ```procfile
 web:    node server.js
@@ -281,319 +367,200 @@ api:    wait_port 127.0.0.1 6379 30 && python -m uvicorn api:app --port 8081
 worker: node worker.js
 ```
 
-| Capability | Detail |
-|---|---|
-| Modes | `SUPERVISOR=auto` (default: Procfile wins when language is auto), `procfile` forces it, `single` disables |
-| Crash recovery | Linear-backoff restarts (1s, 2s, 3s...), gives up after `PROCFILE_MAX_RESTARTS` (5) |
-| Graceful shutdown | Panel SIGTERM relays to every child; hard kill only after a drain window |
-| Per-process logs | `PROCFILE_LOGS=1` mirrors streams to `.logs/processes/<name>.log` |
-| Startup ordering | Built-in `wait_port <host> <port> [timeout]` waits on databases/caches/queues first |
-
-Single-process servers get the same treatment via `AUTO_RESTART=1` + crash diagnostic cards.
+### Supervisor Features:
+- **`wait_port <host> <port> [timeout]`**: Integrated helper to block until databases, Redis, or microservices are accepting connections before starting dependant processes.
+- **Linear-Backoff Crash Recovery**: Automatic restart upon crash (1s, 2s, 3s...) up to `PROCFILE_MAX_RESTARTS`.
+- **Per-Process Log Streams**: Set `PROCFILE_LOGS=1` to stream each process independently to `.logs/processes/<name>.log`.
+- **Graceful Draining**: Relays SIGTERM cleanly to all child processes before kernel SIGKILL.
 
 ---
 
-## Health Checks & Operations
+## 🛑 Panel Stop Watcher & Signal Handling
 
-### Lifecycle: start / stop / kill / restart (all panels)
+Panels handle container stops differently: some send native POSIX signals, while others (like Feather Panel or certain Wings forks) type literal stop commands (`^C` or `stop`) into the console TTY.
 
-- The launcher is **PID 1** (entrypoint uses `exec`, no interpreter layer swallowing signals) and traps
-  `SIGTERM`/`SIGINT`/`SIGHUP`/`SIGQUIT` - panels, `docker stop` and orchestrator shutdowns all get a clean,
-  fast stop (well inside the ~10s window before daemons escalate to SIGKILL).
-- **Per-panel stop delivery - verified against each daemon's source code:**
+| Host Daemon / Panel | Stop Signal Delivery Method | How It Is Handled |
+|:---|:---|:---|
+| **Feather Panel** | Types stop command (`^C`) into console TTY stdin | **Stdin Stop Watcher**: Intercepts TTY / pipe inputs gracefully |
+| **Pterodactyl / Pelican / Wisp** | Translates stop button into `SIGINT` | **PID 1 Signal Trap**: Direct trap in entrypoint bash process |
+| **PufferPanel / Docker / K8s** | Dispatches standard `docker stop` (`SIGTERM`) | **Graceful Drain Trap**: Clean child propagation |
+| **Kill Button** | Hardware `SIGKILL` | Kernel-level instant termination |
 
-  | Panel | How Stop is delivered | Covered by |
-  |---|---|---|
-  | Feather Panel | literal stop command (`^C`) written as **console text into the TTY stdin** | stdin stop watcher (TTY + pipe) |
-  | Pterodactyl / Pelican / Jexactyl / Wisp | real `SIGINT` signal (eggs' `^C` is converted to a signal) | signal trap |
-  | PufferPanel / Docker / Kubernetes | `docker stop` -> `SIGTERM` to PID 1 | signal trap |
-  | Kill button | `SIGKILL` | n/a (kernel-level) |
-
-- **Console-text stop**: daemons that stop a server by typing the stop command into the console (Feather
-  Panel and other Wings forks create containers with `Tty: true` and write the stop command into that TTY)
-  are covered by an stdin stop-command watcher - `stop`, `^C`, `kill`, `shutdown`, `sigint`, ... all trigger
-  the same graceful shutdown. The watcher engages on pipes **and** TTYs, starts after the interactive setup
-  wizard (so first-boot prompts keep stdin), and can be forced off with `PANEL_STOP_WATCHER=0` (or forced
-  on with `1`).
-- **Multi-process containers**: apps spawning daemons (pm2 god processes, detached workers, double-forked
-  helpers) are swept on stop **and** again before every start/restart, so stray processes can never hold
-  ports or keep serving after the panel shows "stopped".
-- `AUTO_RESTART=1` restarts crashed single-process apps; Procfile mode supervises multi-process apps with
-  linear backoff (see [Multi-Layer Apps](#multi-layer-apps-procfile-supervisor)).
-- Multi-port apps (main allocation + extra listeners) all stop and come back together.
-
-### Observability
-
-- `HEALTH_CHECK_PATH=/healthz` - after boot, the launcher probes `http://127.0.0.1:$SERVER_PORT<path>`
-  until it answers (budget `HEALTH_TIMEOUT=60`s).
-- `HEALTH_STRICT=1` - failed probe exits non-zero so panels mark the server unhealthy instead of silently running.
-- **Console mirror** - every boot duplicates the full console into `.logs/console.log` (previous boot kept
-  as `.1`, each segment starts with a `=== boot @ timestamp | panel | arch | uid ===` header; disable with `LAUNCHER_LOG=0`).
-- **Error journal** - egg-level failures (git clone/pull, runtime installs, dependency installs, health
-  probes, crashes, stray sweeps) append timestamped entries with panel context to `.logs/launcher-errors.log`,
-  so issues are diagnosable even when panel scrollback is gone. Dependency install output is kept verbatim in
-  `.logs/dependency-install.log`.
-- **Boot card** - after detection the console prints a 68-col card with the values actually in use: target
-  language, exact runtime version, effective engine, entry point, panel, server UUID, memory tuning, port,
-  process user, architecture, working dir (wraps safely on narrow consoles).
-- **Agent console theme** - glyph-prefixed phase headers (`── Dependency Sync ──`) and status lines.
-  `CLI_THEME=prog` (default) or `classic` for the legacy PotenFYR look.
-- **Gradient banner** - block-font ASCII art with a diagonal 256-color gradient sweep, different preset
-  every boot: `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum` (set one with `CLI_BANNER_GRADIENT`,
-  or `none` for flat). Compact fallback art for narrow consoles.
-- **Trace mode** - `DEBUG=1` writes bash xtrace to `.logs/launcher-trace.log`; console stays readable.
-- **Provenance** - `/etc/potenfyr-version` stamp printed at boot (variant + build date).
-- **Crash diagnostics** - non-zero exits trigger a report card: exit code, active runtime version, memory
-  usage vs limit, disk space, the last 12 console lines before the crash, and a pointer to the error journal.
+- **Multi-Process Cleanup**: Child daemons, detached workers, and PM2 god-processes are systematically swept on container stop and startup to prevent orphaned processes from holding network ports.
 
 ---
 
-## Security Posture
+## 🧠 Dynamic Memory Auto-Tuning Engine
 
-| Control | Detail |
-|---|---|
-| Checksum verification | Node.js tarballs verified against official `SHASUMS256.txt`; Zig against published shasum; mismatch aborts loudly |
-| URL validation | `GIT_REPO`, `CUSTOM_RUNTIME_URL` must be well-formed https/ssh/http URLs; header-injection shapes rejected before any fetch |
-| Secret redaction | Credentials embedded in URLs and tokens never reach console or logs |
-| Root guard | Warns when the container runs as uid 0 (panels should use the non-root image user) |
-| Least privilege | All installs happen inside the workspace as the container user; no host access |
-| Launcher integrity | Self-updated launchers live in `/opt/potenfyr` (container-local, user-writable but outside your data volume, never visible under `/home/container`) and only execute when their sha256 matches the hash the self-update engine recorded; tampered copies are discarded, and legacy workspace copies (`.potenfyr/`) are migrated out or discarded on boot |
-| Update channel hardening | `EGG_UPDATE_URL` is enforced https-only; update failures are always non-fatal |
-| File denylist | The egg denylists `.potenfyr/**` and launcher scripts from panel file-manager edits/plants; the boot also sweeps signature-matching egg scripts (`run.sh`, `entrypoint.sh`, `install.sh`, `install-runtime.sh`, `resolve-version.sh`) out of the workspace root |
-| Process hygiene | `umask 022` (no world-writable files), core dumps disabled, orphaned processes swept on stop and start |
-| Audit trail | Console mirror + error journal + per-installer logs + resolver logs give full replay of what ran and why |
+Avoid unhandled OOM (Out Of Memory) container crashes! The runtime examines allocated memory limits (`SERVER_MEMORY`, `FEATHER_MEMORY`, or cgroup `/sys/fs/cgroup/memory`) and sets safe heap ceilings:
 
----
-
-## Performance & Efficiency
-
-- **Parallel companion installs** - `EXTRA_RUNTIMES=a,b,c` download simultaneously, each logged to
-  `.logs/runtime-install-<name>.log`.
-- **Resilient dependency installs** - npm installs retry once with lifecycle scripts disabled when a
-  package's `postinstall` crashes (deps still install); `CUSTOM_INSTALL_COMMAND` replaces the whole step.
-  The console reports honestly: success, lifecycle-skipped, or failed with a pointer to
-  `.logs/dependency-install.log` - never a false "ready".
-- **TTL resolver cache** - warm boots skip upstream feed lookups.
-- **Idempotent installs** - present binaries short-circuit before any network I/O.
-- **npm ci fast path** - with a lockfile present, `npm ci --prefer-offline` runs instead of a full
-  `npm install` (falls back automatically on mismatched trees).
-- **Single update round-trip** - the egg self-update check runs once per boot and is shared between
-  entrypoint and launcher (`EGG_UPDATE_CHECKED`), with tightened network budgets.
-- **Tuned tool environment** - `NPM_CONFIG_UPDATE_NOTIFIER/FUND/AUDIT=false`, `PIP_DISABLE_PIP_VERSION_CHECK=1`,
-  `GOTOOLCHAIN=local` (no surprise toolchain downloads).
-- **Memory auto-tune** - computes safe heap ceilings per runtime (`NODE_OPTIONS`, `GOMEMLIMIT`, `-Xmx`,
-  `DOTNET_GCHeapHardLimit`, MALLOC trim) from panel memory limits to prevent OOM kills.
-- **Build-cache cleanup** - `CLEAN_BUILD_CACHE=1` purges compiler/package caches after builds.
-
----
-
-## All Startup Variables Reference
-
-### Core selection
-| Variable | Default | Editable | Description |
-|---|---|---|---|
-| `LANGUAGE` | `auto` | Yes | Target language or auto-detect; resolved value pinned after first boot (`auto-detect` re-arms) |
-| `RUNNER` | `auto` | Yes | Engine override (bun, deno, tsx, uvicorn, pm2, ...); `auto` pins to the effective engine |
-| `MAIN_FILE` | `auto` | Yes | Entry point override; `auto` pins to the detected entry point |
-| `PACKAGE_MANAGER` | `auto` | Yes | Dependency manager override |
-| `RUNTIME_VERSION` | `latest` | Yes | Primary runtime version or channel keyword; `latest` pins to the exact resolved version |
-| `CUSTOM_COMMAND` | empty | Yes | Replace launcher command entirely |
-| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Replace the automatic dependency install command entirely (overrides package-manager detection; output to `.logs/dependency-install.log`) |
-| `BUILD_COMMAND` | empty | Yes | Optional build step before run |
-| `EXTRA_ARGS` | empty | Yes | Extra CLI args passed to your app |
-
-### Runtimes & companions
-| Variable | Default | Editable | Description |
-|---|---|---|---|
-| `EXTRA_RUNTIMES` | `auto` | Yes | Companions, optionally versioned: `python@3.12,bun@latest` |
-| `SKIP_RUNTIMES` | `none` | Yes | Engines to skip completely |
-| `RUNTIME_VERSION` | `latest` | Yes | See version tables above |
-| `CUSTOM_RUNTIME_URL` | empty | Yes | Direct download of a custom runtime archive/binary |
-| `NODE_GYP_SUPPORT` | `1` | Yes | Python/build tools for native node addons |
-| `SKIP_PYTHON` | `0` | Yes | Prevent the Python companion entirely |
-| `AUTO_INSTALL_DEPS` | `1` | Yes | Auto dependency installation on boot |
-| `CUSTOM_INSTALL_COMMAND` | empty | Yes | Full control over the dependency install step (see Core selection) |
-
-### Console & theming
-| Variable | Default | Editable | Description |
-|---|---|---|---|
-| `CLI_THEME` | `prog` | Yes | Console theme: `prog` (agent theme) or `classic` (legacy PotenFYR) |
-| `CLI_BANNER_GRADIENT` | `auto` | Yes | Banner gradient: `auto` (random each boot), `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum`, `none` |
-| `PANEL_STOP_WATCHER` | `auto` | Yes | Watch console input for the panel stop command (Wings/Feather-style daemons); `0` = off, `1` = force on |
-
-### Process behaviour
-| Variable | Default | Editable | Description |
-|---|---|---|---|
-| `SUPERVISOR` | `auto` | Yes | `auto` / `procfile` (force) / `single` |
-| `PROCFILE_RESTART` | `1` | Yes | Restart crashed Procfile processes with backoff |
-| `PROCFILE_LOGS` | `0` | Yes | Mirror process streams to `.logs/processes/` |
-| `AUTO_RESTART` | `0` | Yes | Restart single main process on crash |
-| `RESTART_DELAY` | `3` | Yes | Seconds between restart attempts |
-| `DEV_MODE` | `0` | Yes | Watch/hot-reload mode |
-| `PRE_RUN_COMMAND` | empty | Yes | Runs before the main process (migrations...) |
-| `POST_RUN_COMMAND` | empty | Yes | Runs on stop/shutdown |
-| `CLEAN_BUILD_CACHE` | `1` | Yes | Purge caches after builds |
-| `MEMORY_AUTO_TUNE` | `1` | Yes | OOM-protective heap tuning |
-
-### Networking & repository
-| Variable | Default | Editable | Description |
-|---|---|---|---|
-| `SERVER_PORT` | panel-assigned | Admin | Primary allocation (also reads PORT/FEATHER_PORT/PUFFER_PORT) |
-| `AUTO_ENV_INJECT` | `1` | Yes | Keep `.env` PORT/HOST bindings correct |
-| `GIT_REPO` | empty | Yes | Clone/sync repository on boot |
-| `GIT_BRANCH` | `main` | Yes | Branch to track |
-| `GIT_AUTH_TOKEN` | empty | Yes | PAT for private repos (redacted in logs) |
-| `EXTRA_URLS` | empty | Yes | Extra archives/files fetched at boot |
-
-### Health & reliability
-| Variable | Default | Editable | Description |
-|---|---|---|---|
-| `HEALTH_CHECK_PATH` | empty | Yes | HTTP path probed post-boot; empty disables |
-| `HEALTH_STRICT` | `0` | Yes | Exit non-zero when probe fails |
-| `HEALTH_TIMEOUT` | `60` | Yes | Probe budget in seconds |
-| `STARTER_TEMPLATE` | `empty` | Yes | Scaffold a starter project on empty workspaces |
-| `DEBUG` | `0` | Yes | Bash trace to `.logs/launcher-trace.log` |
-| `LAUNCHER_LOG` | `1` | Yes | Console mirroring toggle |
-| `EGG_UPDATE_URL` | repo raw egg URL | Admin | https-only update source; hash-verified, staged, integrity-checked |
-| `DATABASE_*` | - | - | Reserved prefix for future companion services |
-
-Admin-locked: `SERVER_PORT`. Everything else is user-editable in the panel UI.
-
----
-
-## Egg Switching & Migration Guarantees
-
-Moving between eggs (ours or third-party) is designed to be boring:
-
-- **Startup commands normalize safely.** Any startup referencing `run.sh` becomes exactly
-  `bash <launcher>` (kills interpreter mismatches like `sh run.sh` under dash); foreign commands such as
-  `node index.js` are preserved verbatim as `CUSTOM_COMMAND`.
-- **Legacy runtime folders migrate in place.** Old unversioned install dirs (bun/deno/cargo) move to the
-  new layout instead of re-downloading.
-- **Variables survive.** Every historical variable name still exists with compatible semantics; panel-set
-  values always win over persisted config.
-- **Your data is sacred.** Project files, `.environments/`, caches and logs are never touched by upgrades;
-  retained items are announced with sizes and deletion instructions.
-
----
-
-## Image Publishing Policy (CI)
-
-- **Behavior tests gate publishing.** Every push/PR first boots the launcher in a docker mirror and drives
-  the full panel lifecycle (start, stop, kill, restart, console-text stop, crash diagnostics, multi-process
-  sweep, multi-port apps, startup-value pinning, custom install command, panel detection) - `tests/panel-test.sh`, 60 assertions.
-- ONE image, ONE job. Pushes to `main` build `linux/amd64` + `linux/arm64` + `linux/arm/v7`
-  **with `no-cache: true`** - every tag is a clean rebuild of the exact committed sources.
-- Tags published: `latest` (moving) and `<commit-sha>` (immutable, for rollbacks/digest pinning).
-- Pull requests build without pushing.
-
-```bash
-ghcr.io/potenfyr-studios/prog-language-eggs:latest
-ghcr.io/potenfyr-studios/prog-language-eggs:<commit-sha>
+```mermaid
+graph LR
+    A["Container Memory Limit"] --> B["OOM Protection Engine"]
+    B --> C["V8 / Node.js\n--max-old-space-size = 75% RAM"]
+    B --> D["Go Runtime\nGOMEMLIMIT = 85% RAM"]
+    B --> E["JVM / Java\n-Xmx = 75% RAM"]
+    B --> F[".NET Core\nDOTNET_GCHeapHardLimit = 75% RAM"]
+    B --> G["Glibc\nMALLOC_TRIM_THRESHOLD_ = 128KB"]
 ```
 
 ---
 
-## Repository Layout
+## 📋 Complete Startup Variables Reference
 
-```
-ProG-Language-Eggs/
-|-- egg-programming-multi.json        THE single egg (import into any PTDL_v2 panel)
-|-- Dockerfile                        Single multi-arch image definition
-|-- entrypoint.sh                     Boot: panel detect, arch/distro assurance, banner, self-update, launch
-|-- run.sh                            Launcher: detection, isolation, stop-watcher, supervisor, health, restarts
-|-- install-runtime.sh                On-demand toolchain installer (checksummed, arch-aware)
-|-- resolve-version.sh                Version validator + live-feed keyword resolver
-|-- install.sh                        Cross-panel workspace installer script
-|-- tests/                            Docker behavior suite: Dockerfile.test + panel-test.sh (60 assertions) + pty stop driver
-`-- .github/workflows/docker-image.yml  Behavior tests + clean-build publish pipeline
+### Core Language Selection
+| Variable | Default | Editable | Description |
+|---|---|:---:|---|
+| `LANGUAGE` | `auto` | ✅ | Target language or auto-detect; pins exact stack on first boot. Set `auto-detect` to re-run. |
+| `RUNNER` | `auto` | ✅ | Engine override (`bun`, `deno`, `tsx`, `uvicorn`, `pm2`, etc.). |
+| `MAIN_FILE` | `auto` | ✅ | Explicit entry point file; auto-detection applies if empty. |
+| `PACKAGE_MANAGER` | `auto` | ✅ | Package manager override (`npm`, `pnpm`, `yarn`, `poetry`, `uv`, etc.). |
+| `RUNTIME_VERSION` | `latest` | ✅ | Version or keyword (`latest`, `lts`, `stable`, `beta`, `nightly`, or concrete `22`, `3.12`). |
+| `CUSTOM_COMMAND` | *empty* | ✅ | Completely replaces the launcher command. |
+| `CUSTOM_INSTALL_COMMAND` | *empty* | ✅ | Replaces automatic dependency installation step (logged to `.logs/dependency-install.log`). |
+| `BUILD_COMMAND` | *empty* | ✅ | Pre-run build step (e.g. `npm run build` or `cargo build --release`). |
+| `EXTRA_ARGS` | *empty* | ✅ | Additional CLI arguments passed to your application. |
+
+### Runtimes & Companions
+| Variable | Default | Editable | Description |
+|---|---|:---:|---|
+| `EXTRA_RUNTIMES` | `auto` | ✅ | Install companions side-by-side: `python@3.12,bun@latest,java@21`. |
+| `SKIP_RUNTIMES` | `none` | ✅ | Skip specific detected auxiliary engines. |
+| `NODE_GYP_SUPPORT` | `1` | ✅ | Installs Python & GCC build toolchain for native C++ Node addons. |
+| `SKIP_PYTHON` | `0` | ✅ | Opt out of the Python companion runtime. |
+| `AUTO_INSTALL_DEPS` | `1` | ✅ | Automatically install project dependencies during boot. |
+
+### Process Supervision & Lifecycle
+| Variable | Default | Editable | Description |
+|---|---|:---:|---|
+| `SUPERVISOR` | `auto` | ✅ | Supervision mode: `auto` (Procfile wins if present), `procfile` (force), `single`. |
+| `PROCFILE_RESTART` | `1` | ✅ | Automatically restart failed Procfile child processes with linear backoff. |
+| `PROCFILE_LOGS` | `0` | ✅ | Mirror each Procfile process into `.logs/processes/<name>.log`. |
+| `AUTO_RESTART` | `0` | ✅ | Automatically restart single main process on unexpected crash. |
+| `RESTART_DELAY` | `3` | ✅ | Delay in seconds between restart attempts. |
+| `DEV_MODE` | `0` | ✅ | Hot-reload / file-watch mode for supported engines. |
+| `PRE_RUN_COMMAND` | *empty* | ✅ | Command executed before launching main process (e.g. database migrations). |
+| `POST_RUN_COMMAND` | *empty* | ✅ | Command executed during container shutdown. |
+| `CLEAN_BUILD_CACHE` | `1` | ✅ | Clear package caches post-install to conserve storage. |
+| `MEMORY_AUTO_TUNE` | `1` | ✅ | Dynamic OOM-protective heap auto-tuner. |
+
+### Git & Networking
+| Variable | Default | Editable | Description |
+|---|---|:---:|---|
+| `SERVER_PORT` | *assigned* | 🔒 Admin | Primary network port allocated by the panel. |
+| `AUTO_ENV_INJECT` | `1` | ✅ | Injects correct `PORT` and `HOST` variables into `.env`. |
+| `GIT_REPO` | *empty* | ✅ | Git repository to clone and synchronize on boot. |
+| `GIT_BRANCH` | `main` | ✅ | Branch to track and fetch. |
+| `GIT_AUTH_TOKEN` | *empty* | ✅ | Personal access token for private repos (redacted in logs). |
+
+### Health Checks & Console
+| Variable | Default | Editable | Description |
+|---|---|:---:|---|
+| `HEALTH_CHECK_PATH` | *empty* | ✅ | HTTP endpoint probed post-boot (e.g. `/healthz`). |
+| `HEALTH_STRICT` | `0` | ✅ | Exit non-zero when probe fails, marking container unhealthy. |
+| `HEALTH_TIMEOUT` | `60` | ✅ | Timeout budget in seconds for health probe to pass. |
+| `PANEL_STOP_WATCHER` | `auto` | ✅ | Monitor stdin for console stop commands (`0` = off, `1` = force on). |
+| `CLI_THEME` | `prog` | ✅ | Console UI theme: `prog` (modern agent) or `classic` (legacy PotenFYR). |
+| `CLI_BANNER_GRADIENT` | `auto` | ✅ | Banner gradient: `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum`, or `none`. |
+| `LAUNCHER_LOG` | `1` | ✅ | Mirrors full boot console into `.logs/console.log`. |
+| `DEBUG` | `0` | ✅ | Write comprehensive bash xtrace to `.logs/launcher-trace.log`. |
+
+---
+
+## 🔒 Security & Hardening Posture
+
+- **Cryptographic Verification**: Runtimes are checked against official upstream SHA256 checksums before unpacking.
+- **Credential Redaction**: Tokens and passwords in URLs (`GIT_REPO`, `EXTRA_URLS`) are strictly sanitized from consoles and logs.
+- **Strict Least-Privilege**: Runs completely within the container user workspace without root escalation requirements.
+- **File Manager Denylist**: Protects internal egg orchestrators and updates from tampering via panel web interfaces.
+- **Process Hygiene**: Restrictive `umask 022` enforced, disabled core dumps, and orphaned process sweeps on every boot.
+
+---
+
+## 📂 Repository Layout
+
+```text
+Prog-Language-Eggs/
+├── egg-programming-multi.json        # The unified multi-language egg (Import to Pterodactyl/Pelican/Feather)
+├── Dockerfile                        # Multi-architecture production container definition
+├── entrypoint.sh                     # Boot engine: Arch & panel detection, signal traps, self-update
+├── run.sh                            # Main orchestrator: Auto-detection, memory tuner, Procfile supervisor
+├── install-runtime.sh                # On-demand runtime provisioner with checksum validation
+├── resolve-version.sh                # Live-feed dynamic version resolver & caching
+├── install.sh                        # Universal workspace installer helper
+├── tests/                            # Automated behavior verification test suite (60+ assertions)
+│   ├── Dockerfile.test
+│   ├── panel-test.sh
+│   └── pty-stop-driver.py
+└── .github/
+    └── workflows/
+        └── docker-image.yml          # Multi-arch automated build & publish pipeline
 ```
 
 ---
 
-## Troubleshooting & FAQ
-
-### Newbie quick answers
+## 🩺 Troubleshooting & Diagnostics
 
 <details>
-<summary><b>Files I uploaded via the file manager disappeared after a reinstall</b></summary>
-When <code>GIT_REPO</code> is set, every boot syncs the workspace to your git branch: a fresh install
-clones the repo, existing clones run <code>git fetch</code> + <code>git reset --hard FETCH_HEAD</code>.
-Only what is <b>committed and pushed</b> survives a server reinstall (the volume is wiped and re-cloned).
-Files uploaded via the file manager but never committed/pushed to <code>GIT_REPO</code> are untracked:
-they survive normal restarts, but a reinstall restores only the repository content. Commit your files to
-the repo (or upload them again after reinstalling).
+<summary><b>My server starts but displays "Hello from PotenFYR" - where is my code?</b></summary>
+Your workspace was initially empty, so the launcher generated a starter placeholder. Upload your project files (or configure <code>GIT_REPO</code>), and restart your server.
 </details>
 
 <details>
-<summary><b>My server doesn't pick up new commits I pushed to GitHub</b></summary>
-Every boot with <code>GIT_REPO</code> set re-points <code>origin</code> at the currently configured
-repo/token, fetches <code>GIT_BRANCH</code> and resets the workspace to the fetched commit — the console
-prints the old &rarr; new commit hash, subject and date so you can verify it. If a sync fails (bad token,
-wrong branch name, no network) the launcher now says so loudly in the console instead of failing silently,
-and keeps your installed code running. Before any overwrite the current codebase is archived to
-<code>.logs/code-archives/</code> (five newest kept) so a bad sync can be rolled back. A workspace that
-already holds files also gets the repository fetched <i>over</i> it — nothing is wiped.
-</details>
-
-
-<details>
-<summary><b>npm install fails with a postinstall error or EBADENGINE warnings</b></summary>
-The launcher retries the install once with lifecycle scripts disabled
-(<code>npm --ignore-scripts</code>), so dependencies still land when a package's <code>postinstall</code>
-is broken. The console then says <i>"lifecycle scripts skipped"</i> instead of falsely claiming success.
-To run your own install step entirely, set <code>CUSTOM_INSTALL_COMMAND</code> (e.g.
-<code>npm install --ignore-scripts</code>). <code>EBADENGINE</code> lines are warnings: your pinned
-<code>RUNTIME_VERSION</code> is older than a dependency requires - bump it or pin the engine the app wants.
+<summary><b>Files uploaded via the File Manager vanished after a Reinstall</b></summary>
+When <code>GIT_REPO</code> is defined, a fresh reinstall wipes the volume and re-clones the branch. Only committed and pushed files survive a reinstall. Files uploaded manually without committing are untracked and will be overwritten during reinstallation.
 </details>
 
 <details>
-<summary><b>My server starts but says "Hello from PotenFYR" - where is my app?</b></summary>
-Your workspace was empty, so a starter placeholder was scaffolded. Upload your code (or set GIT_REPO),
-then restart.
+<summary><b>npm install fails with EBADENGINE or postinstall errors</b></summary>
+The launcher automatically retries failed installs with <code>npm --ignore-scripts</code> so valid dependencies land even if an optional package's postinstall script fails. Check <code>.logs/dependency-install.log</code> for the full build output, or define <code>CUSTOM_INSTALL_COMMAND</code>.
 </details>
 
 <details>
-<summary><b>How do I change the language later?</b></summary>
-Panel -> Startup -> change <code>LANGUAGE</code>. Your previous environment stays in
-<code>.environments/</code>; the console tells you exactly where and how to delete it if unwanted.
+<summary><b>How do I switch languages or re-trigger auto-detection?</b></summary>
+Go to your panel's <b>Startup</b> tab, change <code>LANGUAGE</code> (or set it to <code>auto-detect</code> to re-evaluate workspace files), and restart. Your previous environments remain intact under <code>.environments/</code>.
 </details>
 
 <details>
-<summary><b>A version keyword did not resolve</b></summary>
-Read the console message (it lists valid series) and check <code>.logs/version-resolver.log</code>.
-Numeric forms look like <code>22</code>, <code>20.11.1</code>, <code>v3.12</code>.
+<summary><b>The app crashed on boot - where are the logs?</b></summary>
+The launcher renders a crash diagnostic card directly in the panel console. For granular details, inspect:
+<ul>
+  <li><code>.logs/console.log</code> - Complete console history of previous and current boots.</li>
+  <li><code>.logs/launcher-errors.log</code> - Timestamped journal of runtime, git, and supervisor errors.</li>
+  <li><code>.logs/processes/&lt;process-name&gt;.log</code> - Process-specific logs (in Procfile mode).</li>
+  <li><code>.logs/launcher-trace.log</code> - Verbose bash execution trace (when <code>DEBUG=1</code>).</li>
+</ul>
 </details>
 
-<details>
-<summary><b>The app crashed - where do I look?</b></summary>
-Console shows a crash card automatically. Deeper: <code>.logs/console.log</code>,
-<code>.logs/processes/&lt;name&gt;.log</code> (Procfile mode), and <code>.logs/launcher-trace.log</code>
-after a <code>DEBUG=1</code> restart.
-</details>
-
-### Expert diagnostics map
-
-| Symptom | First place to look |
+### Diagnostic File Quick-Reference
+| Symptom / Event | Primary Log Location |
 |---|---|
-| Egg misbehaving / app crashed | `.logs/launcher-errors.log` - timestamped journal (git, installs, health, crashes) with panel context |
-| Version request rejected / wrong version picked | `.logs/version-resolver.log` |
-| Runtime download/extraction failure | Installer output (retry counts, sizes, checksum verdicts included) |
-| Dependency install failed | `.logs/dependency-install.log` (verbatim package manager output) |
-| Wrong panel detected | Boot header `panel=` + boot card `Host Platform` row; open an issue with `env \| grep -iE 'pterodactyl\|pelican\|puffer\|feather'` |
-| Environment not reused across restarts | Inspect `.environments/active` marker format `lang\|series\|version` |
-| Procfile process keeps dying | `.logs/processes/<name>.log` + restart counter messages |
-| Health probe failing | App binding must be `0.0.0.0:$SERVER_PORT` inside the container; check app logs first |
-| Want auto-detection back after a pin | Set the variable to `auto-detect` (Startup tab) and restart |
-| Full step replay | `DEBUG=1` then read `.logs/launcher-trace.log` top-to-bottom |
-
-### Support
-
-- Issues: https://github.com/PotenFYR-Studios/Prog-Language-Eggs/issues
-- Email: support@potenfyr.in
+| Runtime download / checksum failures | `.logs/runtime-install-<name>.log` |
+| Upstream version resolution errors | `.logs/version-resolver.log` |
+| Dependency install issues | `.logs/dependency-install.log` |
+| Multi-process / Procfile worker crash | `.logs/processes/<name>.log` |
+| Full boot execution trace | `.logs/launcher-trace.log` (with `DEBUG=1`) |
 
 ---
 
-## License
+## ⭐ Star History
 
-MIT - see [LICENSE](LICENSE). Developed by [PotenFYR Studios](https://github.com/PotenFYR-Studios).
+<div align="center">
+  <a href="https://star-history.com/#PotenFYR-Studios/Prog-Language-Eggs&Date">
+    <img src="https://api.star-history.com/svg?repos=PotenFYR-Studios/Prog-Language-Eggs&type=Date" width="80%" alt="Star History Chart" />
+  </a>
+</div>
+
+---
+
+<div align="center">
+
+## 📄 License & Credits
+
+Released under the **[MIT License](LICENSE)**.<br/>
+Engineered with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)**.
+
+<!-- FOOTER BANNER -->
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:f97316,50:ec4899,100:8b5cf6&height=120&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20PotenFYR%20Studios&fontSize=16&fontColor=ffffff&fontAlignY=65" width="100%" alt="Footer Banner" />
+
+</div>
