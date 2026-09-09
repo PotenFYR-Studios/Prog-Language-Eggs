@@ -10,21 +10,17 @@
 
 <br/>
 
-<!-- COMMUNITY & ORG PILL BADGES -->
+<!-- BADGES -->
 <a href="https://potenfyr.in"><img src="https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Website" /></a>
 <a href="https://discord.gg/potenfyr"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" /></a>
 <a href="mailto:support@potenfyr.in"><img src="https://img.shields.io/badge/Email-support%40potenfyr.in-ec4899?style=for-the-badge&logo=mail.ru&logoColor=white" alt="Email" /></a>
-<img src="https://komarev.com/ghpvc/?username=PotenFYR-Studios-Prog-Language-Eggs&color=ec4899&style=for-the-badge&label=VIEWS&labelColor=1c1e26" alt="Profile Views" />
-
-<br/><br/>
-
-<!-- REPOSITORY METRIC BADGES -->
-[![CI Build](https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Prog-Language-Eggs/docker-image.yml?branch=main&label=CI%20BUILD&logo=githubactions&logoColor=white&style=flat-square)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions)
-[![Docker Image](https://img.shields.io/badge/ghcr.io-prog--language--eggs-blue?logo=docker&logoColor=white&style=flat-square)](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs)
-[![Languages](https://img.shields.io/badge/Languages-50%2B%20Supported-8b5cf6?logo=codefactor&logoColor=white&style=flat-square)](#supported-languages-50)
-[![Panels](https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-orange?style=flat-square)](#multi-panel-support)
-[![Arch](https://img.shields.io/badge/Arch-amd64%20%7C%20arm64%20%7C%20armv7-success?style=flat-square)](#runs-anywhere-cpu--os)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+<img src="https://komarev.com/ghpvc/?username=PotenFYR-Studios-Prog-Language-Eggs&color=ec4899&style=for-the-badge&label=VIEWS&labelColor=1c1e26" alt="Profile Views" /><br/>
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions"><img src="https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Prog-Language-Eggs/docker-image.yml?branch=main&label=CI%20BUILD&logo=githubactions&logoColor=white&style=flat-square" alt="CI Build" /></a>
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs"><img src="https://img.shields.io/badge/ghcr.io-prog--language--eggs-blue?logo=docker&logoColor=white&style=flat-square" alt="Docker Image" /></a>
+<a href="#supported-languages-50"><img src="https://img.shields.io/badge/Languages-50%2B%20Supported-8b5cf6?logo=codefactor&logoColor=white&style=flat-square" alt="Languages" /></a>
+<a href="#multi-panel-support"><img src="https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-orange?style=flat-square" alt="Panels" /></a>
+<a href="#runs-anywhere-cpu--os"><img src="https://img.shields.io/badge/Arch-amd64%20%7C%20arm64%20%7C%20armv7-success?style=flat-square" alt="Arch" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT" /></a>
 
 <br/>
 
