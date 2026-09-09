@@ -71,8 +71,8 @@ grep -q "╗" "$TMP/banner-none.txt" && ok_t "flat block art used for gradient=n
 
 COLUMNS=60
 w=$(measure "$TMP/banner-narrow.txt" print_banner)
-[ "$w" -le 61 ] && ok_t "narrow console falls back to compact art: max ${w} cols" || bad_t "narrow banner wraps: ${w} cols"
-grep -q "____" "$TMP/banner-narrow.txt" && ok_t "compact figlet art used on verifiably narrow console" || bad_t "compact art not used on narrow console"
+[ "$w" -le 61 ] && ok_t "narrow console falls back to styled text: max ${w} cols" || bad_t "narrow banner wraps: ${w} cols"
+grep -q "PROGLANG" "$TMP/banner-narrow.txt" && ok_t "clean styled text fallback used on verifiably narrow console" || bad_t "styled fallback not used on narrow console"
 unset COLUMNS CLI_BANNER_GRADIENT
 
 CLI_THEME=classic
