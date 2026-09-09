@@ -2136,7 +2136,7 @@ print_runtime_card() {
     print_card_row "Memory Tuning"   "${AUTO_TUNE_INFO:-Default}" "${C_MAGENTA}"
     print_card_row "Port Allocation" "${SERVER_PORT} (0.0.0.0)" "${C_GREEN}"
     print_card_row "Egg Self-Update" "$([ "${AUTO_UPDATE_EGG:-1}" = "1" ] && echo Enabled || echo Disabled)" "${C_GREEN}"
-    print_card_row "Process User"    "$(id -un 2>/dev/null || echo '?') (uid $(id -u 2>/dev/null || echo '?'))" "${C_BLUE}"
+    print_card_row "Process User"    "uid $(id -u 2>/dev/null || echo '?')" "${C_BLUE}"
     print_card_row "Architecture"    "${ARCH:-$(uname -m 2>/dev/null)} ($(uname -s 2>/dev/null || echo linux))" "${C_CYAN}"
     print_card_row "Working Dir"     "${WORK_DIR}" "${C_DIM}"
     printf " ${C_DIM}└──────────────────────────────────────────────────────────┘${C_RESET}\n\n"

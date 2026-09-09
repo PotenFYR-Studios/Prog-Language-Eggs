@@ -640,12 +640,10 @@ print_banner() {
                 _banner_grad_row "${_art[$r]}" "$r"
             done
         else
-            # Compact 60-col figlet fallback for narrow/unknown consoles.
-            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "  ____  ____   ___    ____ " "   _         _     _   _   ____ "
-            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|  _ \\|  _ \\  / _ \\  / ___|" "  | |       / \\   | \\ | | / ___|"
-            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "| |_) || |_) || | | || |  _ " "  | |      / _ \\  |  \\| || |  _ "
-            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|  __/ |  __/ | |_| || |_| |" "  | |___  / ___ \\ | |\\  || |_| |"
-            printf "${C_LIME}${C_BOLD}%s${C_GOLD}${C_BOLD}%s${C_RESET}\n" "|_|    |_|     \\___/  \\____|" "  |_____|/_/   \\_\\|_| \\_| \\____|"
+            # Clean styled wordmark for narrow consoles (< 74 cols verified):
+            # short single-line text can never wrap or misalign the way
+            # multi-line figlet art does on a cramped console.
+            printf "${C_LIME}${C_BOLD}  </> PROGLANG${C_RESET}${C_DIM} · 50+ languages${C_RESET}\n"
         fi
     else
         # Flat (CLI_BANNER_GRADIENT=none) - same width rules as above.
@@ -660,11 +658,7 @@ print_banner() {
             printf "${C_LIME}${C_BOLD}  ██║     ██║  ██║╚██████╔╝╚██████╔╝  ███████╗██║  ██║██║ ╚████║╚██████╔╝${C_RESET}\n"
             printf "${C_LIME}${C_BOLD}  ╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝   ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ${C_RESET}\n"
         else
-            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "  ____  ____   ___    ____    _         _     _   _   ____ "
-            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "|  _ \\|  _ \\  / _ \\  / ___|  | |       / \\   | \\ | | / ___|"
-            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "| |_) || |_) || | | || |  _   | |      / _ \\  |  \\| || |  _ "
-            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "|  __/ |  __/ | |_| || |_| |  | |___  / ___ \\ | |\\  || |_| |"
-            printf "${C_LIME}${C_BOLD}%s${C_RESET}\n" "|_|    |_|     \\___/  \\____|  |_____|/_/   \\_\\|_| \\_| \\____|"
+            printf "${C_LIME}${C_BOLD}  </> PROGLANG${C_RESET}${C_DIM} · 50+ languages${C_RESET}\n"
         fi
     fi
 
