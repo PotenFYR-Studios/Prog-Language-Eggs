@@ -558,9 +558,10 @@ fi
 # Block-font art with a diagonal 256-color gradient sweep. Gradient presets:
 #   citrus (brand) aurora sunset ocean candy spectrum | none = flat lime
 # CLI_BANNER_GRADIENT picks one; "auto" (default) randomizes per boot.
-# Width rules: full art needs a real terminal reporting >= 74 cols; panel
-# consoles are pipes (width unknown, ~62-64 visible cols) and always get the
-# compact 60-col figlet art so the banner never wraps.
+# Width rules: panel consoles are pipes where tput cannot answer; unknown
+# width defaults to 80 so panels get the full gradient block art (the art is
+# 70 cols, same footprint as the Database-Eggs banner that renders cleanly).
+# The compact fallback only fires on a console that verifiably reports < 74.
 print_banner() {
     printf "\n"
     if [ "${CLI_THEME}" = "classic" ]; then
@@ -626,16 +627,13 @@ print_banner() {
 '╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ '
         )
         # Panel daemons attach the console as a PIPE, not a TTY: COLUMNS is
-        # unset and tput cannot answer, and panel web consoles are only
-        # ~62-64 cols wide. An unknown width must therefore default to the
-        # compact art - assuming 80 here is what wrapped and garbled the
-        # banner on Feather Panel. Full art only on a real terminal that
-        # verifiably reports >= 74 cols.
+        # unset and tput cannot answer. An unknown width defaults to 80 so
+        # panels still get the full gradient art (the 70-col art fits the
+        # same panels that render the 72-col Database-Eggs banner cleanly).
+        # Only a console that verifiably reports < 74 gets the fallback.
         local _w=""
-        if [ -t 1 ]; then
-            _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 0)}"
-        fi
-        case "${_w}" in ""|*[!0-9]*) _w=0 ;; esac
+        _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"
+        case "${_w}" in ""|0|*[!0-9]*) _w=80 ;; esac
         if [ "${_w}" -ge 74 ]; then
             local r
             for r in 0 1 2 3 4 5; do
@@ -652,10 +650,8 @@ print_banner() {
     else
         # Flat (CLI_BANNER_GRADIENT=none) - same width rules as above.
         local _w=""
-        if [ -t 1 ]; then
-            _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 0)}"
-        fi
-        case "${_w}" in ""|*[!0-9]*) _w=0 ;; esac
+        _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"
+        case "${_w}" in ""|0|*[!0-9]*) _w=80 ;; esac
         if [ "${_w}" -ge 74 ]; then
             printf "${C_LIME}${C_BOLD}  ██████╗ ██████╗  ██████╗ ██████╗   ██╗      █████╗ ███╗   ██╗ ██████╗ ${C_RESET}\n"
             printf "${C_LIME}${C_BOLD}  ██╔══██╗██╔══██╗██╔═══██╗██╔════╝   ██║     ██╔══██╗████╗  ██║██╔════╝ ${C_RESET}\n"

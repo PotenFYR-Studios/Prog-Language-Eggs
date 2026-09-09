@@ -52,19 +52,32 @@ measure() { # measure OUTFILE CMD...
     max_width "$out"
 }
 
-echo "== Console render width tests (budget: 61 cols, Feather Panel) =="
+echo "== Console render width tests =="
+# Banner budget: panel consoles are pipes (unknown width -> 80), so the full
+# 70-col gradient art prints there, matching the Database-Eggs banner that
+# renders cleanly on the same panels. Cards stay within their 61-col budget.
 
 CLI_THEME=prog
 RANDOM=42
 w=$(measure "$TMP/banner.txt" print_banner)
-[ "$w" -le 61 ] && ok_t "gradient banner (non-tty/panel): max ${w} cols" || bad_t "gradient banner wraps: ${w} cols"
-grep -q "____" "$TMP/banner.txt" && ok_t "compact figlet art used for unknown width" || bad_t "compact art not used"
+[ "$w" -le 72 ] && ok_t "gradient banner (non-tty/panel): max ${w} cols" || bad_t "gradient banner wraps: ${w} cols"
+grep -q "╗" "$TMP/banner.txt" && ok_t "full gradient block art used for panel (non-tty)" || bad_t "block art not used on non-tty"
 
-w=$(measure "$TMP/banner-none.txt" env CLI_BANNER_GRADIENT=none print_banner)
-[ "$w" -le 61 ] && ok_t "flat banner (none): max ${w} cols" || bad_t "flat banner wraps: ${w} cols"
+# `env VAR=x fn` cannot run shell functions, so set vars in the shell instead.
+CLI_BANNER_GRADIENT=none
+w=$(measure "$TMP/banner-none.txt" print_banner)
+[ "$w" -le 73 ] && ok_t "flat banner (none): max ${w} cols" || bad_t "flat banner wraps: ${w} cols"
+grep -q "╗" "$TMP/banner-none.txt" && ok_t "flat block art used for gradient=none" || bad_t "block art not used for gradient=none"
 
-w=$(measure "$TMP/banner-classic.txt" env CLI_THEME=classic print_banner)
-[ "$w" -le 61 ] && ok_t "classic banner: max ${w} cols" || bad_t "classic banner wraps: ${w} cols"
+COLUMNS=60
+w=$(measure "$TMP/banner-narrow.txt" print_banner)
+[ "$w" -le 61 ] && ok_t "narrow console falls back to compact art: max ${w} cols" || bad_t "narrow banner wraps: ${w} cols"
+grep -q "____" "$TMP/banner-narrow.txt" && ok_t "compact figlet art used on verifiably narrow console" || bad_t "compact art not used on narrow console"
+unset COLUMNS CLI_BANNER_GRADIENT
+
+CLI_THEME=classic
+w=$(measure "$TMP/banner-classic.txt" print_banner)
+[ "$w" -le 62 ] && ok_t "classic banner: max ${w} cols" || bad_t "classic banner wraps: ${w} cols"
 
 is_placeholder() { return 1; }   # force non-placeholder display paths
 _effective_runner() { echo bun; }
