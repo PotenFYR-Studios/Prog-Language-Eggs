@@ -14,6 +14,9 @@ env:
 
 # ONE image, ONE tag. Every runtime ships inside a single multi-arch image;
 # language choice happens at startup via egg variables, not at build time.
+permissions:
+  contents: write
+
 jobs:
   # Fast behavior suite: boots the launcher in a docker mirror of the real
   # image layout and drives panel lifecycle events (start/stop/kill/restart,
