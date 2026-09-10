@@ -553,7 +553,7 @@ The launcher renders a crash diagnostic card directly in the panel console. For 
 
 ## 📄 License & Credits
 
-Released under the **[Apache License 2.0 with the Commons Clause](LICENSE)** — free to fork, modify, and use, and to build products or services around, but not to sell as a product.<br/>
+Released under the **[Apache License 2.0 with the Commons Clause](LICENSE)** - free to fork, modify, and use, and to build products or services around, but not to sell as a product.<br/>
 Engineered with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)**.
 
 <!-- FOOTER BANNER -->
