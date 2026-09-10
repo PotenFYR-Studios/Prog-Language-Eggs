@@ -20,7 +20,7 @@
 <a href="#supported-languages-50"><img src="https://img.shields.io/badge/Languages-50%2B%20Supported-8b5cf6?logo=codefactor&logoColor=white&style=flat-square" alt="Languages" /></a>
 <a href="#multi-panel-support"><img src="https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-orange?style=flat-square" alt="Panels" /></a>
 <a href="#runs-anywhere-cpu--os"><img src="https://img.shields.io/badge/Arch-amd64%20%7C%20arm64%20%7C%20armv7-success?style=flat-square" alt="Arch" /></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0%20%2B%20Commons%20Clause-blue.svg?style=flat-square" alt="License: Apache-2.0 + Commons Clause" /></a>
 
 <br/>
 
@@ -553,7 +553,7 @@ The launcher renders a crash diagnostic card directly in the panel console. For 
 
 ## 📄 License & Credits
 
-Released under the **[MIT License](LICENSE)**.<br/>
+Released under the **[Apache License 2.0 with the Commons Clause](LICENSE)** — free to fork, modify, and use, and to build products or services around, but not to sell as a product.<br/>
 Engineered with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)**.
 
 <!-- FOOTER BANNER -->
