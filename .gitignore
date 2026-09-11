@@ -130,3 +130,8 @@ desktop.ini
 scratch/
 tmp/
 *.tar.gz
+
+# Local agent/assistant artifacts (do not commit)
+CLAUDE.md
+.rtk
+.plan
