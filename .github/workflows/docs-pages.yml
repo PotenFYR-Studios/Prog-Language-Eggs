@@ -43,7 +43,7 @@ jobs:
 
       - name: Type check
         working-directory: docs
-        run: bunx tsc --noEmit
+        run: bun run prebuild && bunx tsc --noEmit
 
       - name: Build docs site (prebuild + vite)
         working-directory: docs
