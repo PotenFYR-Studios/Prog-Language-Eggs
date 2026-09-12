@@ -14,8 +14,10 @@ env:
 
 # ONE image, ONE tag. Every runtime ships inside a single multi-arch image;
 # language choice happens at startup via egg variables, not at build time.
+# Least privilege: the workflow default is read-only; the publish job grants
+# packages:write itself, so nothing here needs contents:write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # Fast behavior suite: boots the launcher in a docker mirror of the real
@@ -27,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run panel behavior test suite
         run: bash tests/panel-test.sh
@@ -42,28 +44,28 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up QEMU for multi-architecture emulation
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           # Must cover EVERY platform passed to build-push below, otherwise
           # emulated RUN steps fail with "exec format error" (arm/v7 case).
           platforms: linux/amd64,linux/arm64,linux/arm/v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push single Multi-Language image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile

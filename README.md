@@ -1,32 +1,42 @@
 <div align="center">
 
 <!-- HEADER BANNER -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Prog%20Language%20Eggs&fontSize=46&fontColor=ffffff&fontAlignY=38&desc=Universal%20Multi-Language%20Runtime%20%C2%B7%2050%2B%20Languages%20%C2%B7%20Zero-Config%20Auto-Detection&descSize=16&descAlignY=60&descAlign=50" width="100%" alt="Prog Language Eggs Banner" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Prog-Language-Eggs&fontSize=52&fontColor=ffffff&fontAlignY=34&animation=twinkling" width="100%" alt="Prog-Language-Eggs Banner" />
 
 <!-- TYPING SVG SUBTITLE -->
 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code:wght@600&size=19&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=One+Egg.+One+Image.+Every+Language.;50%2B+Programming+Languages+Supported+Out-of-the-Box;Zero-Config+Auto-Detection+%26+Dynamic+On-Demand+Installs;Procfile+Supervisor+%C2%B7+OOM+Protection+%C2%B7+Multi-Panel+Native" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=One+Egg.+One+Image.+Every+Language.;54+Programming+Languages+In+One+Docker+Image;Auto-Detection%2C+On-Demand+Runtimes%2C+Procfile+Supervision;Pterodactyl%2C+Pelican%2C+Feather%2C+PufferPanel+and+Docker" alt="Typing SVG" />
 </a>
 
 <br/>
 
 <!-- BADGES -->
-<a href="https://potenfyr.in"><img src="https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Website" /></a>
-<a href="https://discord.gg/potenfyr"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" /></a>
-<a href="mailto:support@potenfyr.in"><img src="https://img.shields.io/badge/Email-support%40potenfyr.in-ec4899?style=for-the-badge&logo=mail.ru&logoColor=white" alt="Email" /></a>
-<img src="https://komarev.com/ghpvc/?username=PotenFYR-Studios-Prog-Language-Eggs&color=ec4899&style=for-the-badge&label=VIEWS&labelColor=1c1e26" alt="Profile Views" /><br/>
-<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions"><img src="https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Prog-Language-Eggs/docker-image.yml?branch=main&label=CI%20BUILD&logo=githubactions&logoColor=white&style=flat-square" alt="CI Build" /></a>
-<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs"><img src="https://img.shields.io/badge/ghcr.io-prog--language--eggs-blue?logo=docker&logoColor=white&style=flat-square" alt="Docker Image" /></a>
-<a href="#supported-languages-50"><img src="https://img.shields.io/badge/Languages-50%2B%20Supported-8b5cf6?logo=codefactor&logoColor=white&style=flat-square" alt="Languages" /></a>
-<a href="#multi-panel-support"><img src="https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-orange?style=flat-square" alt="Panels" /></a>
-<a href="#runs-anywhere-cpu--os"><img src="https://img.shields.io/badge/Arch-amd64%20%7C%20arm64%20%7C%20armv7-success?style=flat-square" alt="Arch" /></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0%20%2B%20Commons%20Clause-blue.svg?style=flat-square" alt="License: Apache-2.0 + Commons Clause" /></a>
+<a href="https://potenfyr.in"><img src="https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1c1e26" alt="Website" /></a>
+<a href="https://discord.gg/potenfyr"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white&labelColor=1c1e26" alt="Discord" /></a>
+<a href="https://prog-language-eggs.docs.potenfyr.in"><img src="https://img.shields.io/badge/Docs-prog--language--eggs-8b5cf6?style=for-the-badge&logo=gitbook&logoColor=white&labelColor=1c1e26" alt="Docs" /></a>
+<a href="https://nest.potenfyr.in"><img src="https://img.shields.io/badge/Nest-Unified%20Catalog-ec4899?style=for-the-badge&logo=github&logoColor=white&labelColor=1c1e26" alt="Nest" /></a>
+<a href="mailto:support@potenfyr.in"><img src="https://img.shields.io/badge/Email-support%40potenfyr.in-ec4899?style=for-the-badge&logo=minutemailer&logoColor=white&labelColor=1c1e26" alt="Email" /></a>
+<img src="https://komarev.com/ghpvc/?username=PotenFYR-Studios-Prog-Language-Eggs&color=ec4899&style=for-the-badge&label=PROFILE+VIEWS&labelColor=1c1e26" alt="Profile Views" /><br/>
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions"><img src="https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Prog-Language-Eggs/docker-image.yml?branch=master&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%20Build&labelColor=1c1e26&color=2ea043" alt="CI Build" /></a>
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs"><img src="https://img.shields.io/badge/ghcr.io-prog--language--eggs-8b5cf6?style=for-the-badge&logo=docker&logoColor=white&labelColor=1c1e26" alt="Docker Image" /></a>
+<a href="#supported-languages-50"><img src="https://img.shields.io/badge/Languages-54%20Supported-06b6d4?style=for-the-badge&logo=codefactor&logoColor=white&labelColor=1c1e26" alt="Languages" /></a>
+<a href="#multi-panel-support"><img src="https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Puffer-f97316?style=for-the-badge&logo=serverpilot&logoColor=white&labelColor=1c1e26" alt="Panels" /></a>
+<a href="#runs-anywhere-cpu--os"><img src="https://img.shields.io/badge/Arch-amd64%20%7C%20arm64%20%7C%20armv7-10b981?style=for-the-badge&labelColor=1c1e26" alt="Arch" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0%20%2B%20Commons%20Clause-8b5cf6?style=for-the-badge&logo=apache&logoColor=white&labelColor=1c1e26" alt="License: Apache-2.0 + Commons Clause" /></a><br/>
 
 <br/>
 
 <p align="center">
   <b>One egg. One image. Every language.</b><br/>
-  A production-grade hosting runtime that automatically installs, updates, compiles, and supervises <b>50+ programming languages</b> inside your container — built natively for <b>Pterodactyl</b>, <b>Pelican</b>, <b>Feather Panel</b>, <b>PufferPanel</b>, <b>Jexactyl</b>, <b>Wisp</b>, <b>Emerald</b>, <b>Kubernetes</b>, and standalone <b>Docker</b>.
+  A production-grade hosting runtime that automatically installs, updates, compiles, and supervises <b>50+ programming languages</b> inside your container, built natively for <b>Pterodactyl</b>, <b>Pelican</b>, <b>Feather Panel</b>, <b>PufferPanel</b>, <b>Jexactyl</b>, <b>Wisp</b>, <b>Emerald</b>, <b>Kubernetes</b>, and standalone <b>Docker</b>.
+</p>
+
+<p align="center">
+  📚 <a href="https://prog-language-eggs.docs.potenfyr.in"><b>Documentation</b></a> &nbsp;·&nbsp; 🥚 <a href="https://nest.potenfyr.in"><b>Unified Egg Catalog</b></a> &nbsp;·&nbsp; 📦 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/egg-programming-multi.json"><b>Egg JSON</b></a>
+</p>
+
+<p align="center">
+  <sub>The multi-language <b>Pterodactyl egg</b> for universal app hosting: a <b>Pelican egg</b> / <b>Feather Panel egg</b> / <b>PufferPanel template</b> that runs <b>Node.js</b>, <b>Python</b>, <b>Go</b>, <b>Rust</b>, <b>Java</b>, <b>.NET</b>, <b>PHP</b>, <b>Deno</b>, <b>Bun</b> and 45 more stacks in one docker image: auto-detect, on-demand runtimes, Procfile supervisor, OOM protection.</sub>
 </p>
 
 </div>
@@ -96,6 +106,7 @@
 - [🔒 Security & Hardening Posture](#-security--hardening-posture)
 - [📂 Repository Layout](#-repository-layout)
 - [🩺 Troubleshooting & Diagnostics](#-troubleshooting--diagnostics)
+- [🤝 Contributing & Support](#-contributing--support)
 - [⭐ Star History](#-star-history)
 - [📄 License & Credits](#-license--credits)
 
@@ -141,7 +152,7 @@ flowchart TD
 ### 1. Game & Hosting Panels
 *Compatible with Pterodactyl, Pelican, Feather Panel, PufferPanel, Jexactyl, Wisp, and Emerald.*
 
-1. **Download the Egg**: Get the latest [`egg-programming-multi.json`](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/main/egg-programming-multi.json).
+1. **Download the Egg**: Get the latest [`egg-programming-multi.json`](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/egg-programming-multi.json), or read the [full setup guide](https://prog-language-eggs.docs.potenfyr.in/docs/).
 2. **Import Template**:
    - In your panel admin area, navigate to **Nests / Templates** &rarr; **Import Egg**.
    - Select the downloaded `egg-programming-multi.json` and save.
@@ -276,14 +287,14 @@ The launcher autodetects host architecture, daemon mechanics, and environment va
 
 | Hosting Panel / Platform | Family | Status | Working Directory | Unified Port Variables |
 |:---|:---:|:---:|:---|:---|
-| **Pterodactyl Panel** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
-| **Pelican Panel** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
-| **Feather Panel** | `feather` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/app` or `/home/container` | `FEATHER_PORT`, `PORT` |
-| **PufferPanel** | `puffer` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/server` | `PORT`, `PUFFER_PORT` |
-| **Jexactyl / Wisp / Emerald** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
-| **Kubernetes / OpenShift** | `k8s` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` or `/app` | `PORT`, `HTTP_PORT` |
-| **Fly.io / Railway / Render** | `paas` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `$PWD` | `PORT` |
-| **Docker / Podman Standalone** | `docker` | [![Active](https://img.shields.io/badge/Status-Verified-success?style=flat-square)](#) | `/home/container` or `$PWD` | `PORT`, `HTTP_PORT` |
+| **Pterodactyl Panel** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
+| **Pelican Panel** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
+| **Feather Panel** | `feather` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `/app` or `/home/container` | `FEATHER_PORT`, `PORT` |
+| **PufferPanel** | `puffer` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `/server` | `PORT`, `PUFFER_PORT` |
+| **Jexactyl / Wisp / Emerald** | `wings` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `/home/container` | `SERVER_PORT`, `PORT` |
+| **Kubernetes / OpenShift** | `k8s` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `/home/container` or `/app` | `PORT`, `HTTP_PORT` |
+| **Fly.io / Railway / Render** | `paas` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `$PWD` | `PORT` |
+| **Docker / Podman Standalone** | `docker` | [![Active](https://img.shields.io/badge/Status-Verified-2ea043?style=flat-square&labelColor=1c1e26&color=2ea043)](#) | `/home/container` or `$PWD` | `PORT`, `HTTP_PORT` |
 
 ---
 
@@ -484,13 +495,15 @@ Prog-Language-Eggs/
 ├── install-runtime.sh                # On-demand runtime provisioner with checksum validation
 ├── resolve-version.sh                # Live-feed dynamic version resolver & caching
 ├── install.sh                        # Universal workspace installer helper
+├── docs/                             # Documentation site source (Vite + React, generated from the egg JSON)
 ├── tests/                            # Automated behavior verification test suite (60+ assertions)
 │   ├── Dockerfile.test
 │   ├── panel-test.sh
 │   └── pty-stop-driver.py
 └── .github/
     └── workflows/
-        └── docker-image.yml          # Multi-arch automated build & publish pipeline
+        ├── docker-image.yml          # Multi-arch automated build & publish pipeline
+        └── docs-pages.yml            # Docs site build & GitHub Pages deploy
 ```
 
 ---
@@ -539,6 +552,15 @@ The launcher renders a crash diagnostic card directly in the panel console. For 
 
 ---
 
+## 🤝 Contributing & Support
+
+- **Contributing**: Read [CONTRIBUTING.md](CONTRIBUTING.md) first; it covers the egg JSON expectations (PTDL_v2 shape, variable rules), how language additions are validated against the real launcher code, and the branch/PR flow. New languages must come with real auto-detect triggers and runner mappings; invented entries are rejected.
+- **Bug reports**: Open a [bug report](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/issues/new?template=bug_report.yml) with the panel family, the language/runner involved and the `.logs/` excerpts. Feature ideas, docs gaps and questions each have their own issue form; pick the closest match.
+- **Security**: See [SECURITY.md](SECURITY.md). Please use GitHub private vulnerability reporting or `support@potenfyr.in` rather than public issues for anything exploitable.
+- **Docs**: The documentation site sources live in [`docs/`](docs/) and are generated from the real egg JSON at build time; PRs that fix content should keep `egg-programming-multi.json` as the source of truth.
+
+---
+
 ## ⭐ Star History
 
 <div align="center">
@@ -549,14 +571,15 @@ The launcher renders a crash diagnostic card directly in the panel console. For 
 
 ---
 
-<div align="center">
-
 ## 📄 License & Credits
 
-Released under the **[Apache License 2.0 with the Commons Clause](LICENSE)** - free to fork, modify, and use, and to build products or services around, but not to sell as a product.<br/>
+Released under the **[Apache License 2.0 with the Commons Clause](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/LICENSE)**. You can fork, modify, use, self-host and redistribute the egg, including for commercial workloads and products or services built around it. You cannot sell the software itself, offer a paid product or service whose value derives entirely or substantially from its functionality, or use PotenFYR names or trademarks to imply endorsement. License notices must carry the Commons Clause notice; the [LICENSE](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/LICENSE) file is authoritative.<br/>
 Engineered with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)**.
 
-<!-- FOOTER BANNER -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:f97316,50:ec4899,100:8b5cf6&height=120&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20PotenFYR%20Studios&fontSize=16&fontColor=ffffff&fontAlignY=65" width="100%" alt="Footer Banner" />
+<!-- markdownlint-disable -->
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:f97316,50:ec4899,100:8b5cf6&height=120&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20PotenFYR%20Studios&fontSize=22&fontColor=ffffff&animation=twinkling" width="100%" alt="footer"/>
 
 </div>
+<!-- markdownlint-enable -->

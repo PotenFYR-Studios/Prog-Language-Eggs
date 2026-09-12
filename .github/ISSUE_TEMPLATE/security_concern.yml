@@ -1,0 +1,41 @@
+name: Security concern
+description: Non-exploitable security question or hardening idea (exploitable bugs → private reporting, see SECURITY.md).
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **If you believe you found an exploitable vulnerability, do not
+        use this public form.** Use GitHub private vulnerability reporting
+        (Security tab) or email support@potenfyr.in per [SECURITY.md](../blob/master/SECURITY.md).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of concern
+      options:
+        - Hardening suggestion
+        - Documentation of security behavior
+        - Supply-chain question (runtimes, checksums, update feed)
+        - Credential / log-redaction question
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Launcher scripts (run.sh / entrypoint.sh)
+        - Runtime installer (install-runtime.sh / resolve-version.sh)
+        - Egg JSON / panel variables
+        - Docker image / Dockerfile
+        - Docs site / CI
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: Details
+      description: Describe the concern without posting working exploit steps or secrets.
+    validations:
+      required: true

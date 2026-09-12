@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://prog-language-eggs.docs.potenfyr.in/sitemap.xml

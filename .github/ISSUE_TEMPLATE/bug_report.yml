@@ -1,0 +1,86 @@
+name: Bug report
+description: Something in the egg or launcher misbehaves.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more of the boot
+        context you can share, the faster this gets fixed.
+  - type: dropdown
+    id: panel
+    attributes:
+      label: Panel / platform
+      description: Where is the container running?
+      options:
+        - Pterodactyl
+        - Pelican
+        - Feather Panel
+        - PufferPanel
+        - Jexactyl / Wisp / Emerald (Wings fork)
+        - Kubernetes
+        - Fly.io / Railway / Render
+        - Plain Docker / Podman
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language / stack
+      description: The LANGUAGE value or detected stack involved.
+      options:
+        - auto-detect (LANGUAGE=auto)
+        - Node.js / TypeScript / Bun / Deno
+        - Python
+        - Go
+        - Rust
+        - Java / Kotlin / Scala / Groovy
+        - C / C++
+        - C# / .NET (incl. F#, VB.NET)
+        - PHP
+        - Ruby
+        - Static site
+        - Other / esoteric (COBOL, Ada, Prolog, ...)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: variables
+    attributes:
+      label: Startup variables
+      description: |
+        Paste the Startup tab values (REDACT GIT_AUTH_TOKEN and any secrets).
+        You can find the effective values at the top of the console boot log.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Console output plus `.logs/console.log` / `.logs/launcher-errors.log` excerpts.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: image
+    attributes:
+      label: Docker image tag
+      description: e.g. ghcr.io/potenfyr-studios/prog-language-eggs:latest or a sha tag.
+      placeholder: ghcr.io/potenfyr-studios/prog-language-eggs:latest
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I redacted tokens/secrets from the logs and variables above.
+          required: true
+        - label: I searched existing issues for this problem.
+          required: true

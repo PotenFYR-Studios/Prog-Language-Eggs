@@ -1,0 +1,46 @@
+name: Feature request
+description: Propose a new language, variable or runtime capability.
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - New language / runtime support
+        - New startup variable or behavior
+        - Version resolution / runtime channels
+        - Procfile / supervisor
+        - Memory tuning / OOM protection
+        - Panel compatibility
+        - Docker image
+        - Documentation site
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What can't you do today? Include real commands/files that should be detected or run.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Desired behavior, including suggested variable names and defaults.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I checked the docs (https://prog-language-eggs.docs.potenfyr.in) to confirm this isn't already supported.
+          required: true
+        - label: For language requests, the upstream runtime publishes checksummed releases we can verify.
+          required: false

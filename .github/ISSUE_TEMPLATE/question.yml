@@ -1,0 +1,36 @@
+name: Question
+description: Usage help ("how do I run X with the egg?")
+labels: ["question"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: e.g. "run a Next.js app with a Postgres sidecar", "pin Python 3.11", "use pnpm".
+    validations:
+      required: true
+  - type: dropdown
+    id: panel
+    attributes:
+      label: Panel / platform
+      options:
+        - Pterodactyl
+        - Pelican
+        - Feather Panel
+        - PufferPanel
+        - Jexactyl / Wisp / Emerald (Wings fork)
+        - Kubernetes
+        - Fly.io / Railway / Render
+        - Plain Docker / Podman
+        - Other / not relevant
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Include startup variables and console output (redact tokens).
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I checked the docs (https://prog-language-eggs.docs.potenfyr.in) and the README troubleshooting section.
+          required: true

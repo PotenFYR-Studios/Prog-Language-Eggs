@@ -18,6 +18,7 @@ FROM debian:bookworm-slim
 LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
 LABEL org.opencontainers.image.source="https://github.com/potenfyr-studios/prog-language-eggs"
 LABEL org.opencontainers.image.description="Single multi-language runtime image across Pterodactyl, Pelican, Feather Panel, PufferPanel and plain Docker"
+LABEL org.opencontainers.image.licenses="Apache-2.0 WITH Commons-Clause-1.0"
 
 # Kept for local/custom builds; CI always passes "all".
 ARG RUNTIME_VARIANT=all
