@@ -286,13 +286,7 @@ body::before {
   border-radius: 999px;
   background: var(--emerald);
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
-  animation: pulse-dot 2.4s ease-in-out infinite;
 }
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
-
 /* ============================================================
    Glass cards (SPEC §5.5)
    ============================================================ */
