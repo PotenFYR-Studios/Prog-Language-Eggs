@@ -1,14 +1,20 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { App } from "./App";
+import { BASE } from "./routes";
 import "./index.css";
 
 /** Normalize a pathname to a route key: strip trailing slash except root. */
 export function routeFromPath(pathname: string): string {
-  if (pathname.length > 1 && pathname.endsWith("/")) {
-    return pathname.slice(0, -1);
+  let p = pathname;
+  if (BASE !== "/") {
+    if (p === BASE) p = "/";
+    else if (p.startsWith(BASE)) p = p.slice(BASE.length - 1);
   }
-  return pathname;
+  if (p.length > 1 && p.endsWith("/")) {
+    return p.slice(0, -1);
+  }
+  return p;
 }
 
 function useRoute(): string {

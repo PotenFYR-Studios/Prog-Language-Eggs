@@ -3,6 +3,7 @@ import { catalog } from "../data/catalog";
 import { VarTable } from "../components/VarTable";
 import { CodeBlock } from "../components/CodeBlock";
 import { Breadcrumb, Pager, Toc } from "../components/DocsChrome";
+import { withBase } from "../routes";
 
 const REPO = "https://github.com/PotenFYR-Studios/Prog-Language-Eggs";
 const NEST = "https://nest.potenfyr.in";
@@ -97,7 +98,7 @@ export function Eggs() {
           <a href={`${REPO}/blob/master/egg-programming-multi.json`} className="btn btn-primary btn-sm">
             Raw egg JSON <ArrowRight className="h-3.5 w-3.5" />
           </a>
-          <a href="/docs" className="btn btn-ghost btn-sm">
+          <a href={withBase("/docs")} className="btn btn-ghost btn-sm">
             Setup guide
           </a>
         </div>
@@ -109,7 +110,7 @@ export function Eggs() {
       </h2>
       <p className="text-[0.95em] text-ink-2">
         The single image covers {catalog.language_count} languages, the{" "}
-        <a href="/docs/languages">full matrix</a> lists runners, package
+        <a href={withBase("/docs/languages")}>full matrix</a> lists runners, package
         managers and auto-detect triggers for each.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -134,7 +135,7 @@ export function Eggs() {
       <p className="text-[0.95em] text-ink-2">
         The ten variables most servers touch, the complete set of{" "}
         {egg.variable_count} lives in the{" "}
-        <a href="/docs">setup &amp; startup reference</a>.
+        <a href={withBase("/docs")}>setup &amp; startup reference</a>.
       </p>
       <VarTable rows={KEY_VARS.map((v) => egg.variables.find((x) => x.env_variable === v)!)} />
 

@@ -18,6 +18,7 @@ import { Examples } from "./pages/Examples";
 import { About } from "./pages/About";
 import { License } from "./pages/License";
 import { catalog } from "./data/catalog";
+import { withBase } from "./routes";
 
 const REPO = "https://github.com/PotenFYR-Studios/Prog-Language-Eggs";
 const ORG = "https://github.com/PotenFYR-Studios";
@@ -57,9 +58,9 @@ function Header({ route }: { route: string }) {
   return (
     <>
       <header className="site-header">
-        <a href="/" className="flex items-center gap-[9px] no-underline hover:no-underline shrink-0">
+        <a href={withBase("/")} className="flex items-center gap-[9px] no-underline hover:no-underline shrink-0">
           <img
-            src="/favicon.png"
+            src={withBase("/favicon.png")}
             alt=""
             width={24}
             height={24}
@@ -74,7 +75,7 @@ function Header({ route }: { route: string }) {
           {NAV.map(({ href, label }) => (
             <a
               key={href}
-              href={href}
+              href={withBase(href)}
               className={`nav-link${isActive(href, route) ? " active" : ""}`}
               aria-current={isActive(href, route) ? "page" : undefined}
             >
@@ -121,7 +122,7 @@ function Header({ route }: { route: string }) {
           {NAV.map(({ href, label }) => (
             <a
               key={href}
-              href={href}
+              href={withBase(href)}
               className={`nav-link block${isActive(href, route) ? " active" : ""}`}
             >
               {label}
@@ -189,7 +190,7 @@ function Palette({ onClose }: { onClose: () => void }) {
       e.preventDefault();
       setSel((s) => Math.max(s - 1, 0));
     } else if (e.key === "Enter" && entries[sel]) {
-      window.location.assign(entries[sel].href);
+      window.location.assign(withBase(entries[sel].href));
     }
   };
 
@@ -221,7 +222,7 @@ function Palette({ onClose }: { onClose: () => void }) {
           {entries.map((e, i) => (
             <li key={`${e.hint}-${e.label}`}>
               <a
-                href={e.href}
+                href={withBase(e.href)}
                 onClick={onClose}
                 className={`flex items-center justify-between rounded-lg px-3 py-2 text-[13px] no-underline hover:no-underline ${
                   i === sel ? "bg-brand-violet/15 text-white" : "text-ink-2 hover:bg-white/5"
@@ -248,7 +249,7 @@ function Footer() {
         <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
           <div className="max-w-[420px]">
             <div className="flex items-center gap-2">
-              <img src="/favicon.png" alt="" className="h-8 w-8 rounded-full ring-1 ring-line" />
+              <img src={withBase("/favicon.png")} alt="" className="h-8 w-8 rounded-full ring-1 ring-line" />
               <span className="font-mono text-[0.95em] font-bold text-white">
                 Prog-Language<span className="grad-text"> Eggs</span>
               </span>
@@ -271,10 +272,10 @@ function Footer() {
             <a href={NEST} target="_blank" rel="noopener" className="footer-link">
               Unified Catalog
             </a>
-            <a href="/docs" className="footer-link accent">
+            <a href={withBase("/docs")} className="footer-link accent">
               Docs
             </a>
-            <a href="/license" className="footer-link">
+            <a href={withBase("/license")} className="footer-link">
               License
             </a>
           </div>

@@ -7,6 +7,24 @@
 
 export const CANON = "https://prog-language-eggs.docs.potenfyr.in";
 
+const envBase: unknown = import.meta.env?.BASE_URL;
+
+/** Deploy base ("/" on a custom domain, "/Prog-Language-Eggs/" on github.io
+ *  project pages): vite inlines BASE_URL in the client bundle; the process-env
+ *  fallback covers the bun-run prerender, which imports this module directly. */
+export const BASE: string =
+  typeof envBase === "string" ? envBase
+  : typeof process !== "undefined" ? process.env?.VITE_BASE ?? "/"
+  : "/";
+
+/** Prefix an in-site path with the deploy base. Idempotent, and a no-op for
+ *  anything not site-rooted, so call sites can wrap unconditionally. */
+export function withBase(p: string): string {
+  if (BASE !== "/" && (p === BASE || p.startsWith(BASE))) return p;
+  if (!p.startsWith("/")) return p;
+  return `${BASE}${p.slice(1)}`;
+}
+
 export const OG_IMAGE = `${CANON}/og.png`;
 export const OG_IMAGE_ALT =
   "Prog-Language Eggs social card: one egg, one image, every language.";

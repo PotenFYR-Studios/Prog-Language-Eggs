@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { CodeBlock } from "./CodeBlock";
+import { withBase } from "../routes";
 
 export interface SidebarItem {
   href: string;
@@ -60,7 +61,7 @@ export function Sidebar({
                   {g.items.map((it) => (
                     <a
                       key={it.href}
-                      href={it.href}
+                      href={withBase(it.href)}
                       className={`sidebar-link${route === it.href ? " active" : ""}`}
                       aria-current={route === it.href ? "page" : undefined}
                     >
@@ -135,7 +136,7 @@ export function Breadcrumb({
       {trail.map((item, i) => (
         <span key={item.href} className="inline-flex items-center gap-2">
           {i > 0 && <span aria-hidden>/</span>}
-          <a href={item.href}>{item.label}</a>
+          <a href={withBase(item.href)}>{item.label}</a>
         </span>
       ))}
     </nav>
@@ -155,7 +156,7 @@ export function Pager({
     <div className="mt-16 flex justify-between gap-4">
       {prev ? (
         <a
-          href={prev.href}
+          href={withBase(prev.href)}
           className="flex-1 rounded-xl border border-line-light bg-white/[0.02] p-4 no-underline transition-transform hover:-translate-y-0.5 hover:border-brand-violet/50 hover:no-underline"
         >
           <div className="mono-label">Previous</div>
@@ -166,7 +167,7 @@ export function Pager({
       )}
       {next ? (
         <a
-          href={next.href}
+          href={withBase(next.href)}
           className="flex-1 rounded-xl border border-line-light bg-white/[0.02] p-4 text-right no-underline transition-transform hover:-translate-y-0.5 hover:border-brand-pink/50 hover:no-underline"
         >
           <div className="mono-label">Next</div>
