@@ -13,6 +13,7 @@ import { Marquee, NumberTicker, Meteors } from "../components/magicui";
 import { CodeBlock } from "../components/CodeBlock";
 import { catalog } from "../data/catalog";
 import { REPO } from "../App";
+import { withBase } from "../routes";
 
 const PLATFORMS = [
   "Pterodactyl",
@@ -76,7 +77,7 @@ function MarqueeRow({ reverse }: { reverse?: boolean }) {
   return (
     <Marquee reverse={reverse} duration={reverse ? 48 : 42}>
       {items.map((l) => (
-        <a key={l.n} href="/docs/languages" className="lang-chip">
+        <a key={l.n} href={withBase("/docs/languages")} className="lang-chip">
           <span className="mr-2 text-brand-violet">◆</span>
           {l.name}
         </a>
@@ -146,10 +147,10 @@ export function Home() {
             className="hero-enter mt-8 flex flex-wrap items-center justify-center gap-3"
             style={{ animationDelay: "0.24s" }}
           >
-            <a href="/docs" className="btn btn-primary">
+            <a href={withBase("/docs")} className="btn btn-primary">
               Read the docs <ArrowRight className="h-4 w-4" />
             </a>
-            <a href="/docs/languages" className="btn btn-ghost">
+            <a href={withBase("/docs/languages")} className="btn btn-ghost">
               <ListFilter className="h-4 w-4" /> Browse {catalog.language_count} languages
             </a>
             <a href={`${REPO}/blob/master/egg-programming-multi.json`} className="btn btn-ghost">
@@ -243,7 +244,7 @@ export function Home() {
                 <span className="tag">4</span> Upload code or set <code className="inline-code">GIT_REPO</code>, start.
               </li>
             </ol>
-            <a href="/docs" className="btn btn-ghost btn-sm mt-6">
+            <a href={withBase("/docs")} className="btn btn-ghost btn-sm mt-6">
               Full setup guide <ArrowRight className="h-3.5 w-3.5" />
             </a>
           </div>
@@ -282,7 +283,7 @@ export function Home() {
               by real runners.
             </p>
           </div>
-          <a href="/docs/languages" className="btn btn-ghost btn-sm shrink-0">
+          <a href={withBase("/docs/languages")} className="btn btn-ghost btn-sm shrink-0">
             Full matrix <ArrowRight className="h-3.5 w-3.5" />
           </a>
         </div>

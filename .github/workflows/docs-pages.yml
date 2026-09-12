@@ -30,12 +30,24 @@ jobs:
   build:
     name: Build documentation site
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
+
+      # Runs before the build so the base path can adapt to the serving URL;
+      # also enables Pages (build_type: workflow) on first run.
+      - name: Configure Pages
+        id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
 
       - name: Install docs dependencies
         working-directory: docs
@@ -45,9 +57,18 @@ jobs:
         working-directory: docs
         run: bun run prebuild && bunx tsc --noEmit
 
+      # Hybrid base: custom domain -> root path; otherwise
+      # /Prog-Language-Eggs/ (github.io project pages serve under the repo
+      # slug), so assets and links resolve in both deployments.
       - name: Build docs site (prebuild + vite)
         working-directory: docs
-        run: bun run build
+        run: |
+          BASE_URL="${{ steps.pages.outputs.base_url }}"
+          case "$BASE_URL" in
+            ""|*github.io*) export VITE_BASE="/Prog-Language-Eggs/" ;;
+            *) export VITE_BASE="/" ;;
+          esac
+          bun run build
 
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
@@ -68,9 +89,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v6
-
       - name: Deploy Pages artifact
         id: deployment
         uses: actions/deploy-pages@v5
