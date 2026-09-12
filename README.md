@@ -563,11 +563,13 @@ The launcher renders a crash diagnostic card directly in the panel console. For 
 
 ## ⭐ Star History
 
-<div align="center">
-  <a href="https://star-history.com/#PotenFYR-Studios/Prog-Language-Eggs&Date">
-    <img src="https://api.star-history.com/svg?repos=PotenFYR-Studios/Prog-Language-Eggs&type=Date" width="80%" alt="Star History Chart" />
-  </a>
-</div>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=potenfyr-studios/authcore,potenfyr-studios/statfyr,potenfyr-studios/discord-botlists,potenfyr-studios/vigilfyr,potenfyr-studios/shell-eggs,potenfyr-studios/prog-language-eggs,potenfyr-studios/minecraft-eggs,potenfyr-studios/database-eggs,potenfyr-studios/apicordon,potenfyr-studios/ojaj,potenfyr-studios/fyrwall,potenfyr-studios/echoingdeaths&type=Date&theme=dark" />
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=potenfyr-studios/authcore,potenfyr-studios/statfyr,potenfyr-studios/discord-botlists,potenfyr-studios/vigilfyr,potenfyr-studios/shell-eggs,potenfyr-studios/prog-language-eggs,potenfyr-studios/minecraft-eggs,potenfyr-studios/database-eggs,potenfyr-studios/apicordon,potenfyr-studios/ojaj,potenfyr-studios/fyrwall,potenfyr-studios/echoingdeaths&type=Date" />
+  <img alt="Star history chart for all PotenFYR Studios public repositories" src="https://api.star-history.com/svg?repos=potenfyr-studios/authcore,potenfyr-studios/statfyr,potenfyr-studios/discord-botlists,potenfyr-studios/vigilfyr,potenfyr-studios/shell-eggs,potenfyr-studios/prog-language-eggs,potenfyr-studios/minecraft-eggs,potenfyr-studios/database-eggs,potenfyr-studios/apicordon,potenfyr-studios/ojaj,potenfyr-studios/fyrwall,potenfyr-studios/echoingdeaths&type=Date" width="80%" />
+</picture>
+
+Every public PotenFYR Studios repository on one live chart, served by [star-history.com](https://star-history.com).
 
 ---
 
@@ -577,6 +579,24 @@ Released under the **[Apache License 2.0 with the Commons Clause](https://github
 Engineered with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)**.
 
 <!-- markdownlint-disable -->
+Contributions make the open-source community such an amazing place to learn, inspire and create. Any contributions you make are **greatly appreciated** - see [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/labels/good%20first%20issue). Security concerns: please use [SECURITY.md](SECURITY.md) (private vulnerability reporting), not public issues.
+
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=PotenFYR-Studios/Prog-Language-Eggs" alt="Prog-Language-Eggs contributors" />
+</a>
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/stargazers">
+  <img src="https://img.shields.io/github/stars/PotenFYR-Studios/Prog-Language-Eggs?style=social&label=Stars" alt="Live star count" />
+</a>
+<a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/network/members">
+  <img src="https://img.shields.io/github/forks/PotenFYR-Studios/Prog-Language-Eggs?style=social&label=Forks" alt="Live fork count" />
+</a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PotenFYR-Studios/FYRwall/output/github-snake-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/PotenFYR-Studios/FYRwall/output/github-snake.svg" />
+  <img alt="Contribution snake animation" src="https://raw.githubusercontent.com/PotenFYR-Studios/FYRwall/output/github-snake.svg" width="100%" />
+</picture>
+
 <div align="center">
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:f97316,50:ec4899,100:8b5cf6&height=120&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20PotenFYR%20Studios&fontSize=22&fontColor=ffffff&animation=twinkling" width="100%" alt="footer"/>
