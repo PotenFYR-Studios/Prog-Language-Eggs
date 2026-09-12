@@ -1,0 +1,76 @@
+name: Deploy Documentation to GitHub Pages
+
+# Docs are generated from the real egg JSON + README language matrix, so
+# content-affecting files all trigger a rebuild.
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "egg-programming-multi.json"
+      - ".github/workflows/docs-pages.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "egg-programming-multi.json"
+      - ".github/workflows/docs-pages.yml"
+  workflow_dispatch:
+
+# Least privilege: deploy job elevates via its own permissions block.
+permissions:
+  contents: read
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build documentation site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install docs dependencies
+        working-directory: docs
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        working-directory: docs
+        run: bunx tsc --noEmit
+
+      - name: Build docs site (prebuild + vite)
+        working-directory: docs
+        run: bun run build
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v5

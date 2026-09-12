@@ -379,7 +379,7 @@ unset _key _cur _pval _eval_cur
 #   * URL pointing at a run.sh                -> replaces the launcher directly.
 # Failure of any step is non-fatal: the previously installed launcher runs.
 phase "Egg Self-Update"
-EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/egg-programming-multi.json}"
+EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/egg-programming-multi.json}"
 AUTO_UPDATE_EGG="${AUTO_UPDATE_EGG:-1}"
 
 # Persist the defaults so servers created before these variables existed get
@@ -842,7 +842,7 @@ unset _POT_DIR _staged_hash _rec_hash
 if [ ! -f "${LAUNCHER_SCRIPT}" ]; then
     mkdir -p /tmp/potenfyr 2>/dev/null || true
     if [ ! -f "/tmp/potenfyr/run.sh" ]; then
-        curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/run.sh -o /tmp/potenfyr/run.sh 2>/dev/null || true
+        curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/run.sh -o /tmp/potenfyr/run.sh 2>/dev/null || true
         chmod +x /tmp/potenfyr/run.sh 2>/dev/null || true
     fi
     LAUNCHER_SCRIPT="/tmp/potenfyr/run.sh"

@@ -11,6 +11,12 @@ jspm_packages/
 .pnp/
 .pnp.js
 
+# --- Docs site build (docs/) ---------------------------------
+docs/node_modules/
+docs/dist/
+# generated at build time by docs/scripts/prebuild.ts from the egg JSON
+docs/src/data/catalog.json
+
 # --- Python ---------------------------------------------------
 __pycache__/
 *.py[cod]

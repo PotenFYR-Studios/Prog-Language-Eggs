@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: PotenFYR Studios Discord
+    url: https://discord.gg/potenfyr
+    about: Live community support and general discussion.
+  - name: Documentation
+    url: https://prog-language-eggs.docs.potenfyr.in
+    about: Setup guide, egg catalog, language matrix and examples.
+  - name: Unified Egg Catalog (Nest)
+    url: https://nest.potenfyr.in
+    about: Browse every PotenFYR egg collection.

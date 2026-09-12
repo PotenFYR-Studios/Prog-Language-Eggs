@@ -530,7 +530,7 @@ fi
 #     treated as the raw egg JSON and the launcher is refreshed from the same
 #     branch. Any failure is non-fatal: the installed launcher keeps running.
 if [ "${EGG_UPDATE_CHECKED:-0}" != "1" ]; then
-    EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/egg-programming-multi.json}"
+    EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/egg-programming-multi.json}"
     AUTO_UPDATE_EGG="${AUTO_UPDATE_EGG:-1}"
 
     # Servers created before these variables existed: persist the defaults so
@@ -1230,7 +1230,7 @@ resolve_runtime_version() {
     if [ ! -f "${resolver}" ]; then
         mkdir -p /tmp/potenfyr 2>/dev/null || true
         curl -fsSL --retry 3 --connect-timeout 10 \
-            "https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/resolve-version.sh" \
+            "https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/resolve-version.sh" \
             -o /tmp/potenfyr/resolve-version.sh 2>/dev/null || true
         resolver="/tmp/potenfyr/resolve-version.sh"
     fi
@@ -1542,7 +1542,7 @@ ensure_local_runtime() {
             inst_script="/install-runtime.sh"
         else
             mkdir -p /tmp/potenfyr 2>/dev/null || true
-            curl -fsSL --retry 3 --connect-timeout 10 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/main/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
+            curl -fsSL --retry 3 --connect-timeout 10 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
             chmod +x /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
             inst_script="/tmp/potenfyr/install-runtime.sh"
         fi
