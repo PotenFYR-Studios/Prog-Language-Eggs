@@ -62,6 +62,13 @@ USER_AGENT="ProgLanguageEggsInstall/1.0 (PotenFYR Studios; support@potenfyr.in)"
 # reset to FETCH_HEAD (origin/<branch> is stale on single-branch clones and
 # branch switches), surface token-redacted errors, and fetch OVER an existing
 # non-empty workspace instead of failing the clone. Never wipes user files.
+# Additional hardening shared with the launcher:
+#   * isolated global git config (GIT_CONFIG_GLOBAL) marking the workspace
+#     safe - installs run as root, boots run as uid 988/1000, and since git
+#     2.35.2 an owner mismatch fails every git command ("dubious ownership");
+#   * stale .git/index.lock from a killed run is cleared before syncing;
+#   * an authenticated fetch/clone that fails is retried ONCE anonymously so
+#     a revoked/expired token cannot take PUBLIC repositories down with it.
 if [ -n "${GIT_REPO}" ]; then
     GIT_REPO="$(printf '%s' "${GIT_REPO}" | tr -d ' \t\r\n')"
     GIT_BRANCH="$(printf '%s' "${GIT_BRANCH:-main}" | tr -d ' \t\r\n')"
@@ -70,6 +77,14 @@ if [ -n "${GIT_REPO}" ]; then
     export GIT_TERMINAL_PROMPT=0
     export GIT_ASKPASS=/bin/true
     redact_err_git() { tr '\n' ' ' < "$1" | sed -e "s#${GIT_AUTH_TOKEN}#***#g" | cut -c1-300; }
+
+    _gitcfg="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitconfig.$$")"
+    {
+        [ -f "${HOME}/.gitconfig" ] && cat "${HOME}/.gitconfig" 2>/dev/null
+        printf '[safe]\n\tdirectory = *\n'
+        printf '[init]\n\tdefaultBranch = main\n'
+    } > "${_gitcfg}" 2>/dev/null || true
+    export GIT_CONFIG_GLOBAL="${_gitcfg}"
 
     _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
     log "Syncing source code from Git repository: ${GIT_REPO} (branch: ${GIT_BRANCH})..."
@@ -83,8 +98,23 @@ if [ -n "${GIT_REPO}" ]; then
 
     if [ -d ".git" ]; then
         log "Updating existing Git repository..."
+        for _lock in .git/index.lock .git/shallow.lock; do
+            if [ -f "${_lock}" ]; then
+                rm -f "${_lock}" 2>/dev/null || true
+                warn "Removed stale git lock (${_lock}) left over from a previous run."
+            fi
+        done
         git remote set-url origin "${AUTH_REPO_URL}" 2>/dev/null || git remote add origin "${AUTH_REPO_URL}" 2>/dev/null || true
+        _fetch_ok=0
         if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+            _fetch_ok=1
+        elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+            warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
+            if git fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
+                _fetch_ok=1
+            fi
+        fi
+        if [ "${_fetch_ok}" = "1" ]; then
             git reset --hard FETCH_HEAD 2>"${_err}" || warn "Could not apply fetched commits: $(redact_err_git "${_err}")"
         else
             warn "Git fetch failed: $(redact_err_git "${_err}")"
@@ -92,23 +122,46 @@ if [ -n "${GIT_REPO}" ]; then
     elif find . -mindepth 1 -maxdepth 1 2>/dev/null | grep -q .; then
         log "Workspace already has files - fetching repository over them (no wipe)..."
         git init -q . 2>/dev/null || true
+        git symbolic-ref HEAD "refs/heads/${GIT_BRANCH}" 2>/dev/null || true
         git remote remove origin 2>/dev/null || true
-        if git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" && git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
-            git reset --hard FETCH_HEAD 2>"${_err}" || warn "Could not apply fetched commits"
+        git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" || true
+        _fetch_ok=0
+        if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+            _fetch_ok=1
+        elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+            warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
+            git remote remove origin 2>/dev/null || true
+            git remote add origin "${GIT_REPO}" 2>/dev/null || true
+            if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+                _fetch_ok=1
+            fi
+        fi
+        if [ "${_fetch_ok}" = "1" ] && git reset --hard FETCH_HEAD 2>"${_err}"; then
+            : ; # success - commit reported below
         else
             warn "Git fetch failed - existing files kept: $(redact_err_git "${_err}")"
         fi
     else
         if ! git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
-            warn "Cloning branch ${GIT_BRANCH} failed: $(redact_err_git "${_err}"). Attempting default clone..."
-            git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}" || warn "Git clone failed: $(redact_err_git "${_err}")"
+            warn "Cloning branch ${GIT_BRANCH} failed: $(redact_err_git "${_err}")."
+            if [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ] \
+                    && git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                ok "Cloned anonymously (public repository)."
+            elif ! git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+                if [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ] \
+                        && git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                    ok "Cloned anonymously (default branch)."
+                else
+                    warn "Git clone failed: $(redact_err_git "${_err}")"
+                fi
+            fi
         fi
     fi
     if _head="$(git rev-parse --short HEAD 2>/dev/null)"; then
         ok "Repository at commit ${_head}"
     fi
-    rm -f "${_err}" 2>/dev/null || true
-    unset _err _head
+    rm -f "${_err}" "${GIT_CONFIG_GLOBAL:-}" 2>/dev/null || true
+    unset _err _head _fetch_ok _gitcfg _lock
     ok "Git repository initialized"
 fi
 

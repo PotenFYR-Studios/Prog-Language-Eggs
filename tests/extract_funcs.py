@@ -16,7 +16,7 @@ def extract(text: str) -> str:
     lines = text.splitlines()
     i = 0
     n = len(lines)
-    func_re = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*\(\) \{$')
+    func_re = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*\(\) \{\s*(?:#.*)?$')
     while i < n:
         if func_re.match(lines[i]):
             depth = 0
@@ -49,4 +49,7 @@ def extract(text: str) -> str:
 
 if __name__ == '__main__':
     with open(sys.argv[1], encoding='utf-8', errors='replace') as f:
+        # Windows consoles default to cp1252 and choke on box-drawing chars in
+        # the extracted functions; force UTF-8 stdout so tests run everywhere.
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         sys.stdout.write(extract(f.read()))

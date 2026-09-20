@@ -78,6 +78,7 @@ CHILD_PID=0
 HEALTH_PID=""
 PROC_PIDS=""
 SLEEP_PID=0
+GIT_WATCHER_PID=""
 POST_RUN_COMMAND="${POST_RUN_COMMAND:-}"
 
 # Recursively discover all child and descendant PIDs of a process
@@ -187,6 +188,12 @@ handle_signal() {
         HEALTH_PID=""
     fi
 
+    # Stop the Git Auto-Update watcher if active
+    if [ -n "${GIT_WATCHER_PID:-}" ] && [ "${GIT_WATCHER_PID}" -gt 1 ] 2>/dev/null; then
+        kill -9 "${GIT_WATCHER_PID}" 2>/dev/null || true
+        GIT_WATCHER_PID=""
+    fi
+
     # Stop Procfile supervisor children if active
     if [ -n "${PROC_PIDS:-}" ]; then
         for p in ${PROC_PIDS}; do
@@ -268,12 +275,16 @@ start_stop_watcher() {
             # Dup console stdin to fd 3 in the main shell before backgrounding
             # - spawn-time redirections on background jobs do not survive on
             # some daemon/container runtimes (observed EOF-on-read otherwise).
-            exec 3<&0 2>/dev/null || true
+            # NOTE: exec redirections are PERMANENT for the shell, so no
+            # `2>/dev/null` here - that silently re-pointed the launcher's
+            # (and the app's) stderr to /dev/null for the rest of the boot.
+            # The subshell probe above already guarantees these succeed.
+            exec 3<&0
             panel_stop_watcher &
             STOP_WATCHER_PID=$!
             # The watcher subshell holds its own dup; close ours so the dup is
             # not inherited by every child the launcher spawns afterwards.
-            exec 3>&- 2>/dev/null || true
+            exec 3>&-
         fi
     fi
 }
@@ -348,6 +359,18 @@ valid_git_url() {
 #     .logs/code-archives/ (5 newest kept) so a bad sync can be rolled back.
 #   * A workspace that already holds files (no .git) gets the repository
 #     fetched OVER it instead of failing the clone ("directory not empty").
+#   * An isolated global git config (GIT_CONFIG_GLOBAL) marks the workspace
+#     safe: installs run as root while boots run as uid 988/1000, and since
+#     git 2.35.2 a different owner makes every git command fail with
+#     "detected dubious ownership" - which silently blocked ALL updates.
+#   * A stale .git/index.lock left by a killed install/boot is cleared before
+#     syncing; it made every later fetch/reset fail forever.
+#   * If an authenticated fetch/clone fails, it is retried ONCE anonymously -
+#     a revoked/expired token must not take PUBLIC repositories down with it
+#     (git only auto-falls-back on a 401 challenge, not on "not found").
+#   * Exports GIT_SYNC_UPDATED=1 when the workspace moved to a new commit and
+#     GIT_SYNC_FAILED=1 when nothing could be synced, so callers (starter
+#     scaffolding, auto-update watcher) can react instead of guessing.
 # -----------------------------------------------------------------------------
 _git_ws_has_files() {
     find . -mindepth 1 -maxdepth 1 \
@@ -381,16 +404,47 @@ _git_redact_err() {
     redact_url "$(tr '\n' ' ' < "$1" 2>/dev/null | cut -c1-300)"
 }
 
+# _git_env_setup: isolated global git config for every git call we make.
+# safe.directory is only honored from system/global config (never -c or repo
+# config), and HOME may not hold a writable .gitconfig under panel uids - so
+# point GIT_CONFIG_GLOBAL at a generated file that MERGES the user's real
+# global config with the entries we need.
+_git_env_setup() {
+    export GIT_TERMINAL_PROMPT=0
+    export GIT_ASKPASS=/bin/true
+    local _cfg="${TMPDIR:-/tmp}/potenfyr-gitconfig.$$"
+    {
+        [ -f "${HOME}/.gitconfig" ] && cat "${HOME}/.gitconfig" 2>/dev/null
+        printf '[safe]\n\tdirectory = *\n'
+        printf '[init]\n\tdefaultBranch = main\n'
+    } > "${_cfg}" 2>/dev/null || printf '[safe]\n\tdirectory = *\n' > "${_cfg}" 2>/dev/null || true
+    export GIT_CONFIG_GLOBAL="${_cfg}"
+}
+
+# _git_clear_stale_locks: a previous boot/install killed mid-operation leaves
+# .git/index.lock (or shallow.lock) behind, and every later fetch/reset then
+# fails with "Unable to create ... index.lock: File exists" forever. At boot
+# no other git process can hold the lock, so removing it is safe.
+_git_clear_stale_locks() {
+    local _lock
+    for _lock in .git/index.lock .git/shallow.lock; do
+        if [ -f "${_lock}" ]; then
+            rm -f "${_lock}" 2>/dev/null || true
+            warn "Removed stale git lock (${_lock}) left over from a previous run."
+        fi
+    done
+}
+
 sync_git_repo() {
     GIT_REPO="$(printf '%s' "${GIT_REPO:-}" | tr -d ' \t\r\n')"
     GIT_BRANCH="$(printf '%s' "${GIT_BRANCH:-main}" | tr -d ' \t\r\n')"
     [ -n "${GIT_BRANCH}" ] || GIT_BRANCH="main"
     GIT_AUTH_TOKEN="$(printf '%s' "${GIT_AUTH_TOKEN:-}" | tr -d ' \t\r\n')"
-    # Never let git block the boot on an interactive credential prompt.
-    export GIT_TERMINAL_PROMPT=0
-    export GIT_ASKPASS=/bin/true
+    GIT_SYNC_UPDATED=0
+    GIT_SYNC_FAILED=0
+    _git_env_setup
 
-    local _err _old_head _new_head _new_date _new_subj
+    local _err _old_head _new_head _new_date _new_subj _fetch_ok
     _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
 
     AUTH_REPO_URL="${GIT_REPO}"
@@ -403,45 +457,87 @@ sync_git_repo() {
             _git_archive_workspace
             log "Workspace has existing files - fetching '${GIT_BRANCH}' over them (no wipe)..."
             git init -q . 2>/dev/null || true
+            git symbolic-ref HEAD "refs/heads/${GIT_BRANCH}" 2>/dev/null || true
             git remote remove origin 2>/dev/null || true
-            if git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" \
-                    && git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
-                if git reset --hard FETCH_HEAD 2>"${_err}"; then
-                    _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
-                    _new_subj="$(git log -1 --format=%s 2>/dev/null || true)"
-                    ok "Repository fetched over existing files (commit ${_new_head}: ${_new_subj:-n/a})"
-                else
-                    warn "Could not apply fetched commits: $(_git_redact_err "${_err}")"
-                    _egg_error_log "launcher" "git reset failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH})"
+            git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" || true
+            _fetch_ok=0
+            if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+                _fetch_ok=1
+            elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+                # Token-authenticated fetch failed - retry anonymously so a
+                # revoked/expired token cannot break PUBLIC repositories.
+                warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
+                git remote remove origin 2>/dev/null || true
+                git remote add origin "${GIT_REPO}" 2>/dev/null || true
+                if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+                    _fetch_ok=1
                 fi
+            fi
+            if [ "${_fetch_ok}" = "1" ] && git reset --hard FETCH_HEAD 2>"${_err}"; then
+                _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+                _new_subj="$(git log -1 --format=%s 2>/dev/null || true)"
+                ok "Repository fetched over existing files (commit ${_new_head}: ${_new_subj:-n/a})"
+                GIT_SYNC_UPDATED=1
             else
                 warn "Git fetch failed - your files were kept unchanged: $(_git_redact_err "${_err}")"
+                GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git fetch failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
             fi
         else
             log "Cloning repository: $(redact_url "${GIT_REPO}") (branch: ${GIT_BRANCH})..."
             if git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
                 ok "Repository successfully cloned (commit $(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
+                GIT_SYNC_UPDATED=1
             else
                 warn "Git clone of branch '${GIT_BRANCH}' failed: $(_git_redact_err "${_err}")"
                 _egg_error_log "launcher" "git clone failed on branch ${GIT_BRANCH} (repo: $(redact_url "${GIT_REPO}")) - check URL, branch name and credentials"
-                warn "Retrying with the repository's default branch..."
-                if git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
-                    ok "Repository cloned (default branch)"
-                else
+                if [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+                    warn "Retrying without credentials (public repository?)..."
+                    if git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                        ok "Repository successfully cloned anonymously (commit $(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
+                        GIT_SYNC_UPDATED=1
+                    fi
+                fi
+                if [ "${GIT_SYNC_UPDATED}" != "1" ]; then
+                    warn "Retrying with the repository's default branch..."
+                    if git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+                        ok "Repository cloned (default branch)"
+                        GIT_SYNC_UPDATED=1
+                    elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+                        warn "Retrying default branch without credentials..."
+                        if git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                            ok "Repository cloned anonymously (default branch)"
+                            GIT_SYNC_UPDATED=1
+                        fi
+                    fi
+                fi
+                if [ "${GIT_SYNC_UPDATED}" != "1" ]; then
                     warn "Could not clone repository. Check network, URL and credentials, then restart."
+                    GIT_SYNC_FAILED=1
                     _egg_error_log "launcher" "git clone failed entirely (repo: $(redact_url "${GIT_REPO}")) - verify URL, credentials (GIT_AUTH_TOKEN) and network egress"
                 fi
             fi
         fi
     else
         log "Existing Git repository found - checking for new commits..."
+        _git_clear_stale_locks
         # Re-point origin at the currently configured repo/token first: either
         # may have been edited in the Startup tab since the first clone.
         git remote set-url origin "${AUTH_REPO_URL}" 2>/dev/null \
             || git remote add origin "${AUTH_REPO_URL}" 2>/dev/null || true
         _old_head="$(git rev-parse --short HEAD 2>/dev/null || echo 'none')"
+        _fetch_ok=0
         if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+            _fetch_ok=1
+        elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+            # Token-authenticated fetch failed - retry anonymously so a
+            # revoked/expired token cannot break PUBLIC repositories.
+            warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
+            if git fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
+                _fetch_ok=1
+            fi
+        fi
+        if [ "${_fetch_ok}" = "1" ]; then
             _git_archive_workspace
             if git reset --hard FETCH_HEAD 2>"${_err}"; then
                 _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
@@ -450,19 +546,43 @@ sync_git_repo() {
                 if [ "${_old_head}" != "${_new_head}" ]; then
                     ok "Git updated: ${_old_head} -> ${_new_head} (branch ${GIT_BRANCH}, commit from ${_new_date:-unknown date})"
                     info "Latest commit: ${_new_subj:-n/a}"
+                    GIT_SYNC_UPDATED=1
                 else
                     ok "Already at latest commit ${_new_head} on '${GIT_BRANCH}' (from ${_new_date:-unknown date})"
                 fi
             else
                 warn "Could not apply fetched commits - code left unchanged: $(_git_redact_err "${_err}")"
+                GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git reset --hard FETCH_HEAD failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - restore from .logs/code-archives/ if needed"
             fi
         else
             warn "Git fetch failed - keeping installed code: $(_git_redact_err "${_err}")"
+            GIT_SYNC_FAILED=1
             _egg_error_log "launcher" "git fetch failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
         fi
     fi
     rm -f "${_err}" 2>/dev/null || true
+    rm -f "${GIT_CONFIG_GLOBAL:-}" 2>/dev/null || true
+    unset GIT_CONFIG_GLOBAL
+}
+
+# _git_unpin_stale: the first boot may have pinned LANGUAGE/RUNNER/MAIN_FILE
+# from a scaffold or an earlier snapshot of the repository. When a sync brings
+# in commits and the pinned entry point no longer exists, those pins would
+# force the launcher to run (or stub-create) a file the repository does not
+# have - looking exactly like "commits are not applied". Drop the pins and
+# re-arm auto-detection whenever the pinned entry point vanished upstream.
+_git_unpin_stale() {
+    local pinned
+    pinned="$(grep -E '^MAIN_FILE=' "${CONF_FILE}" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+    [ -n "${pinned}" ] || return 0
+    if [ ! -f "${pinned}" ]; then
+        sed -i -e '/^MAIN_FILE=/d' -e '/^LANGUAGE=/d' -e '/^RUNNER=/d' "${CONF_FILE}" 2>/dev/null || true
+        LANGUAGE="auto"
+        RUNNER="auto"
+        MAIN_FILE="auto"
+        warn "Repository update removed the pinned entry point '${pinned}' - re-running auto-detection."
+    fi
 }
 
 # --- Variables with defaults ---
@@ -485,6 +605,15 @@ CLEAN_BUILD_CACHE="${CLEAN_BUILD_CACHE:-1}"
 GIT_REPO="${GIT_REPO:-}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_AUTH_TOKEN="${GIT_AUTH_TOKEN:-}"
+# Git Auto-Update: poll the repository while the server runs and restart the
+# application when new commits land (1 = on, 0 = boot-time sync only).
+GIT_AUTO_UPDATE="${GIT_AUTO_UPDATE:-1}"
+GIT_POLL_SECONDS="${GIT_POLL_SECONDS:-300}"
+case "${GIT_POLL_SECONDS}" in
+    ''|*[!0-9]*) GIT_POLL_SECONDS=300 ;;
+esac
+[ "${GIT_POLL_SECONDS}" -lt 30 ] && GIT_POLL_SECONDS=30
+[ "${GIT_POLL_SECONDS}" -gt 86400 ] && GIT_POLL_SECONDS=86400
 STARTER_TEMPLATE="${STARTER_TEMPLATE:-}"
 SERVER_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-8080}}}}"
 NODE_GYP_SUPPORT="${NODE_GYP_SUPPORT:-1}"
@@ -620,14 +749,38 @@ if [ -n "${GIT_REPO}" ]; then
     fi
     log "Checking Git repository integration..."
     sync_git_repo
+    if [ "${GIT_SYNC_UPDATED:-0}" = "1" ]; then
+        _git_unpin_stale
+    fi
 fi
 
 # -----------------------------------------------------------------------------
 # 2. Interactive Setup Wizard (Interactive TTY vs Non-Interactive)
 # -----------------------------------------------------------------------------
+# Scaffolding rules (deliberately strict - starter files are a COURTESY for
+# empty workspaces, never a fallback that can mask a broken deployment):
+#   * GIT_REPO set + empty workspace  -> the repository sync produced nothing
+#     (failed, wrong branch, or the repo is empty). Scaffold NOTHING and stop
+#     with the real reason: serving a generated "Hello World" app here looked
+#     exactly like "the egg is not applying my commits" to users.
+#   * CUSTOM_COMMAND set              -> the user owns the command line, so no
+#     generated default files; scaffold nothing.
+#   * otherwise empty workspace       -> starter wizard / non-interactive
+#     Node.js default, as before.
 FILE_COUNT=$(find . -mindepth 1 -maxdepth 1 -not -name '.*' -not -name 'run.sh' -not -name 'entrypoint.sh' -not -name 'install.sh' -not -name 'install-runtime.sh' 2>/dev/null | wc -l)
 
-if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ]; then
+if [ "${FILE_COUNT}" -eq 0 ] && [ -n "${GIT_REPO}" ] \
+        && { [ -z "${STARTER_TEMPLATE}" ] || [ "${STARTER_TEMPLATE}" = "empty" ]; }; then
+    # No explicit starter requested: an empty workspace after a GIT_REPO sync
+    # is always a deployment problem - stop with the real reason.
+    if [ "${GIT_SYNC_FAILED:-0}" = "1" ]; then
+        fail "Git repository produced no files - sync failed (see warnings above). Check GIT_REPO, GIT_BRANCH and GIT_AUTH_TOKEN, then start the server again. No starter files were generated to avoid masking this error."
+    else
+        fail "Git repository synced successfully but contains no files. Nothing to run - add code to the repository or clear GIT_REPO."
+    fi
+fi
+
+if [ "${FILE_COUNT}" -eq 0 ] && [ -z "${STARTER_TEMPLATE}" ] && [ -z "${CUSTOM_COMMAND}" ]; then
     if [ "${LANGUAGE}" != "auto" ] && [ -n "${LANGUAGE}" ] && [ "${LANGUAGE}" != "custom" ]; then
         STARTER_TEMPLATE="${LANGUAGE}"
         log "Empty workspace detected with language '${LANGUAGE}'. Auto-scaffolding starter project..."
@@ -1872,8 +2025,10 @@ resolve_main_file() {
 
 RESOLVED_MAIN=$(resolve_main_file)
 
-# Ensure fallback entrypoint exists so initial container run does not crash
-if [ ! -f "${RESOLVED_MAIN}" ] && [ "${DETECTED_LANG}" != "static" ] && [ -z "${CUSTOM_COMMAND}" ]; then
+# Ensure fallback entrypoint exists so initial container run does not crash.
+# Never generated when CUSTOM_COMMAND or GIT_REPO owns the workspace: a stub
+# main file would shadow the real application (or hide that it is missing).
+if [ ! -f "${RESOLVED_MAIN}" ] && [ "${DETECTED_LANG}" != "static" ] && [ -z "${CUSTOM_COMMAND}" ] && [ -z "${GIT_REPO}" ]; then
     mkdir -p "$(dirname "${RESOLVED_MAIN}")" 2>/dev/null || true
     case "${DETECTED_LANG}" in
         nodejs|javascript|js)
@@ -2468,6 +2623,67 @@ construct_run_cmd() {
 RUN_CMD=$(construct_run_cmd)
 
 # -----------------------------------------------------------------------------
+# 9.5 Git Auto-Update Watcher (in-run repository sync)
+# -----------------------------------------------------------------------------
+# Boot-time sync alone meant a long-running server NEVER picked up new commits
+# until someone restarted it. This watcher polls GIT_BRANCH every
+# GIT_POLL_SECONDS (default 300s); when a new commit appears it re-runs the
+# full sync (archive -> fetch -> reset) and stops the application process so
+# the launch loop below restarts it on the fresh code. Disable entirely with
+# GIT_AUTO_UPDATE=0.
+# -----------------------------------------------------------------------------
+run_git_update_watcher() {
+    local _last_head _cur_head _target _werr
+    _last_head="$(git rev-parse --short HEAD 2>/dev/null || echo '')"
+    while :; do
+        sleep "${GIT_POLL_SECONDS}" 2>/dev/null || sleep 300
+        cd "${WORK_DIR}" 2>/dev/null || return 0
+        [ -d ".git" ] || return 0
+        _werr="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitwatch-$$")"
+        if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_werr}"; then
+            _cur_head="$(git rev-parse --short FETCH_HEAD 2>/dev/null || echo '')"
+            if [ -n "${_cur_head}" ] && [ "${_cur_head}" != "${_last_head}" ]; then
+                log "Git Auto-Update: new commits detected on '${GIT_BRANCH}' (${_last_head:-?} -> ${_cur_head}). Syncing..."
+                sync_git_repo
+                if [ "${GIT_SYNC_FAILED:-0}" = "1" ]; then
+                    warn "Git Auto-Update: sync failed - application keeps running the current code."
+                else
+                    _last_head="$(git rev-parse --short HEAD 2>/dev/null || echo "${_cur_head}")"
+                    mkdir -p "${WORK_DIR}/.logs" 2>/dev/null || true
+                    : > "${WORK_DIR}/.logs/.git-restart-pending" 2>/dev/null || true
+                    warn "Git Auto-Update: restarting the application to apply new commits..."
+                    _target="$(cat "${WORK_DIR}/.logs/.app-pid" 2>/dev/null || true)"
+                    if [ -n "${_target}" ] && [ "${_target}" -gt 1 ] 2>/dev/null; then
+                        terminate_process_tree "${_target}" 5
+                    fi
+                fi
+            fi
+        else
+            # Poll failures are journaled, not printed: a flaky upstream must
+            # not spam the console every cycle.
+            _egg_error_log "launcher" "git auto-update poll failed (branch ${GIT_BRANCH}): $(redact_url "$(tr '\n' ' ' < "${_werr}" 2>/dev/null | cut -c1-200)")"
+        fi
+        rm -f "${_werr}" 2>/dev/null || true
+    done
+}
+
+start_git_update_watcher() {
+    [ -n "${GIT_REPO}" ] || return 0
+    [ "${GIT_AUTO_UPDATE}" = "1" ] || return 0
+    [ -d ".git" ] || return 0
+    command -v git >/dev/null 2>&1 || return 0
+    (
+        _git_env_setup
+        trap 'rm -f "${GIT_CONFIG_GLOBAL:-}" 2>/dev/null || true' EXIT
+        run_git_update_watcher
+    ) &
+    GIT_WATCHER_PID=$!
+    ok "Git Auto-Update watcher active (polling '${GIT_BRANCH}' every ${GIT_POLL_SECONDS}s; new commits restart the app)."
+}
+
+start_git_update_watcher
+
+# -----------------------------------------------------------------------------
 # 10. Execution Loop & Process Handling
 # -----------------------------------------------------------------------------
 phase "Application Launch"
@@ -2562,11 +2778,15 @@ while [ "${RUN_LOOP}" -eq 1 ]; do
     # run/crash (pm2 daemons, detached workers) so ports are free and no stale
     # process keeps serving between restarts.
     sweep_stray_processes quick
+    # Clear any Git Auto-Update restart flag left from a previous run.
+    rm -f "${WORK_DIR}/.logs/.git-restart-pending" 2>/dev/null || true
     log "Starting application process..."
     printf "%b>>> %s%b\n\n" "${C_GREEN}${C_BOLD}" "${RUN_CMD}" "${C_RESET}"
 
     eval "${RUN_CMD}" &
     CHILD_PID=$!
+    mkdir -p "${WORK_DIR}/.logs" 2>/dev/null || true
+    printf '%s' "${CHILD_PID}" > "${WORK_DIR}/.logs/.app-pid" 2>/dev/null || true
 
     # --- Health Check (first boot only) --------------------------------------
     # HEALTH_CHECK_PATH=/healthz probes http://127.0.0.1:$SERVER_PORT$PATH until
@@ -2611,6 +2831,19 @@ while [ "${RUN_LOOP}" -eq 1 ]; do
     
     if [ "${RUN_LOOP}" -eq 0 ]; then
         break
+    fi
+
+    # Git Auto-Update restart: the watcher synced new commits and stopped the
+    # process deliberately. Restart regardless of AUTO_RESTART (this is a
+    # deploy, not a crash), running the graceful shutdown hook first.
+    if [ -f "${WORK_DIR}/.logs/.git-restart-pending" ]; then
+        rm -f "${WORK_DIR}/.logs/.git-restart-pending" 2>/dev/null || true
+        ok "Git Auto-Update: new commits applied - restarting application."
+        if [ -n "${POST_RUN_COMMAND}" ]; then
+            log "Executing POST_RUN_COMMAND: ${POST_RUN_COMMAND}..."
+            eval "${POST_RUN_COMMAND}" || true
+        fi
+        continue
     fi
 
     if [ "${AUTO_RESTART}" = "1" ]; then

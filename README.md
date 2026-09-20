@@ -456,9 +456,11 @@ graph LR
 |---|---|:---:|---|
 | `SERVER_PORT` | *assigned* | 🔒 Admin | Primary network port allocated by the panel. |
 | `AUTO_ENV_INJECT` | `1` | ✅ | Injects correct `PORT` and `HOST` variables into `.env`. |
-| `GIT_REPO` | *empty* | ✅ | Git repository to clone and synchronize on boot. |
+| `GIT_REPO` | *empty* | ✅ | Git repository to clone and synchronize on boot (and, with `GIT_AUTO_UPDATE`, while running). |
 | `GIT_BRANCH` | `main` | ✅ | Branch to track and fetch. |
-| `GIT_AUTH_TOKEN` | *empty* | ✅ | Personal access token for private repos (redacted in logs). |
+| `GIT_AUTH_TOKEN` | *empty* | ✅ | Personal access token for private repos (redacted in logs; a bad token no longer blocks public repos). |
+| `GIT_AUTO_UPDATE` | `1` | ✅ | Poll for new commits while the server runs and restart the app to apply them. |
+| `GIT_POLL_SECONDS` | `300` | ✅ | Poll interval in seconds for `GIT_AUTO_UPDATE` (30-86400). |
 
 ### Health Checks & Console
 | Variable | Default | Editable | Description |

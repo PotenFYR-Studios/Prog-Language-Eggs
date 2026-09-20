@@ -14,6 +14,15 @@ set -u
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 
+# Never let a host credential helper (Git Credential Manager on Windows, etc.)
+# pop a dialog or hang the suite: the S6 case intentionally probes a real
+# unreachable GitHub URL and must fail fast without any interactivity.
+# Env-only - nothing here touches the user's real git config files.
+export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=/bin/true
+export GCM_INTERACTIVE=never
+export GIT_CONFIG_SYSTEM=/dev/null
+
 TMP="$(mktemp -d)"
 ERRLOG="$TMP/error-journal.log"
 PASS=0; FAIL=0
@@ -115,14 +124,14 @@ echo "S6: unreachable repo + token -> loud error, code kept, no leak"
 rm -rf "$ERRLOG"
 W6="$TMP/s6"; mkdir -p "$W6"
 echo "existing" > "$W6/old.js"
-GIT_REPO="https://github.com/potenfyr-invalid/does-not-exist-xyz.git" GIT_BRANCH=main GIT_AUTH_TOKEN="SECRETTOKEN123" run_sync_in "$W6"
+GIT_REPO="https://127.0.0.1:1/potenfyr-invalid/does-not-exist.git" GIT_BRANCH=main GIT_AUTH_TOKEN="SECRETTOKEN123" run_sync_in "$W6"
 grep -q "SECRETTOKEN123" "$TMP/out.log" && bad_t "TOKEN LEAKED to console" || ok_t "token not printed to console"
 grep -qE "\[warn\] .*(Git fetch failed|Git clone)" "$TMP/out.log" && ok_t "failure reported to console" || bad_t "failure hidden from user"
 [ -s "$ERRLOG" ] && ok_t "error journal entry written" || bad_t "no error journal entry"
 [ -f "$W6/old.js" ] && ok_t "installed code kept after failed sync" || bad_t "user code lost"
 # same failure must surface on a fresh clone too
 W6b="$TMP/s6b"; mkdir -p "$W6b"
-GIT_REPO="https://github.com/potenfyr-invalid/does-not-exist-xyz.git" GIT_BRANCH=main GIT_AUTH_TOKEN="SECRETTOKEN123" run_sync_in "$W6b"
+GIT_REPO="https://127.0.0.1:1/potenfyr-invalid/does-not-exist.git" GIT_BRANCH=main GIT_AUTH_TOKEN="SECRETTOKEN123" run_sync_in "$W6b"
 grep -qE "\[warn\] .*Could not clone repository" "$TMP/out.log" && ok_t "fresh-clone failure reported" || bad_t "fresh-clone failure hidden"
 
 # ---------------------------------------------------------------- S7
@@ -139,6 +148,42 @@ echo "S8: untrimmed panel startup inputs"
 W8="$TMP/s8"; mkdir -p "$W8"
 GIT_REPO="$TMP/alpha.git " GIT_BRANCH=$'main\r\n' GIT_AUTH_TOKEN="" run_sync_in "$W8"
 [ -f "$W8/index.js" ] && ok_t "trailing whitespace in GIT_REPO/GIT_BRANCH tolerated" || bad_t "untrimmed inputs broke clone"
+
+# ---------------------------------------------------------------- S9
+echo "S9: stale .git/index.lock from a killed run is cleared"
+W9="$TMP/s9"; mkdir -p "$W9"
+GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W9"
+touch "$W9/.git/index.lock"          # simulate a previous run killed mid-reset
+commit alpha index.js 'console.log(9)' 'alpha c9'
+GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W9"
+grep -q "console.log(9)" "$W9/index.js" && ok_t "sync works despite stale index.lock" || bad_t "stale lock blocked sync"
+grep -q "Removed stale git lock" "$TMP/out.log" && ok_t "stale lock removal reported" || bad_t "lock removal silent"
+
+# ---------------------------------------------------------------- S10
+echo "S10: pinned entry point removed upstream -> pins dropped, re-detection"
+W10="$TMP/s10"; mkdir -p "$W10"
+commit alpha old-entry.js 'old' 'alpha add old-entry'
+GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W10"
+printf 'MAIN_FILE=old-entry.js\nLANGUAGE=nodejs\nRUNNER=node\n' > "$W10/.multi-prog.conf"
+git $GITCFG -C "$TMP/alpha-wt" rm -q old-entry.js >/dev/null 2>&1
+commit alpha new-entry.js 'new' 'alpha replace entry'
+# a real boot re-syncs after the upstream change, THEN re-evaluates the pins
+GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W10"
+( cd "$W10" && WORK_DIR="$W10" CONF_FILE="$W10/.multi-prog.conf" GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" _git_unpin_stale ) > "$TMP/out.log" 2>&1
+grep -q '^MAIN_FILE=' "$W10/.multi-prog.conf" && bad_t "stale MAIN_FILE pin kept" || ok_t "stale MAIN_FILE pin dropped"
+grep -q '^LANGUAGE=' "$W10/.multi-prog.conf" && bad_t "LANGUAGE pin kept" || ok_t "LANGUAGE pin dropped with it"
+grep -q "re-running auto-detection" "$TMP/out.log" && ok_t "re-detection reported" || bad_t "re-detection silent"
+
+# ---------------------------------------------------------------- S11
+echo "S11: sync messaging on clone path and loud failure for empty workspaces"
+W11="$TMP/s11"; mkdir -p "$W11"
+GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W11"
+grep -q "successfully cloned" "$TMP/out.log" && ok_t "clone messaging present" || bad_t "no clone messaging"
+# unreachable repo on an empty workspace -> loud clone failure (no starter will mask it)
+W11b="$TMP/s11b"; mkdir -p "$W11b"
+GIT_REPO="https://127.0.0.1:1/potenfyr-invalid/does-not-exist.git" GIT_BRANCH=main GIT_AUTH_TOKEN="SECRETTOKEN123" run_sync_in "$W11b"
+grep -q "Could not clone repository" "$TMP/out.log" && ok_t "failed clone surfaces loud warning" || bad_t "failed clone not surfaced"
+grep -q "SECRETTOKEN123" "$TMP/out.log" && bad_t "TOKEN LEAKED to console" || ok_t "token still not printed on clone path"
 
 echo
 echo "Results: $PASS passed, $FAIL failed"
