@@ -461,6 +461,7 @@ graph LR
 | `GIT_AUTH_TOKEN` | *empty* | ✅ | Personal access token for private repos (redacted in logs; a bad token no longer blocks public repos). |
 | `GIT_AUTO_UPDATE` | `1` | ✅ | Poll for new commits while the server runs and restart the app to apply them. |
 | `GIT_POLL_SECONDS` | `300` | ✅ | Poll interval in seconds for `GIT_AUTO_UPDATE` (30-86400). |
+| `GIT_PRESERVE_ENV` | `1` | ✅ | Keep every existing `.env` in place across syncs: old credentials are restored to their original location after new commits land, so the project never breaks (0 = let repo `.env` files win). |
 
 ### Health Checks & Console
 | Variable | Default | Editable | Description |
@@ -475,6 +476,49 @@ graph LR
 | `DEBUG` | `0` | ✅ | Write comprehensive bash xtrace to `.logs/launcher-trace.log`. |
 
 ---
+
+## 🌐 Browser Automation (Playwright / Puppeteer / nodriver / Selenium)
+
+Chromium and chromedriver are **pre-installed in the image** (Debian builds kept in lockstep), so browser-based automation works out of the box - no downloading a browser inside the server container, which is slow and frequently breaks under the container sandbox.
+
+| Variable | Default | Editable | Description |
+|---|---|:---:|---|
+| `BROWSER_SUPPORT` | `1` | ✅ | Prepare the baked browser stack: writable profile + browser caches, container-safe flags, version banner at boot. |
+| `BROWSER_EXTRA_ARGS` | `--no-sandbox --disable-dev-shm-usage` | ✅ | Flags exported as `CHROMIUM_FLAGS` - the distro chromium wrapper applies them to every launch. |
+| `BROWSER_HEADFUL` | `0` | ✅ | Start a virtual Xvfb display (`DISPLAY=:99`) so headed (non-headless) automation works inside the container. |
+| `BROWSER_PROFILE_DIR` | `/home/container/.browser-profile` | ✅ | Writable chromium user-data-dir your automation can use as its profile. |
+
+Environment your code can always rely on: `CHROME_PATH` / `CHROMIUM_PATH` (`/usr/bin/chromium`), `CHROMEDRIVER_PATH`, `PUPPETEER_EXECUTABLE_PATH`, and `PLAYWRIGHT_BROWSERS_PATH` (writable, lives on the server volume).
+
+**Python - Playwright** (uses the baked chromium; extra flags come from `CHROMIUM_FLAGS`):
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto("https://example.com")
+    print(page.title())
+    browser.close()
+```
+
+If a project pins a different Playwright release that wants its own browser build, run `playwright install chromium` once in the console - the download lands in the writable `PLAYWRIGHT_BROWSERS_PATH` on the server volume and survives restarts.
+
+**Node - Puppeteer** (auto-uses `PUPPETEER_EXECUTABLE_PATH`; no browser download):
+
+```javascript
+const puppeteer = require('puppeteer');
+(async () => {
+  const browser = await puppeteer.launch({ headless: 'new' });
+  const page = await browser.newPage();
+  await page.goto('https://example.com');
+  console.log(await page.title());
+  await browser.close();
+})();
+```
+
+**nodriver** auto-detects `/usr/bin/chromium` on PATH. **Selenium** uses the baked `/usr/bin/chromedriver`, which always matches the installed chromium version. Headed mode: set `BROWSER_HEADFUL=1` and drop `headless` from your launch options.
 
 ## 🔒 Security & Hardening Posture
 

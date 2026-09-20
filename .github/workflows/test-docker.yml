@@ -1,0 +1,123 @@
+# Real-world runtime verification: builds the image, executes actual programs
+# in every pre-baked language (compile + run, real package installs), then
+# boots the egg launcher end-to-end and verifies it serves HTTP on the
+# assigned port and stops gracefully on SIGTERM.
+name: Test Docker & Language Runtimes
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtimes:
+    name: Compile & run every baked language
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -t prog-language-eggs:ci .
+
+      - name: Runtime battery (real compiles, real installs, real execution)
+        run: |
+          docker run --rm \
+            -v "$PWD/tests/runtime-battery.sh:/usr/local/bin/runtime-battery.sh:ro" \
+            prog-language-eggs:ci bash /usr/local/bin/runtime-battery.sh
+
+  launcher-e2e:
+    name: Egg launcher end-to-end (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: nodejs
+            main: index.js
+          - language: python
+            main: main.py
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -t prog-language-eggs:ci .
+
+      - name: Stage a minimal ${{ matrix.language }} HTTP app (as a panel user would)
+        run: |
+          mkdir -p app && chmod 777 app
+          if [ "${{ matrix.language }}" = "nodejs" ]; then
+            cat > app/index.js <<'EOF'
+          const http = require("http");
+          http.createServer((req, res) => { res.end("E2E_OK\n"); })
+              .listen(Number(process.env.PORT || 3000), "0.0.0.0");
+          EOF
+          else
+            cat > app/main.py <<'EOF'
+          import os
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+
+          PORT = int(os.environ.get("PORT", "3000"))
+
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b"E2E_OK\n")
+
+              def log_message(self, *args):
+                  pass
+
+          HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+          EOF
+          fi
+
+      - name: Boot the egg launcher and serve on the assigned port
+        run: |
+          docker run -d --name e2e \
+            -e LANGUAGE=${{ matrix.language }} \
+            -e MAIN_FILE=${{ matrix.main }} \
+            -e SERVER_PORT=3000 \
+            -v "$PWD/app:/home/container" \
+            prog-language-eggs:ci
+
+          served=""
+          for i in $(seq 1 60); do
+            if docker exec e2e curl -fsS http://127.0.0.1:3000/ 2>/dev/null | grep -q E2E_OK; then
+              served=1; break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' e2e 2>/dev/null)" != "true" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "${served}" ]; then
+            echo "::error::launcher never served HTTP on port 3000"
+            docker logs e2e 2>&1 | tail -n 60
+            exit 1
+          fi
+          echo "Launcher served E2E_OK over HTTP"
+
+      - name: Graceful stop (SIGTERM)
+        run: |
+          docker stop --time 20 e2e >/dev/null
+          code=$(docker inspect -f '{{.State.ExitCode}}' e2e)
+          echo "Exit code: ${code}"
+          case "${code}" in 0|130|143) ;; *) echo "::error::unclean exit"; exit 1 ;; esac
+
+      - name: Logs on failure
+        if: failure()
+        run: docker logs e2e 2>&1 | tail -n 60 || true
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f e2e 2>/dev/null || true

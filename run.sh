@@ -404,6 +404,48 @@ _git_redact_err() {
     redact_url "$(tr '\n' ' ' < "$1" 2>/dev/null | cut -c1-300)"
 }
 
+# ---------------------------------------------------------------------------
+# GIT_PRESERVE_ENV (default 1): credentials must survive repo updates. `git
+# reset --hard` overwrites every tracked file, so any .env the repo ships
+# would clobber the user's live credentials on each update. Snapshot every
+# .env in the workspace before the reset and copy it back to its original
+# location afterwards; the project keeps working unchanged. Set
+# GIT_PRESERVE_ENV=0 to let the repository's .env files win instead.
+_git_preserve_env_enabled() { [ "${GIT_PRESERVE_ENV:-1}" = "1" ]; }
+
+_git_snapshot_env() { # _git_snapshot_env <backup-dir>
+    _git_preserve_env_enabled || return 0
+    rm -rf "$1" 2>/dev/null || true
+    mkdir -p "$1" 2>/dev/null || return 0
+    ( cd "${WORK_DIR}" 2>/dev/null || exit 0
+      find . -type f -name .env -not -path './archive/*' -not -path './.logs/*' \
+             -not -path './.runtimes/*' -not -path './.git/*' -not -path './node_modules/*' \
+             -not -path './.potenfyr/*' 2>/dev/null | sed 's#^\./##'
+    ) 2>/dev/null | while IFS= read -r _rel; do
+        [ -n "${_rel}" ] || continue
+        mkdir -p "$1/$(dirname "${_rel}")" 2>/dev/null || true
+        cp -f "${WORK_DIR}/${_rel}" "$1/${_rel}" 2>/dev/null || true
+    done
+}
+
+_git_restore_env() { # _git_restore_env <backup-dir>
+    _git_preserve_env_enabled || return 0
+    [ -d "$1" ] || return 0
+    local _restored=0 _rel
+    while IFS= read -r _rel; do
+        [ -n "${_rel}" ] || continue
+        mkdir -p "${WORK_DIR}/$(dirname "${_rel}")" 2>/dev/null || true
+        if cp -f "$1/${_rel}" "${WORK_DIR}/${_rel}" 2>/dev/null; then
+            _restored=$((_restored + 1))
+        fi
+    done < <( cd "$1" 2>/dev/null && find . -type f 2>/dev/null | sed 's#^\./##' )
+    if [ "${_restored}" -gt 0 ]; then
+        ok "Preserved ${_restored} existing .env file(s) across the git update (GIT_PRESERVE_ENV)."
+    fi
+    rm -rf "$1" 2>/dev/null || true
+    return 0
+}
+
 # _git_env_setup: isolated global git config for every git call we make.
 # safe.directory is only honored from system/global config (never -c or repo
 # config), and HOME may not hold a writable .gitconfig under panel uids - so
@@ -473,6 +515,7 @@ sync_git_repo() {
                     _fetch_ok=1
                 fi
             fi
+            _git_snapshot_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
             if [ "${_fetch_ok}" = "1" ] && git reset --hard FETCH_HEAD 2>"${_err}"; then
                 _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
                 _new_subj="$(git log -1 --format=%s 2>/dev/null || true)"
@@ -483,6 +526,7 @@ sync_git_repo() {
                 GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git fetch failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
             fi
+            _git_restore_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
         else
             log "Cloning repository: $(redact_url "${GIT_REPO}") (branch: ${GIT_BRANCH})..."
             if git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
@@ -539,6 +583,7 @@ sync_git_repo() {
         fi
         if [ "${_fetch_ok}" = "1" ]; then
             _git_archive_workspace
+            _git_snapshot_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
             if git reset --hard FETCH_HEAD 2>"${_err}"; then
                 _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
                 _new_date="$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M %Z' 2>/dev/null || true)"
@@ -555,6 +600,7 @@ sync_git_repo() {
                 GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git reset --hard FETCH_HEAD failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - restore from .logs/code-archives/ if needed"
             fi
+            _git_restore_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
         else
             warn "Git fetch failed - keeping installed code: $(_git_redact_err "${_err}")"
             GIT_SYNC_FAILED=1
@@ -753,6 +799,41 @@ if [ -n "${GIT_REPO}" ]; then
         _git_unpin_stale
     fi
 fi
+
+# -----------------------------------------------------------------------------
+# 1.2 Browser Automation Environment (Playwright / Puppeteer / nodriver / ...)
+# -----------------------------------------------------------------------------
+# Chromium + chromedriver ship in the image; this pre-flight makes them
+# immediately usable from the container user: writable profile/cache dirs,
+# container-safe default flags (the distro chromium wrapper honors
+# CHROMIUM_FLAGS), and an optional virtual display for headful automation.
+# Startup variables (egg JSON): BROWSER_SUPPORT (default 1), BROWSER_EXTRA_ARGS,
+# BROWSER_HEADFUL (default 0), BROWSER_PROFILE_DIR.
+browser_preflight() {
+    [ "${BROWSER_SUPPORT:-1}" = "1" ] || return 0
+    local chrome_bin="${CHROME_PATH:-/usr/bin/chromium}"
+    if [ ! -x "${chrome_bin}" ]; then
+        warn "Browser automation requested but no chromium binary at ${chrome_bin} - skipping browser setup."
+        return 0
+    fi
+    export BROWSER_PROFILE_DIR="${BROWSER_PROFILE_DIR:-/home/container/.browser-profile}"
+    mkdir -p "${BROWSER_PROFILE_DIR}" "${HOME}/.cache/ms-playwright" "${HOME}/.cache/puppeteer" 2>/dev/null || true
+    # A non-root container user cannot use the Chrome sandbox under the
+    # default Docker seccomp profile, so bake container-safe flags into the
+    # distro wrapper (users can extend/override via BROWSER_EXTRA_ARGS).
+    export CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-} ${BROWSER_EXTRA_ARGS:---no-sandbox --disable-dev-shm-usage}"
+    if [ "${BROWSER_HEADFUL:-0}" = "1" ] && command -v Xvfb >/dev/null 2>&1 && [ -z "${DISPLAY:-}" ]; then
+        Xvfb :99 -screen 0 1280x720x24 >/dev/null 2>&1 &
+        sleep 1
+        export DISPLAY=:99
+        export BROWSER_DISPLAY=:99
+        info "Virtual display started on :99 (BROWSER_HEADFUL=1)."
+    fi
+    ok "Browser automation ready: $(chromium --version 2>/dev/null | head -n 1) · driver $(chromedriver --version 2>/dev/null | awk 'NR==1{print $1}') · profile ${BROWSER_PROFILE_DIR}"
+}
+
+phase "Browser Automation"
+browser_preflight
 
 # -----------------------------------------------------------------------------
 # 2. Interactive Setup Wizard (Interactive TTY vs Non-Interactive)

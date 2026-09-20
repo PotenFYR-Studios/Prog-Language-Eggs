@@ -38,11 +38,34 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GOPATH=/home/container/go \
     CARGO_HOME=/home/container/.cargo \
     RUSTUP_HOME=/opt/rustup \
+    CHROME_PATH=/usr/bin/chromium \
+    CHROMIUM_PATH=/usr/bin/chromium \
+    CHROMEDRIVER_PATH=/usr/bin/chromedriver \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_CACHE_DIR=/home/container/.cache/puppeteer \
+    PLAYWRIGHT_BROWSERS_PATH=/home/container/.cache/ms-playwright \
+    SE_BROWSER_PATH=/usr/bin/chromium \
     IMAGE_VARIANT=${RUNTIME_VARIANT}
 
 # Stop contract: the launcher (PID 1) traps SIGTERM for graceful shutdown;
 # panels and docker stop both deliver SIGTERM first.
 STOPSIGNAL SIGTERM
+
+# Slim pull size at the dpkg layer: never unpack man pages, HTML docs,
+# lintian metadata or non-English locales (copyright files, English and the
+# locale alias stay). Applied before every install below; no runtime impact.
+RUN printf '%s\n' \
+    'path-exclude=/usr/share/doc/*' \
+    'path-include=/usr/share/doc/*/copyright' \
+    'path-exclude=/usr/share/man/*' \
+    'path-exclude=/usr/share/info/*' \
+    'path-exclude=/usr/share/lintian/*' \
+    'path-exclude=/usr/share/locale/*' \
+    'path-include=/usr/share/locale/en*' \
+    'path-include=/usr/share/locale/locale.alias' \
+    > /etc/dpkg/dpkg.cfg.d/01-potenfyr-slim
 
 # 1. Base tools, networking, archive utilities & shared dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -87,7 +110,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && npm install -g --no-fund --no-audit npm pnpm yarn typescript ts-node tsx nodemon pm2 \
     && mkdir -p /opt/runtimes/node/bin \
     && ln -sf /usr/bin/node /opt/runtimes/node/bin/node 2>/dev/null || true \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && npm cache clean --force 2>/dev/null || true \
+    && rm -rf /root/.npm /root/.cache /tmp/npm-*
 
 # 4. Bun (amd64/arm64 upstream; other arches self-provision on demand)
 RUN ARCH="$(uname -m)" \
@@ -158,10 +183,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
     && mkdir -p /opt/runtimes/go/bin \
     && ln -sf /usr/bin/go /opt/runtimes/go/bin/go 2>/dev/null || true \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/lib/go-*/api /usr/lib/go-*/doc /usr/lib/go-*/test
 # 8. Rust & Cargo via rustup
 RUN export RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo \
     && (curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal || true) \
+    && rm -rf /opt/rustup/downloads/* /opt/rustup/tmp/* /root/.rustup 2>/dev/null || true \
     && chmod -R 777 /opt/cargo /opt/rustup 2>/dev/null || true
 
 # 9. PHP & Composer
@@ -204,6 +231,47 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tcl \
         swi-prolog \
     && rm -rf /var/lib/apt/lists/*
+
+# 13b. Browser automation stack (Playwright / Puppeteer / nodriver / Selenium)
+#      Debian chromium + matching chromedriver are baked so users never have
+#      to download a browser inside the server container (slow, and often
+#      sandbox-broken). The shared-library set below is spelled out because
+#      Playwright/Puppeteer may fetch their OWN chromium builds at runtime
+#      into /home/container/.cache/ms-playwright - those builds need the same
+#      libs the distro chromium needs. xvfb/dbu support headful automation.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        chromium \
+        chromium-sandbox \
+        chromium-driver \
+        fonts-liberation \
+        xvfb \
+        xauth \
+        dbus \
+        dbus-x11 \
+        libnss3 \
+        libatk-bridge2.0-0 \
+        libatk1.0-0 \
+        libgtk-3-0 \
+        libgbm1 \
+        libasound2 \
+        libxkbcommon0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libx11-xcb1 \
+        libxcursor1 \
+        libxi6 \
+        libxtst6 \
+        libcups2 \
+        libpangocairo-1.0-0 \
+        libcairo2 \
+        libpango-1.0-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /home/container/.cache/ms-playwright /home/container/.cache/puppeteer /home/container/.browser-profile \
+    && chmod -R 777 /home/container/.cache /home/container/.browser-profile \
+    && chromium --version \
+    && chromedriver --version | head -n 1
 
 # 14. Multi-panel working directories and non-root container user
 #     /opt/potenfyr: egg-owned state dir (self-updated launcher + hashes).

@@ -227,7 +227,7 @@ EXTRA_RUNTIMES=python@3.12,bun@latest,java@21   # companion toolchains`}
           printing the installed commit so latest-vs-old is verifiable in the
           console.
         </p>
-        <VarTable rows={[eggVar("GIT_REPO"), eggVar("GIT_BRANCH"), eggVar("GIT_AUTH_TOKEN")]} />
+        <VarTable rows={[eggVar("GIT_REPO"), eggVar("GIT_BRANCH"), eggVar("GIT_AUTH_TOKEN"), eggVar("GIT_PRESERVE_ENV")]} />
         <div className="doc-card my-5">
           <h3 className="!mt-0">Token safety</h3>
           <p className="text-[0.85em] leading-relaxed text-muted">
@@ -235,6 +235,60 @@ EXTRA_RUNTIMES=python@3.12,bun@latest,java@21   # companion toolchains`}
             fetch URL server-side and redacted from console output and logs.
             Reinstall semantics: only committed, pushed files survive, a
             reinstall re-clones the branch.
+          </p>
+        </div>
+        <div className="doc-card my-5">
+          <h3 className="!mt-0">.env preservation</h3>
+          <p className="text-[0.85em] leading-relaxed text-muted">
+            With <code className="inline-code">GIT_PRESERVE_ENV=1</code> (default),
+            every <code className="inline-code">.env</code> in the workspace is
+            snapshotted before <code className="inline-code">git reset --hard</code>{" "}
+            applies new commits and copied back to its original location
+            afterwards - a repo-shipped <code className="inline-code">.env</code>{" "}
+            can never clobber or wipe your live credentials. Set it to{" "}
+            <code className="inline-code">0</code> to let the repository win.
+          </p>
+        </div>
+
+        <h2 id="browser">Browser Automation</h2>
+        <p>
+          Chromium and chromedriver ship <strong>inside the image</strong>, so
+          Playwright, Puppeteer, nodriver and Selenium work out of the box - no
+          browser downloads inside the server container. The launcher exports{" "}
+          <code className="inline-code">CHROME_PATH</code>,{" "}
+          <code className="inline-code">CHROMEDRIVER_PATH</code>,{" "}
+          <code className="inline-code">PUPPETEER_EXECUTABLE_PATH</code> and a
+          writable <code className="inline-code">PLAYWRIGHT_BROWSERS_PATH</code>{" "}
+          on the server volume, and applies container-safe flags via{" "}
+          <code className="inline-code">CHROMIUM_FLAGS</code>.
+        </p>
+        <VarTable
+          rows={[
+            eggVar("BROWSER_SUPPORT"),
+            eggVar("BROWSER_EXTRA_ARGS"),
+            eggVar("BROWSER_HEADFUL"),
+            eggVar("BROWSER_PROFILE_DIR"),
+          ]}
+        />
+        <div className="doc-card my-5">
+          <h3 className="!mt-0">Quick usage</h3>
+          <p className="text-[0.85em] leading-relaxed text-muted">
+            <strong>Playwright (Python):</strong>{" "}
+            <code className="inline-code">p.chromium.launch(headless=True)</code>{" "}
+            - works immediately. If a pinned Playwright wants its own browser
+            build, run <code className="inline-code">playwright install chromium</code>{" "}
+            once in the console; it lands in the writable browsers path on your
+            volume. <strong>Puppeteer (Node):</strong> just{" "}
+            <code className="inline-code">puppeteer.launch()</code> - it reads{" "}
+            <code className="inline-code">PUPPETEER_EXECUTABLE_PATH</code>.{" "}
+            <strong>nodriver:</strong> auto-detects{" "}
+            <code className="inline-code">/usr/bin/chromium</code>.{" "}
+            <strong>Selenium:</strong>{" "}
+            <code className="inline-code">webdriver.Chrome()</code> uses the
+            baked matching chromedriver. For headed automation set{" "}
+            <code className="inline-code">BROWSER_HEADFUL=1</code> - the launcher
+            starts an Xvfb display on{" "}
+            <code className="inline-code">:99</code>.
           </p>
         </div>
 

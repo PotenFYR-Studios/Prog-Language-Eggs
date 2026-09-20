@@ -32,7 +32,7 @@ cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
 # --- Extract every top-level function from run.sh and load them -------------
-python tests/extract_funcs.py run.sh > "$TMP/functions.sh" || exit 1
+python3 tests/extract_funcs.py run.sh > "$TMP/functions.sh" || exit 1
 # shellcheck disable=SC1090
 source "$TMP/functions.sh"
 
