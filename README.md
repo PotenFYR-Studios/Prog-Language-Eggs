@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- HEADER BANNER -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Prog-Language-Eggs&fontSize=52&fontColor=ffffff&fontAlignY=34&animation=twinkling" width="100%" alt="Prog-Language-Eggs Banner" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Prog-Language-Eggs&fontSize=52&fontColor=ffffff&fontAlignY=34&desc=One%20Egg.%20One%20Image.%20Every%20Language.&descSize=18&descAlignY=55&animation=twinkling" width="100%" alt="Prog-Language-Eggs Banner" />
 
 <!-- TYPING SVG SUBTITLE -->
 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs">
@@ -12,10 +12,10 @@
 
 <!-- BADGES -->
 <a href="https://potenfyr.in"><img src="https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1c1e26" alt="Website" /></a>
-<a href="https://discord.gg/potenfyr"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white&labelColor=1c1e26" alt="Discord" /></a>
+<a href="https://discord.com/invite/zUaN2FPBec"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white&labelColor=1c1e26" alt="Discord" /></a>
 <a href="https://prog-language-eggs.docs.potenfyr.in"><img src="https://img.shields.io/badge/Docs-prog--language--eggs-8b5cf6?style=for-the-badge&logo=gitbook&logoColor=white&labelColor=1c1e26" alt="Docs" /></a>
 <a href="https://nest.potenfyr.in"><img src="https://img.shields.io/badge/Nest-Unified%20Catalog-ec4899?style=for-the-badge&logo=github&logoColor=white&labelColor=1c1e26" alt="Nest" /></a>
-<a href="mailto:support@potenfyr.in"><img src="https://img.shields.io/badge/Email-support%40potenfyr.in-ec4899?style=for-the-badge&logo=minutemailer&logoColor=white&labelColor=1c1e26" alt="Email" /></a>
+<a href="mailto:support@potenfyr.in"><img src="https://img.shields.io/badge/Email-support%40potenfyr.in-f97316?style=for-the-badge&logo=gmail&logoColor=white&labelColor=1c1e26" alt="Email" /></a>
 <img src="https://komarev.com/ghpvc/?username=PotenFYR-Studios-Prog-Language-Eggs&color=ec4899&style=for-the-badge&label=VIEW&labelColor=1c1e26" alt="Profile Views" /><br/>
 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/actions"><img src="https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Prog-Language-Eggs/docker-image.yml?branch=master&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%20Build&labelColor=1c1e26&color=2ea043" alt="CI Build" /></a>
 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/pkgs/container/prog-language-eggs"><img src="https://img.shields.io/badge/ghcr.io-prog--language--eggs-8b5cf6?style=for-the-badge&logo=docker&logoColor=white&labelColor=1c1e26" alt="Docker Image" /></a>
@@ -625,7 +625,22 @@ Released under the **[Apache License 2.0 with the Commons Clause](https://github
 Engineered with ❤️ by **[PotenFYR Studios](https://github.com/PotenFYR-Studios)**.
 
 <!-- markdownlint-disable -->
-Contributions make the open-source community such an amazing place to learn, inspire and create. Any contributions you make are **greatly appreciated** - see [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/labels/good%20first%20issue). Security concerns: please use [SECURITY.md](SECURITY.md) (private vulnerability reporting), not public issues.
+## 📫 Connect With Us
+
+<div align="center">
+
+[![GitHub](https://img.shields.io/badge/GitHub-PotenFYR--Studios-181717?style=for-the-badge&logo=github&labelColor=1c1e26)](https://github.com/PotenFYR-Studios)
+[![Website](https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=googlechrome&labelColor=1c1e26)](https://potenfyr.in)
+[![Community](https://img.shields.io/badge/Community-Discord-5865F2?style=for-the-badge&logo=discord&labelColor=1c1e26)](https://discord.com/invite/zUaN2FPBec)
+[![Modrinth](https://img.shields.io/badge/Modrinth-Organization-1bd96a?style=for-the-badge&logo=modrinth&labelColor=1c1e26)](https://modrinth.com/organization/potenfyr)
+
+</div>
+
+## 🎯 Vision
+
+✨ **Modular** (easy to integrate and customize) · ⚡ **Performant** (built for speed) · 🛡️ **Reliable** (production-ready code) · 🤝 **Community-Focused** (open to collaboration)
+
+## 👥 Contributors
 
 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=PotenFYR-Studios/Prog-Language-Eggs" alt="Prog-Language-Eggs contributors" />

@@ -266,7 +266,7 @@ function Footer() {
             <a href={WEBSITE} target="_blank" rel="noopener" className="footer-link">
               potenfyr.in
             </a>
-            <a href="https://discord.gg/potenfyr" target="_blank" rel="noopener" className="footer-link">
+            <a href="https://discord.com/invite/zUaN2FPBec" target="_blank" rel="noopener" className="footer-link">
               Support Discord
             </a>
             <a href={NEST} target="_blank" rel="noopener" className="footer-link">
