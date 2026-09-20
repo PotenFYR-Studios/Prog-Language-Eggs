@@ -14,8 +14,8 @@ env:
 
 # ONE image, ONE tag. Every runtime ships inside a single multi-arch image;
 # language choice happens at startup via egg variables, not at build time.
-# Least privilege: the workflow default is read-only; the publish job grants
-# packages:write itself, so nothing here needs contents:write.
+# Least privilege: the workflow default is read-only; the publish jobs grant
+# packages:write themselves, so nothing here needs contents:write.
 permissions:
   contents: read
 
@@ -34,24 +34,44 @@ jobs:
       - name: Run panel behavior test suite
         run: bash tests/panel-test.sh
 
-  build-and-push:
-    name: Build and publish multi-arch image
+  # Per-architecture native builds. amd64 and arm64 run on native runners
+  # (no QEMU at all - this used to emulate arm64 AND arm/v7 for every push,
+  # which took hours); only arm/v7 still emulates, on a cached dedicated leg.
+  # Each leg pushes its image by digest with its own cache scope; the merge
+  # job stitches the digests into one multi-arch manifest.
+  build:
+    name: Build image (${{ matrix.slug }})
     needs: behavior-tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            slug: amd64
+            runner: ubuntu-latest
+            qemu: "false"
+          - platform: linux/arm64
+            slug: arm64
+            runner: ubuntu-24.04-arm
+            qemu: "false"
+          - platform: linux/arm/v7
+            slug: armv7
+            runner: ubuntu-latest
+            qemu: "true"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up QEMU for multi-architecture emulation
+      - name: Set up QEMU (emulated architectures only)
+        if: matrix.qemu == 'true'
         uses: docker/setup-qemu-action@v4
         with:
-          # Must cover EVERY platform passed to build-push below, otherwise
-          # emulated RUN steps fail with "exec format error" (arm/v7 case).
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: ${{ matrix.platform }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -64,21 +84,83 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push single Multi-Language image
+      - name: Build and push by digest (${{ matrix.platform }})
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
-          # amd64 (standard nodes), arm64 (Apple/Ampere/RPi64), arm/v7 (SBC-hosted panels).
-          # Other host arches still work: runtimes self-provision on demand via
-          # install-runtime.sh, which supports ppc64le/s390x/riscv64 upstreams too.
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: ${{ matrix.platform }}
           build-args: |
             RUNTIME_VARIANT=all
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          # Always build from a CLEAN slate: no stale layer caches are reused,
-          # so every published tag reflects the exact committed sources.
-          no-cache: true
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
+          # Content-addressed per-arch layer cache: unchanged layers (every
+          # apt/RUN layer below the scripts COPYs) are reused verbatim, so
+          # ordinary script-only pushes rebuild in seconds. A cache hit is
+          # byte-identical to a fresh build.
+          cache-from: type=gha,scope=build-${{ matrix.slug }}
+          cache-to: type=gha,scope=build-${{ matrix.slug }},mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests#${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.slug }}
+          path: ${{ runner.temp }}/digests*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Stitch the per-architecture digests into the published multi-arch tags.
+  merge:
+    name: Merge manifest & publish tags
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download per-arch digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${REGISTRY}/${IMAGE_NAME}"
+          TAGS="${IMAGE_URI}:latest,${IMAGE_URI}:${GITHUB_SHA}"
+          echo "tags=${TAGS}" >> "${GITHUB_OUTPUT}"
+
+      - name: Merge manifest lists and push tags
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          ARGS=""
+          IFS=',' read -ra TAG_LIST <<< "${{ steps.tags.outputs.tags }}"
+          for t in "${TAG_LIST[@]}"; do ARGS="${ARGS} --tag ${t}"; done
+          # shellcheck disable=SC2046
+          docker buildx imagetools create ${ARGS} \
+            $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
+          echo "Published multi-arch image:"
+          docker buildx imagetools inspect "${TAG_LIST[0]}"
