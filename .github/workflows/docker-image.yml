@@ -34,6 +34,9 @@ jobs:
       - name: Run panel behavior test suite
         run: bash tests/panel-test.sh
 
+      - name: Hermetic git-sync engine tests (no network)
+        run: bash tests/sync-test.sh
+
   # Per-architecture native builds. amd64 and arm64 run on native runners
   # (no QEMU at all - this used to emulate arm64 AND arm/v7 for every push,
   # which took hours); only arm/v7 still emulates, on a cached dedicated leg.
