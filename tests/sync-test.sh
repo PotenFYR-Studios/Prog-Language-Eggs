@@ -185,6 +185,17 @@ GIT_REPO="https://127.0.0.1:1/potenfyr-invalid/does-not-exist.git" GIT_BRANCH=ma
 grep -q "Could not clone repository" "$TMP/out.log" && ok_t "failed clone surfaces loud warning" || bad_t "failed clone not surfaced"
 grep -q "SECRETTOKEN123" "$TMP/out.log" && bad_t "TOKEN LEAKED to console" || ok_t "token still not printed on clone path"
 
+# ---------------------------------------------------------------- S12
+echo "S12: Git Auto-Update optional handling (GIT_AUTO_UPDATE / missing checkout)"
+W12="$TMP/s12"; mkdir -p "$W12"
+out=$( cd "$W12" && WORK_DIR="$W12" GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTO_UPDATE=0 start_git_update_watcher 2>&1 )
+[ -z "$out" ] && ok_t "GIT_AUTO_UPDATE=0 starts nothing and stays silent" || bad_t "GIT_AUTO_UPDATE=0 not honored: $out"
+out=$( cd "$W12" && WORK_DIR="$W12" GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTO_UPDATE=1 start_git_update_watcher 2>&1 )
+printf '%s' "$out" | grep -q "no git checkout" && ok_t "missing checkout reported instead of silently off" || bad_t "missing checkout not reported: $out"
+( cd "$W" && WORK_DIR="$W" GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTO_UPDATE=1 GIT_POLL_SECONDS=30 \
+    start_git_update_watcher && sleep 1; [ -n "${GIT_WATCHER_PID:-}" ] && kill "${GIT_WATCHER_PID}" 2>/dev/null || true ) > "$TMP/out.log" 2>&1
+grep -q "watcher active" "$TMP/out.log" && ok_t "watcher starts on a real checkout" || bad_t "watcher did not start"
+
 echo
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -2715,6 +2715,7 @@ RUN_CMD=$(construct_run_cmd)
 # -----------------------------------------------------------------------------
 run_git_update_watcher() {
     local _last_head _cur_head _target _werr
+    cd "${WORK_DIR}" 2>/dev/null || return 0
     _last_head="$(git rev-parse --short HEAD 2>/dev/null || echo '')"
     while :; do
         sleep "${GIT_POLL_SECONDS}" 2>/dev/null || sleep 300
@@ -2724,7 +2725,14 @@ run_git_update_watcher() {
         if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_werr}"; then
             _cur_head="$(git rev-parse --short FETCH_HEAD 2>/dev/null || echo '')"
             if [ -n "${_cur_head}" ] && [ "${_cur_head}" != "${_last_head}" ]; then
+                # Announce WHAT landed, not just the sha transition, so the
+                # console is enough to verify a deploy.
+                local _subj _author _date
+                _subj="$(git log -1 --format=%s FETCH_HEAD 2>/dev/null || true)"
+                _author="$(git log -1 --format=%an FETCH_HEAD 2>/dev/null || true)"
+                _date="$(git log -1 --format=%cd --date=short FETCH_HEAD 2>/dev/null || true)"
                 log "Git Auto-Update: new commits detected on '${GIT_BRANCH}' (${_last_head:-?} -> ${_cur_head}). Syncing..."
+                [ -n "${_subj}" ] && info "New commit ${_cur_head}: \"${_subj}\" - ${_author:-unknown}, ${_date:-unknown}"
                 sync_git_repo
                 if [ "${GIT_SYNC_FAILED:-0}" = "1" ]; then
                     warn "Git Auto-Update: sync failed - application keeps running the current code."
@@ -2751,15 +2759,23 @@ run_git_update_watcher() {
 start_git_update_watcher() {
     [ -n "${GIT_REPO}" ] || return 0
     [ "${GIT_AUTO_UPDATE}" = "1" ] || return 0
-    [ -d ".git" ] || return 0
-    command -v git >/dev/null 2>&1 || return 0
+    if ! command -v git >/dev/null 2>&1; then
+        warn "Git Auto-Update off: git is not installed in this image."
+        return 0
+    fi
+    if [ ! -d "${WORK_DIR}/.git" ]; then
+        # Boot sync produced no checkout (bad URL/token/branch). Say so instead
+        # of silently never polling again.
+        warn "Git Auto-Update off: no git checkout in the workspace - fix the GIT_REPO settings and restart (see .logs/launcher-errors.log)."
+        return 0
+    fi
     (
         _git_env_setup
         trap 'rm -f "${GIT_CONFIG_GLOBAL:-}" 2>/dev/null || true' EXIT
         run_git_update_watcher
     ) &
     GIT_WATCHER_PID=$!
-    ok "Git Auto-Update watcher active (polling '${GIT_BRANCH}' every ${GIT_POLL_SECONDS}s; new commits restart the app)."
+    ok "Git Auto-Update watcher active (polling '${GIT_BRANCH}' every ${GIT_POLL_SECONDS}s; new commits are announced and restart the app)."
 }
 
 start_git_update_watcher
