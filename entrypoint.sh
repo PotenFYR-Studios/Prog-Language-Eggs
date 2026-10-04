@@ -29,6 +29,26 @@ C_DIM=$'\033[2m'
 C_GOLD=$'\033[33m'
 C_LIME=$'\033[92m'
 
+# If a panel overrides the image USER and starts the container as root,
+# switch back to the image's dedicated runtime account (uid/gid 988) before
+# touching the server volume: fix ownership while still root, then drop
+# privileges via gosu and re-exec this entrypoint. Root-owned volume files
+# would otherwise break the panel file manager, runtime installs into the
+# server dir, and later non-root starts.
+if [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
+    _PG_BOOT_UID="${RUNTIME_UID:-988}"
+    _PG_BOOT_GID="${RUNTIME_GID:-988}"
+
+    for _vol in /home/container /mnt/server; do
+        [ -d "${_vol}" ] && chown -R "${_PG_BOOT_UID}:${_PG_BOOT_GID}" "${_vol}" 2>/dev/null || true
+    done
+    unset _vol
+
+    if command -v gosu >/dev/null 2>&1 && getent passwd "${_PG_BOOT_UID}" >/dev/null 2>&1; then
+        exec gosu "${_PG_BOOT_UID}:${_PG_BOOT_GID}" /entrypoint.sh "$@"
+    fi
+fi
+
 if [ "${CLI_THEME}" = "classic" ]; then
     log()   { printf "%b %b\n" "${C_CYAN}${C_BOLD}[PotenFYR]${C_RESET}" "$*"; }
     ok()    { printf "%b %b\n" "${C_GREEN}${C_BOLD}[PotenFYR][✓]${C_RESET}" "$*"; }
@@ -257,9 +277,10 @@ if [ "${LAUNCHER_LOG:-1}" = "1" ]; then
     fi
 fi
 
-# Running as root inside a panel container is a security anti-pattern; warn.
+# Running as root here means the root-bootstrap above could not drop
+# privileges (no gosu / no runtime account) - genuinely unsupported.
 if [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
-    warn "Container is running as ROOT. Panels should launch images as a non-root user (e.g. uid 988)."
+    warn "Container is running as ROOT and could not drop privileges. Panels should launch images as a non-root user (e.g. uid 988)."
 fi
 
 # Image provenance stamp (written at docker build time) for supportability.

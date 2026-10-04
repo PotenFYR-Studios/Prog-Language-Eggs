@@ -73,6 +73,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         wget \
         jq \
+        gosu \
         unzip \
         tar \
         xz-utils \
