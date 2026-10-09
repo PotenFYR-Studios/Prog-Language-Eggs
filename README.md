@@ -13,7 +13,7 @@
 <!-- BADGES -->
 <a href="https://potenfyr.in"><img src="https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1c1e26" alt="Website" /></a>
 <a href="https://discord.com/invite/zUaN2FPBec"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white&labelColor=1c1e26" alt="Discord" /></a>
-<a href="https://prog-language-eggs.docs.potenfyr.in"><img src="https://img.shields.io/badge/Docs-prog--language--eggs-8b5cf6?style=for-the-badge&logo=gitbook&logoColor=white&labelColor=1c1e26" alt="Docs" /></a>
+<a href="https://docs.potenfyr.in/repo/prog-language-eggs"><img src="https://img.shields.io/badge/Docs-prog--language--eggs-8b5cf6?style=for-the-badge&logo=gitbook&logoColor=white&labelColor=1c1e26" alt="Docs" /></a>
 <a href="https://nest.potenfyr.in"><img src="https://img.shields.io/badge/Nest-Unified%20Catalog-ec4899?style=for-the-badge&logo=github&logoColor=white&labelColor=1c1e26" alt="Nest" /></a>
 <a href="mailto:support@potenfyr.in"><img src="https://img.shields.io/badge/Email-support%40potenfyr.in-f97316?style=for-the-badge&logo=gmail&logoColor=white&labelColor=1c1e26" alt="Email" /></a>
 <img src="https://komarev.com/ghpvc/?username=PotenFYR-Studios-Prog-Language-Eggs&color=ec4899&style=for-the-badge&label=VIEW&labelColor=1c1e26" alt="Profile Views" /><br/>
@@ -32,7 +32,7 @@
 </p>
 
 <p align="center">
-  📚 <a href="https://prog-language-eggs.docs.potenfyr.in"><b>Documentation</b></a> &nbsp;·&nbsp; 🥚 <a href="https://nest.potenfyr.in"><b>Unified Egg Catalog</b></a> &nbsp;·&nbsp; 📦 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/egg-programming-multi.json"><b>Egg JSON</b></a>
+  📚 <a href="https://docs.potenfyr.in/repo/prog-language-eggs"><b>Documentation</b></a> &nbsp;·&nbsp; 🥚 <a href="https://nest.potenfyr.in"><b>Unified Egg Catalog</b></a> &nbsp;·&nbsp; 📦 <a href="https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/egg-programming-multi.json"><b>Egg JSON</b></a>
 </p>
 
 <p align="center">
@@ -152,7 +152,7 @@ flowchart TD
 ### 1. Game & Hosting Panels
 *Compatible with Pterodactyl, Pelican, Feather Panel, PufferPanel, Jexactyl, Wisp, and Emerald.*
 
-1. **Download the Egg**: Get the latest [`egg-programming-multi.json`](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/egg-programming-multi.json), or read the [full setup guide](https://prog-language-eggs.docs.potenfyr.in/docs/).
+1. **Download the Egg**: Get the latest [`egg-programming-multi.json`](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/blob/master/egg-programming-multi.json), or read the [full setup guide](https://docs.potenfyr.in/repo/prog-language-eggs/docs).
 2. **Import Template**:
    - In your panel admin area, navigate to **Nests / Templates** &rarr; **Import Egg**.
    - Select the downloaded `egg-programming-multi.json` and save.
