@@ -76,25 +76,32 @@ if [ -n "${GIT_REPO}" ]; then
     GIT_AUTH_TOKEN="$(printf '%s' "${GIT_AUTH_TOKEN:-}" | tr -d ' \t\r\n')"
     export GIT_TERMINAL_PROMPT=0
     export GIT_ASKPASS=/bin/true
-    redact_err_git() { tr '\n' ' ' < "$1" | sed -e "s#${GIT_AUTH_TOKEN}#***#g" | cut -c1-300; }
+    redact_err_git() {
+        # Without a token, sed gets an empty pattern ("s##***#g") and fails,
+        # which swallowed the git error on public-repo installs.
+        if [ -n "${GIT_AUTH_TOKEN}" ]; then
+            tr '\n' ' ' < "$1" | sed -e "s#${GIT_AUTH_TOKEN}#***#g" | cut -c1-300
+        else
+            tr '\n' ' ' < "$1" | cut -c1-300
+        fi
+    }
 
     _gitcfg="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitconfig.$$")"
     {
         [ -f "${HOME}/.gitconfig" ] && cat "${HOME}/.gitconfig" 2>/dev/null
         printf '[safe]\n\tdirectory = *\n'
         printf '[init]\n\tdefaultBranch = main\n'
+        # Token comes from the environment via a credential helper, never from
+        # the URL, so it is not written into .git/config in plain text.
+        if [ -n "${GIT_AUTH_TOKEN}" ]; then
+            export POTENFYR_GIT_TOKEN="${GIT_AUTH_TOKEN}"
+            printf '[credential]\n\thelper = "!f() { echo username=x-access-token; echo \\"password=$POTENFYR_GIT_TOKEN\\"; }; f"\n'
+        fi
     } > "${_gitcfg}" 2>/dev/null || true
     export GIT_CONFIG_GLOBAL="${_gitcfg}"
 
     _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
     log "Syncing source code from Git repository: ${GIT_REPO} (branch: ${GIT_BRANCH})..."
-
-    AUTH_REPO_URL="${GIT_REPO}"
-    if [ -n "${GIT_AUTH_TOKEN}" ]; then
-        if [[ "${GIT_REPO}" =~ ^https:// ]]; then
-            AUTH_REPO_URL="https://${GIT_AUTH_TOKEN}@${GIT_REPO#https://}"
-        fi
-    fi
 
     if [ -d ".git" ]; then
         log "Updating existing Git repository..."
@@ -104,13 +111,13 @@ if [ -n "${GIT_REPO}" ]; then
                 warn "Removed stale git lock (${_lock}) left over from a previous run."
             fi
         done
-        git remote set-url origin "${AUTH_REPO_URL}" 2>/dev/null || git remote add origin "${AUTH_REPO_URL}" 2>/dev/null || true
+        git remote set-url origin "${GIT_REPO}" 2>/dev/null || git remote add origin "${GIT_REPO}" 2>/dev/null || true
         _fetch_ok=0
         if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
             _fetch_ok=1
-        elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+        elif [ -n "${GIT_AUTH_TOKEN}" ]; then
             warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
-            if git fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
+            if git -c credential.helper= fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
                 _fetch_ok=1
             fi
         fi
@@ -124,15 +131,13 @@ if [ -n "${GIT_REPO}" ]; then
         git init -q . 2>/dev/null || true
         git symbolic-ref HEAD "refs/heads/${GIT_BRANCH}" 2>/dev/null || true
         git remote remove origin 2>/dev/null || true
-        git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" || true
+        git remote add origin "${GIT_REPO}" 2>"${_err}" || true
         _fetch_ok=0
         if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
             _fetch_ok=1
-        elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+        elif [ -n "${GIT_AUTH_TOKEN}" ]; then
             warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
-            git remote remove origin 2>/dev/null || true
-            git remote add origin "${GIT_REPO}" 2>/dev/null || true
-            if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+            if git -c credential.helper= fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
                 _fetch_ok=1
             fi
         fi
@@ -142,14 +147,14 @@ if [ -n "${GIT_REPO}" ]; then
             warn "Git fetch failed - existing files kept: $(redact_err_git "${_err}")"
         fi
     else
-        if ! git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+        if ! git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
             warn "Cloning branch ${GIT_BRANCH} failed: $(redact_err_git "${_err}")."
-            if [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ] \
-                    && git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+            if [ -n "${GIT_AUTH_TOKEN}" ] \
+                    && git -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                 ok "Cloned anonymously (public repository)."
-            elif ! git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
-                if [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ] \
-                        && git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+            elif ! git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                if [ -n "${GIT_AUTH_TOKEN}" ] \
+                        && git -c credential.helper= clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                     ok "Cloned anonymously (default branch)."
                 else
                     warn "Git clone failed: $(redact_err_git "${_err}")"

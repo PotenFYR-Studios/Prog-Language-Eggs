@@ -196,6 +196,21 @@ printf '%s' "$out" | grep -q "no git checkout" && ok_t "missing checkout reporte
     start_git_update_watcher && sleep 1; [ -n "${GIT_WATCHER_PID:-}" ] && kill "${GIT_WATCHER_PID}" 2>/dev/null || true ) > "$TMP/out.log" 2>&1
 grep -q "watcher active" "$TMP/out.log" && ok_t "watcher starts on a real checkout" || bad_t "watcher did not start"
 
+# ---------------------------------------------------------------- S13
+echo "S13: token never stored in .git/config (credential helper, not URL)"
+W13="$TMP/s13"; mkdir -p "$W13" && git init -q -b main "$W13"
+# Simulate a workspace synced by an older launcher that embedded the token in origin.
+git -C "$W13" remote add origin "https://SECRETTOKEN123@127.0.0.1:1/potenfyr-invalid/does-not-exist.git"
+GIT_REPO="https://127.0.0.1:1/potenfyr-invalid/does-not-exist.git" GIT_BRANCH=main GIT_AUTH_TOKEN="SECRETTOKEN123" run_sync_in "$W13"
+grep -q "SECRETTOKEN123" "$W13/.git/config" && bad_t "token still stored in .git/config" || ok_t "stale embedded token removed from origin on next sync"
+GIT_AUTH_TOKEN="SECRETTOKEN123"; _git_env_setup
+grep -q "POTENFYR_GIT_TOKEN" "$GIT_CONFIG_GLOBAL" && ok_t "credential helper written to isolated git config" || bad_t "no credential helper configured"
+grep -q "SECRETTOKEN123" "$GIT_CONFIG_GLOBAL" && bad_t "token written into generated git config" || ok_t "generated git config holds no token"
+rm -f "$GIT_CONFIG_GLOBAL"; unset GIT_CONFIG_GLOBAL
+GIT_AUTH_TOKEN=""; _git_env_setup
+grep -q "POTENFYR_GIT_TOKEN" "$GIT_CONFIG_GLOBAL" && bad_t "helper set without a token" || ok_t "no helper when no token is set"
+rm -f "$GIT_CONFIG_GLOBAL"; unset GIT_CONFIG_GLOBAL; GIT_AUTH_TOKEN=""
+
 echo
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

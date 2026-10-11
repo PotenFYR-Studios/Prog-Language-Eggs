@@ -404,6 +404,17 @@ _git_redact_err() {
     redact_url "$(tr '\n' ' ' < "$1" 2>/dev/null | cut -c1-300)"
 }
 
+# _git_fail_reason <err> <auth_err>: when a token was tried first, report that
+# error (e.g. "Invalid username or token"), not the anonymous retry's
+# "Repository not found", which is what GitHub says for every private repo.
+_git_fail_reason() {
+    if [ -s "$2" ]; then
+        _git_redact_err "$2"
+    else
+        _git_redact_err "$1"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # GIT_PRESERVE_ENV (default 1): credentials must survive repo updates. `git
 # reset --hard` overwrites every tracked file, so any .env the repo ships
@@ -459,6 +470,14 @@ _git_env_setup() {
         [ -f "${HOME}/.gitconfig" ] && cat "${HOME}/.gitconfig" 2>/dev/null
         printf '[safe]\n\tdirectory = *\n'
         printf '[init]\n\tdefaultBranch = main\n'
+        # Credentials come from the environment, never from the URL: a token
+        # embedded in origin would be written to .git/config in plain text.
+        # The helper only runs when git gets a 401 challenge, so public
+        # repositories are never sent the token.
+        if [ -n "$(printf '%s' "${GIT_AUTH_TOKEN:-}" | tr -d ' \t\r\n')" ]; then
+            export POTENFYR_GIT_TOKEN="$(printf '%s' "${GIT_AUTH_TOKEN}" | tr -d ' \t\r\n')"
+            printf '[credential]\n\thelper = "!f() { echo username=x-access-token; echo \\"password=$POTENFYR_GIT_TOKEN\\"; }; f"\n'
+        fi
     } > "${_cfg}" 2>/dev/null || printf '[safe]\n\tdirectory = *\n' > "${_cfg}" 2>/dev/null || true
     export GIT_CONFIG_GLOBAL="${_cfg}"
 }
@@ -486,13 +505,12 @@ sync_git_repo() {
     GIT_SYNC_FAILED=0
     _git_env_setup
 
-    local _err _old_head _new_head _new_date _new_subj _fetch_ok
+    local _err _auth_err _old_head _new_head _new_date _new_subj _fetch_ok
     _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
-
-    AUTH_REPO_URL="${GIT_REPO}"
-    if [ -n "${GIT_AUTH_TOKEN}" ] && [[ "${GIT_REPO}" =~ ^https:// ]]; then
-        AUTH_REPO_URL="https://${GIT_AUTH_TOKEN}@${GIT_REPO#https://}"
-    fi
+    # The anonymous retry overwrites $_err; keep the authenticated error too,
+    # so the real cause (rejected token) is not replaced by "Repository not found".
+    _auth_err="${_err}.auth"
+    rm -f "${_auth_err}" 2>/dev/null || true
 
     if [ ! -d ".git" ]; then
         if _git_ws_has_files; then
@@ -501,17 +519,16 @@ sync_git_repo() {
             git init -q . 2>/dev/null || true
             git symbolic-ref HEAD "refs/heads/${GIT_BRANCH}" 2>/dev/null || true
             git remote remove origin 2>/dev/null || true
-            git remote add origin "${AUTH_REPO_URL}" 2>"${_err}" || true
+            git remote add origin "${GIT_REPO}" 2>"${_err}" || true
             _fetch_ok=0
             if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
                 _fetch_ok=1
-            elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+            elif [ -n "${GIT_AUTH_TOKEN}" ]; then
                 # Token-authenticated fetch failed - retry anonymously so a
                 # revoked/expired token cannot break PUBLIC repositories.
                 warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
-                git remote remove origin 2>/dev/null || true
-                git remote add origin "${GIT_REPO}" 2>/dev/null || true
-                if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
+                cp -f "${_err}" "${_auth_err}" 2>/dev/null || true
+                if git -c credential.helper= fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
                     _fetch_ok=1
                 fi
             fi
@@ -522,34 +539,35 @@ sync_git_repo() {
                 ok "Repository fetched over existing files (commit ${_new_head}: ${_new_subj:-n/a})"
                 GIT_SYNC_UPDATED=1
             else
-                warn "Git fetch failed - your files were kept unchanged: $(_git_redact_err "${_err}")"
+                warn "Git fetch failed - your files were kept unchanged: $(_git_fail_reason "${_err}" "${_auth_err}")"
+                [ -n "${GIT_AUTH_TOKEN}" ] && warn "If the error above mentions authentication or 'not found', check GIT_AUTH_TOKEN in the Startup tab (expiry, repository read access, org SSO)."
                 GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git fetch failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
             fi
             _git_restore_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
         else
             log "Cloning repository: $(redact_url "${GIT_REPO}") (branch: ${GIT_BRANCH})..."
-            if git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+            if git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                 ok "Repository successfully cloned (commit $(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
                 GIT_SYNC_UPDATED=1
             else
                 warn "Git clone of branch '${GIT_BRANCH}' failed: $(_git_redact_err "${_err}")"
                 _egg_error_log "launcher" "git clone failed on branch ${GIT_BRANCH} (repo: $(redact_url "${GIT_REPO}")) - check URL, branch name and credentials"
-                if [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+                if [ -n "${GIT_AUTH_TOKEN}" ]; then
                     warn "Retrying without credentials (public repository?)..."
-                    if git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                    if git -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                         ok "Repository successfully cloned anonymously (commit $(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
                         GIT_SYNC_UPDATED=1
                     fi
                 fi
                 if [ "${GIT_SYNC_UPDATED}" != "1" ]; then
                     warn "Retrying with the repository's default branch..."
-                    if git clone --depth 1 "${AUTH_REPO_URL}" . 2>"${_err}"; then
+                    if git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                         ok "Repository cloned (default branch)"
                         GIT_SYNC_UPDATED=1
-                    elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+                    elif [ -n "${GIT_AUTH_TOKEN}" ]; then
                         warn "Retrying default branch without credentials..."
-                        if git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                        if git -c credential.helper= clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                             ok "Repository cloned anonymously (default branch)"
                             GIT_SYNC_UPDATED=1
                         fi
@@ -567,17 +585,18 @@ sync_git_repo() {
         _git_clear_stale_locks
         # Re-point origin at the currently configured repo/token first: either
         # may have been edited in the Startup tab since the first clone.
-        git remote set-url origin "${AUTH_REPO_URL}" 2>/dev/null \
-            || git remote add origin "${AUTH_REPO_URL}" 2>/dev/null || true
+        git remote set-url origin "${GIT_REPO}" 2>/dev/null \
+            || git remote add origin "${GIT_REPO}" 2>/dev/null || true
         _old_head="$(git rev-parse --short HEAD 2>/dev/null || echo 'none')"
         _fetch_ok=0
         if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_err}"; then
             _fetch_ok=1
-        elif [ -n "${GIT_AUTH_TOKEN}" ] && [ "${AUTH_REPO_URL}" != "${GIT_REPO}" ]; then
+        elif [ -n "${GIT_AUTH_TOKEN}" ]; then
             # Token-authenticated fetch failed - retry anonymously so a
             # revoked/expired token cannot break PUBLIC repositories.
             warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
-            if git fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
+            cp -f "${_err}" "${_auth_err}" 2>/dev/null || true
+            if git -c credential.helper= fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
                 _fetch_ok=1
             fi
         fi
@@ -602,12 +621,13 @@ sync_git_repo() {
             fi
             _git_restore_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
         else
-            warn "Git fetch failed - keeping installed code: $(_git_redact_err "${_err}")"
+            warn "Git fetch failed - keeping installed code: $(_git_fail_reason "${_err}" "${_auth_err}")"
+            [ -n "${GIT_AUTH_TOKEN}" ] && warn "If the error above mentions authentication or 'not found', check GIT_AUTH_TOKEN in the Startup tab (expiry, repository read access, org SSO)."
             GIT_SYNC_FAILED=1
             _egg_error_log "launcher" "git fetch failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
         fi
     fi
-    rm -f "${_err}" 2>/dev/null || true
+    rm -f "${_err}" "${_auth_err}" 2>/dev/null || true
     rm -f "${GIT_CONFIG_GLOBAL:-}" 2>/dev/null || true
     unset GIT_CONFIG_GLOBAL
 }
@@ -2740,7 +2760,7 @@ RUN_CMD=$(construct_run_cmd)
 # GIT_AUTO_UPDATE=0.
 # -----------------------------------------------------------------------------
 run_git_update_watcher() {
-    local _last_head _cur_head _target _werr
+    local _last_head _cur_head _target _werr _werr_auth _wok
     cd "${WORK_DIR}" 2>/dev/null || return 0
     _last_head="$(git rev-parse --short HEAD 2>/dev/null || echo '')"
     while :; do
@@ -2748,7 +2768,18 @@ run_git_update_watcher() {
         cd "${WORK_DIR}" 2>/dev/null || return 0
         [ -d ".git" ] || return 0
         _werr="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitwatch-$$")"
+        _werr_auth="${_werr}.auth"
+        rm -f "${_werr_auth}" 2>/dev/null || true
+        _wok=0
         if git fetch --depth 1 origin "${GIT_BRANCH}" 2>"${_werr}"; then
+            _wok=1
+        elif [ -n "${GIT_AUTH_TOKEN}" ]; then
+            # Same anonymous fallback as the boot sync: a dead token must not
+            # stop polling of a PUBLIC repository.
+            cp -f "${_werr}" "${_werr_auth}" 2>/dev/null || true
+            git -c credential.helper= fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_werr}" && _wok=1
+        fi
+        if [ "${_wok}" = "1" ]; then
             _cur_head="$(git rev-parse --short FETCH_HEAD 2>/dev/null || echo '')"
             if [ -n "${_cur_head}" ] && [ "${_cur_head}" != "${_last_head}" ]; then
                 # Announce WHAT landed, not just the sha transition, so the
@@ -2776,9 +2807,9 @@ run_git_update_watcher() {
         else
             # Poll failures are journaled, not printed: a flaky upstream must
             # not spam the console every cycle.
-            _egg_error_log "launcher" "git auto-update poll failed (branch ${GIT_BRANCH}): $(redact_url "$(tr '\n' ' ' < "${_werr}" 2>/dev/null | cut -c1-200)")"
+            _egg_error_log "launcher" "git auto-update poll failed (branch ${GIT_BRANCH}): $(_git_fail_reason "${_werr}" "${_werr_auth}" | cut -c1-200)"
         fi
-        rm -f "${_werr}" 2>/dev/null || true
+        rm -f "${_werr}" "${_werr_auth}" 2>/dev/null || true
     done
 }
 
