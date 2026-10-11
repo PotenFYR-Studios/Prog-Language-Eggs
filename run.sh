@@ -803,25 +803,31 @@ fi
 # -----------------------------------------------------------------------------
 # 1.2 Browser Automation Environment (Playwright / Puppeteer / nodriver / ...)
 # -----------------------------------------------------------------------------
-# Chromium + chromedriver ship in the image; this pre-flight makes them
-# immediately usable from the container user: writable profile/cache dirs,
-# container-safe default flags (the distro chromium wrapper honors
-# CHROMIUM_FLAGS), and an optional virtual display for headful automation.
-# Startup variables (egg JSON): BROWSER_SUPPORT (default 1), BROWSER_EXTRA_ARGS,
-# BROWSER_HEADFUL (default 0), BROWSER_PROFILE_DIR.
+# Chromium (+chromedriver), Firefox ESR (+geckodriver) and Microsoft Edge ship
+# in the image; this pre-flight makes them immediately usable from the
+# container user: writable profile/cache dirs, container-safe default flags
+# per engine, and an optional virtual display for headful automation of every
+# browser. Startup variables (egg JSON): BROWSER_SUPPORT (default 1),
+# BROWSER_EXTRA_ARGS, BROWSER_HEADFUL (default 0), BROWSER_PROFILE_DIR.
 browser_preflight() {
     [ "${BROWSER_SUPPORT:-1}" = "1" ] || return 0
-    local chrome_bin="${CHROME_PATH:-/usr/bin/chromium}"
-    if [ ! -x "${chrome_bin}" ]; then
-        warn "Browser automation requested but no chromium binary at ${chrome_bin} - skipping browser setup."
-        return 0
-    fi
     export BROWSER_PROFILE_DIR="${BROWSER_PROFILE_DIR:-/home/container/.browser-profile}"
     mkdir -p "${BROWSER_PROFILE_DIR}" "${HOME}/.cache/ms-playwright" "${HOME}/.cache/puppeteer" 2>/dev/null || true
+
     # A non-root container user cannot use the Chrome sandbox under the
     # default Docker seccomp profile, so bake container-safe flags into the
-    # distro wrapper (users can extend/override via BROWSER_EXTRA_ARGS).
-    export CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-} ${BROWSER_EXTRA_ARGS:---no-sandbox --disable-dev-shm-usage}"
+    # environment (users can extend/override via BROWSER_EXTRA_ARGS).
+    # Chromium-family launchers honor CHROMIUM_FLAGS via the distro wrapper;
+    # CHROME_DEVEL_SANDBOX redirects every Chrome/Chromium/Edge binary to the
+    # setuid sandbox helper it can actually use in-container.
+    local extra="${BROWSER_EXTRA_ARGS:---no-sandbox --disable-dev-shm-usage}"
+    export CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-} ${extra}"
+    if [ -x /usr/lib/chromium/chromium-sandbox ] || [ -x /usr/lib/chromium-sandbox/chromium-sandbox ] || find /usr/lib -maxdepth 3 -name 'chrome-sandbox' 2>/dev/null | grep -q .; then
+        export CHROME_DEVEL_SANDBOX="$(find /usr/lib -maxdepth 3 \( -name 'chrome-sandbox' -o -name 'chromium-sandbox' \) 2>/dev/null | head -n1)"
+    fi
+
+    # Headful mode: one virtual display serves every browser (chromium,
+    # firefox-esr, edge all attach to DISPLAY=:99).
     if [ "${BROWSER_HEADFUL:-0}" = "1" ] && command -v Xvfb >/dev/null 2>&1 && [ -z "${DISPLAY:-}" ]; then
         Xvfb :99 -screen 0 1280x720x24 >/dev/null 2>&1 &
         sleep 1
@@ -829,7 +835,27 @@ browser_preflight() {
         export BROWSER_DISPLAY=:99
         info "Virtual display started on :99 (BROWSER_HEADFUL=1)."
     fi
-    ok "Browser automation ready: $(chromium --version 2>/dev/null | head -n 1) · driver $(chromedriver --version 2>/dev/null | awk 'NR==1{print $1}') · profile ${BROWSER_PROFILE_DIR}"
+
+    local found=""
+    if command -v chromium >/dev/null 2>&1; then
+        found="chromium $(chromium --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+    fi
+    if command -v firefox-esr >/dev/null 2>&1 || command -v firefox >/dev/null 2>&1; then
+        local ffver; ffver="$( (command -v firefox-esr >/dev/null 2>&1 && firefox-esr --version || firefox --version) 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+        found="${found:+${found} · }firefox ${ffver:-esr}"
+    fi
+    if [ -x /usr/bin/microsoft-edge ] || [ -x /usr/bin/microsoft-edge-stable ]; then
+        local edge_bin; edge_bin="$(command -v microsoft-edge || command -v microsoft-edge-stable)"
+        found="${found:+${found} · }edge $(${edge_bin} --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+    fi
+    if [ -z "${found}" ]; then
+        warn "Browser automation requested but no browser binary found - skipping browser setup."
+        return 0
+    fi
+    local drv=""
+    command -v chromedriver >/dev/null 2>&1 && drv="chromedriver $(chromedriver --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+    command -v geckodriver >/dev/null 2>&1 && drv="${drv:+${drv} · }geckodriver $(geckodriver --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+    ok "Browser automation ready: ${found} · ${drv:-no webdriver} · profile ${BROWSER_PROFILE_DIR}"
 }
 
 phase "Browser Automation"

@@ -41,12 +41,17 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CHROME_PATH=/usr/bin/chromium \
     CHROMIUM_PATH=/usr/bin/chromium \
     CHROMEDRIVER_PATH=/usr/bin/chromedriver \
+    FIREFOX_PATH=/usr/bin/firefox-esr \
+    GECKODRIVER_PATH=/usr/local/bin/geckodriver \
+    EDGE_PATH=/usr/bin/microsoft-edge \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_CACHE_DIR=/home/container/.cache/puppeteer \
     PLAYWRIGHT_BROWSERS_PATH=/home/container/.cache/ms-playwright \
     SE_BROWSER_PATH=/usr/bin/chromium \
+    SE_FIREFOX_BINARY=/usr/bin/firefox-esr \
+    SE_FIREFOX_DRIVER=/usr/local/bin/geckodriver \
     IMAGE_VARIANT=${RUNTIME_VARIANT}
 
 # Stop contract: the launcher (PID 1) traps SIGTERM for graceful shutdown;
@@ -233,18 +238,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         swi-prolog \
     && rm -rf /var/lib/apt/lists/*
 
-# 13b. Browser automation stack (Playwright / Puppeteer / nodriver / Selenium)
+# 13b. Browser automation stack - Chromium, Firefox, Edge (Playwright /
+#      Puppeteer / nodriver / Selenium / WebdriverIO)
 #      Debian chromium + matching chromedriver are baked so users never have
 #      to download a browser inside the server container (slow, and often
-#      sandbox-broken). The shared-library set below is spelled out because
-#      Playwright/Puppeteer may fetch their OWN chromium builds at runtime
-#      into /home/container/.cache/ms-playwright - those builds need the same
-#      libs the distro chromium needs. xvfb/dbu support headful automation.
+#      sandbox-broken). firefox-esr ships in every Debian port; geckodriver
+#      comes from Mozilla's GitHub releases (Debian ships no package) on
+#      amd64/arm64, skipped elsewhere (Selenium WebDriver bi-di still works).
+#      Microsoft Edge installs from packages.microsoft.com on amd64 only
+#      (upstream ships no linux arm64 build). The shared-library set below is
+#      spelled out because Playwright/Puppeteer may fetch their OWN chromium
+#      builds at runtime into /home/container/.cache/ms-playwright - those
+#      builds need the same libs the distro chromium needs. xvfb/dbus support
+#      headful automation. The geckodriver pin tracks the latest stable.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         chromium \
         chromium-sandbox \
         chromium-driver \
+        firefox-esr \
         fonts-liberation \
+        fonts-noto-color-emoji \
         xvfb \
         xauth \
         dbus \
@@ -272,7 +285,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /home/container/.cache/ms-playwright /home/container/.cache/puppeteer /home/container/.browser-profile \
     && chmod -R 777 /home/container/.cache /home/container/.browser-profile \
     && chromium --version \
-    && chromedriver --version | head -n 1
+    && chromedriver --version | head -n 1 \
+    && firefox-esr --version
+
+# Edge (amd64 only: Microsoft ships no linux arm64/armhf build). Installed
+# from the official signed packages.microsoft.com repo, then the repo config
+# is removed again so runtime apt operations never touch it.
+RUN set -eu; \
+    if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+        mkdir -p /usr/share/keyrings \
+        && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-edge.gpg \
+        && printf '%s\n' "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-edge.gpg] https://packages.microsoft.com/repos/edge stable main" > /etc/apt/sources.list.d/microsoft-edge.list \
+        && apt-get update -qq \
+        && apt-get install -y -qq --no-install-recommends microsoft-edge-stable \
+        && ln -sf /usr/bin/microsoft-edge-stable /usr/bin/microsoft-edge \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi; \
+    rm -f /usr/share/keyrings/microsoft-edge.gpg /etc/apt/sources.list.d/microsoft-edge.list
+
+# geckodriver (amd64/arm64; Mozilla ships no other linux builds)
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in \
+        amd64) GD_ASSET="geckodriver-v0.37.1-linux64.tar.gz" ;; \
+        arm64) GD_ASSET="geckodriver-v0.37.1-linux-aarch64.tar.gz" ;; \
+        *) GD_ASSET=""; echo "[build] geckodriver not packaged for $(dpkg --print-architecture) - skipped (Selenium still works over Chromium)." ;; \
+    esac; \
+    if [ -n "${GD_ASSET}" ]; then \
+        curl -fsSL -o /tmp/geckodriver.tar.gz "https://github.com/mozilla/geckodriver/releases/download/v0.37.1/${GD_ASSET}" \
+        && tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin geckodriver \
+        && chmod 755 /usr/local/bin/geckodriver \
+        && rm -f /tmp/geckodriver.tar.gz \
+        && /usr/local/bin/geckodriver --version | head -n 1; \
+    fi
 
 # 14. Multi-panel working directories and non-root container user
 #     /opt/potenfyr: egg-owned state dir (self-updated launcher + hashes).

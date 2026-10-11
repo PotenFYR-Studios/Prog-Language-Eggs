@@ -477,18 +477,23 @@ graph LR
 
 ---
 
-## 🌐 Browser Automation (Playwright / Puppeteer / nodriver / Selenium)
+## 🌐 Browser Automation (Playwright / Puppeteer / nodriver / Selenium / WebdriverIO)
 
-Chromium and chromedriver are **pre-installed in the image** (Debian builds kept in lockstep), so browser-based automation works out of the box - no downloading a browser inside the server container, which is slow and frequently breaks under the container sandbox.
+Three browsers are **pre-installed in the image**: **Chromium** + chromedriver (Debian builds kept in lockstep), **Firefox ESR** + geckodriver (Mozilla's official driver, latest stable), and **Microsoft Edge** (amd64 images; upstream ships no linux ARM build). Browser-based automation works out of the box - no downloading a browser inside the server container, which is slow and frequently breaks under the container sandbox.
 
 | Variable | Default | Editable | Description |
 |---|---|:---:|---|
 | `BROWSER_SUPPORT` | `1` | ✅ | Prepare the baked browser stack: writable profile + browser caches, container-safe flags, version banner at boot. |
-| `BROWSER_EXTRA_ARGS` | `--no-sandbox --disable-dev-shm-usage` | ✅ | Flags exported as `CHROMIUM_FLAGS` - the distro chromium wrapper applies them to every launch. |
-| `BROWSER_HEADFUL` | `0` | ✅ | Start a virtual Xvfb display (`DISPLAY=:99`) so headed (non-headless) automation works inside the container. |
-| `BROWSER_PROFILE_DIR` | `/home/container/.browser-profile` | ✅ | Writable chromium user-data-dir your automation can use as its profile. |
+| `BROWSER_EXTRA_ARGS` | `--no-sandbox --disable-dev-shm-usage` | ✅ | Flags exported as `CHROMIUM_FLAGS` - every Chromium-family launch (Chromium, Edge, Playwright/Puppeteer Chromium builds) applies them. |
+| `BROWSER_HEADFUL` | `0` | ✅ | Start a virtual Xvfb display (`DISPLAY=:99`) so headed (non-headless) automation works for **every** browser inside the container. |
+| `BROWSER_PROFILE_DIR` | `/home/container/.browser-profile` | ✅ | Writable browser user-data-dir / profile root your automation can use as its profile. |
+| `FIREFOX_PATH` | `/usr/bin/firefox-esr` | ✅ | Firefox binary your automation launches; point it at a self-provisioned Firefox for rapid releases. |
+| `GECKODRIVER_PATH` | `/usr/local/bin/geckodriver` | ✅ | geckodriver binary for Selenium Firefox sessions. |
+| `EDGE_PATH` | `/usr/bin/microsoft-edge` | ✅ | Microsoft Edge binary (amd64 images). |
 
-Environment your code can always rely on: `CHROME_PATH` / `CHROMIUM_PATH` (`/usr/bin/chromium`), `CHROMEDRIVER_PATH`, `PUPPETEER_EXECUTABLE_PATH`, and `PLAYWRIGHT_BROWSERS_PATH` (writable, lives on the server volume).
+Environment your code can always rely on: `CHROME_PATH` / `CHROMIUM_PATH` (`/usr/bin/chromium`), `CHROMEDRIVER_PATH`, `FIREFOX_PATH` (`/usr/bin/firefox-esr`), `GECKODRIVER_PATH`, `EDGE_PATH` (amd64), `PUPPETEER_EXECUTABLE_PATH`, `SE_BROWSER_PATH`, `SE_FIREFOX_BINARY`, `SE_FIREFOX_DRIVER`, and `PLAYWRIGHT_BROWSERS_PATH` (writable, lives on the server volume).
+
+**Headless vs headful**: every browser runs headless by default. Set `BROWSER_HEADFUL=1` and drop `headless`/`--headless` from your launch options to run against the virtual display - works identically for Chromium, Firefox and Edge.
 
 **Python - Playwright** (uses the baked chromium; extra flags come from `CHROMIUM_FLAGS`):
 
@@ -518,7 +523,22 @@ const puppeteer = require('puppeteer');
 })();
 ```
 
-**nodriver** auto-detects `/usr/bin/chromium` on PATH. **Selenium** uses the baked `/usr/bin/chromedriver`, which always matches the installed chromium version. Headed mode: set `BROWSER_HEADFUL=1` and drop `headless` from your launch options.
+**nodriver** auto-detects `/usr/bin/chromium` on PATH. **Selenium** picks its driver automatically: chromium sessions use the baked `/usr/bin/chromedriver` (always matches the installed chromium version); Firefox sessions use `/usr/local/bin/geckodriver` — set `SE_FIREFOX_BINARY`/`FIREFOX_PATH` explicitly or pass `options.binary_location` in your code. Edge sessions use Selenium Manager's auto-detected `/usr/bin/microsoft-edge` with its matching msedgedriver (Selenium downloads it on first use into the writable cache).
+
+**Python - Playwright (Firefox / Edge):**
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    firefox = p.firefox.launch(headless=True)          # baked firefox-esr build
+    page = firefox.new_page()
+    page.goto("https://example.com")
+    print(page.title())
+    firefox.close()
+```
+
+(Playwright's bundled firefox build downloads into `PLAYWRIGHT_BROWSERS_PATH` on `playwright install firefox`; the baked ESR is always there for Selenium/geckodriver and as a zero-download fallback for `p.firefox.launch(executable_path="/usr/bin/firefox-esr")`.)
 
 ## 🔒 Security & Hardening Posture
 
@@ -541,7 +561,6 @@ Prog-Language-Eggs/
 ├── install-runtime.sh                # On-demand runtime provisioner with checksum validation
 ├── resolve-version.sh                # Live-feed dynamic version resolver & caching
 ├── install.sh                        # Universal workspace installer helper
-├── docs/                             # Documentation site source (Vite + React, generated from the egg JSON)
 ├── tests/                            # Automated behavior verification test suite (60+ assertions)
 │   ├── Dockerfile.test
 │   ├── panel-test.sh
@@ -603,7 +622,7 @@ The launcher renders a crash diagnostic card directly in the panel console. For 
 - **Contributing**: Read [CONTRIBUTING.md](CONTRIBUTING.md) first; it covers the egg JSON expectations (PTDL_v2 shape, variable rules), how language additions are validated against the real launcher code, and the branch/PR flow. New languages must come with real auto-detect triggers and runner mappings; invented entries are rejected.
 - **Bug reports**: Open a [bug report](https://github.com/PotenFYR-Studios/Prog-Language-Eggs/issues/new?template=bug_report.yml) with the panel family, the language/runner involved and the `.logs/` excerpts. Feature ideas, docs gaps and questions each have their own issue form; pick the closest match.
 - **Security**: See [SECURITY.md](SECURITY.md). Please use GitHub private vulnerability reporting or `support@potenfyr.in` rather than public issues for anything exploitable.
-- **Docs**: The documentation site sources live in [`docs/`](docs/) and are generated from the real egg JSON at build time; PRs that fix content should keep `egg-programming-multi.json` as the source of truth.
+- **Docs**: Documentation lives in the unified hub at [docs.potenfyr.in/repo/prog-language-eggs](https://docs.potenfyr.in/repo/prog-language-eggs) and is generated from the real egg JSON there; PRs that fix content should keep `egg-programming-multi.json` as the source of truth.
 
 ---
 
