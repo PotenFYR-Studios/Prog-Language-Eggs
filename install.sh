@@ -85,6 +85,27 @@ if [ -n "${GIT_REPO}" ]; then
             tr '\n' ' ' < "$1" | cut -c1-300
         fi
     }
+    _git_auth_denied_hint() {
+        # GitHub answers 403 "Write access to repository not granted" (or app
+        # tokens: "Resource not accessible by integration") when the token
+        # AUTHENTICATES but does not grant access to this repository - e.g. a
+        # fine-grained PAT without this repo selected or without "Contents:
+        # Read", or an org token not authorized for SSO. Explain that instead
+        # of the generic token hint (which suggests an expiry that is not
+        # there). Returns 0 when the signature matched, 1 otherwise.
+        local _hint_txt
+        _hint_txt="$(tr '\n' ' ' < "$1" 2>/dev/null || printf '%s' "$1")"
+        case "${_hint_txt}" in
+            *"Write access to repository not granted"*|\
+*"Read access to repository not granted"*|\
+*"Resource not accessible by integration"*|\
+*"error: 403"*)
+                warn "The token in GIT_AUTH_TOKEN was accepted but does not grant READ access to this repository - git returned 403 'access not granted'. For a fine-grained token: select this repository under 'Repository access' and grant 'Contents: Read'. For an organization: authorize the token for SSO. (An expired/wrong token instead fails with 'Invalid username or password'.)"
+                return 0
+                ;;
+            *) return 1 ;;
+        esac
+    }
 
     _gitcfg="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitconfig.$$")"
     {
@@ -101,6 +122,7 @@ if [ -n "${GIT_REPO}" ]; then
     export GIT_CONFIG_GLOBAL="${_gitcfg}"
 
     _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
+    _err_auth="${_err}.auth"
     log "Syncing source code from Git repository: ${GIT_REPO} (branch: ${GIT_BRANCH})..."
 
     if [ -d ".git" ]; then
@@ -117,6 +139,7 @@ if [ -n "${GIT_REPO}" ]; then
             _fetch_ok=1
         elif [ -n "${GIT_AUTH_TOKEN}" ]; then
             warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
+            cp -f "${_err}" "${_err_auth}" 2>/dev/null || true
             if git -c credential.helper= fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
                 _fetch_ok=1
             fi
@@ -125,6 +148,7 @@ if [ -n "${GIT_REPO}" ]; then
             git reset --hard FETCH_HEAD 2>"${_err}" || warn "Could not apply fetched commits: $(redact_err_git "${_err}")"
         else
             warn "Git fetch failed: $(redact_err_git "${_err}")"
+            [ -n "${GIT_AUTH_TOKEN}" ] && _git_auth_denied_hint "${_err_auth:-${_err}}"
         fi
     elif find . -mindepth 1 -maxdepth 1 2>/dev/null | grep -q .; then
         log "Workspace already has files - fetching repository over them (no wipe)..."
@@ -137,6 +161,7 @@ if [ -n "${GIT_REPO}" ]; then
             _fetch_ok=1
         elif [ -n "${GIT_AUTH_TOKEN}" ]; then
             warn "Authenticated fetch failed - retrying without credentials (public repository?)..."
+            cp -f "${_err}" "${_err_auth}" 2>/dev/null || true
             if git -c credential.helper= fetch --depth 1 "${GIT_REPO}" "${GIT_BRANCH}" 2>"${_err}"; then
                 _fetch_ok=1
             fi
@@ -145,10 +170,12 @@ if [ -n "${GIT_REPO}" ]; then
             : ; # success - commit reported below
         else
             warn "Git fetch failed - existing files kept: $(redact_err_git "${_err}")"
+            [ -n "${GIT_AUTH_TOKEN}" ] && _git_auth_denied_hint "${_err_auth:-${_err}}"
         fi
     else
         if ! git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
             warn "Cloning branch ${GIT_BRANCH} failed: $(redact_err_git "${_err}")."
+            cp -f "${_err}" "${_err_auth}" 2>/dev/null || true
             if [ -n "${GIT_AUTH_TOKEN}" ] \
                     && git -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                 ok "Cloned anonymously (public repository)."
@@ -158,6 +185,7 @@ if [ -n "${GIT_REPO}" ]; then
                     ok "Cloned anonymously (default branch)."
                 else
                     warn "Git clone failed: $(redact_err_git "${_err}")"
+                    [ -n "${GIT_AUTH_TOKEN}" ] && _git_auth_denied_hint "${_err_auth:-${_err}}"
                 fi
             fi
         fi
@@ -165,8 +193,8 @@ if [ -n "${GIT_REPO}" ]; then
     if _head="$(git rev-parse --short HEAD 2>/dev/null)"; then
         ok "Repository at commit ${_head}"
     fi
-    rm -f "${_err}" "${GIT_CONFIG_GLOBAL:-}" 2>/dev/null || true
-    unset _err _head _fetch_ok _gitcfg _lock
+    rm -f "${_err}" "${_err_auth}" "${GIT_CONFIG_GLOBAL:-}" 2>/dev/null || true
+    unset _err _err_auth _head _fetch_ok _gitcfg _lock
     ok "Git repository initialized"
 fi
 

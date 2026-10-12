@@ -211,6 +211,42 @@ GIT_AUTH_TOKEN=""; _git_env_setup
 grep -q "POTENFYR_GIT_TOKEN" "$GIT_CONFIG_GLOBAL" && bad_t "helper set without a token" || ok_t "no helper when no token is set"
 rm -f "$GIT_CONFIG_GLOBAL"; unset GIT_CONFIG_GLOBAL; GIT_AUTH_TOKEN=""
 
+# ---------------------------------------------------------------- S14
+echo "S14: 403 'access not granted' -> precise token-permission hint"
+# GitHub answers 403 "Write access to repository not granted" when a token
+# AUTHENTICATES but does not grant access to the repository (fine-grained PAT
+# without the repo selected / without Contents: Read, or org SSO not
+# authorized). The launcher must explain THAT, not a wrong expiry.
+rm -rf "$ERRLOG"
+W14="$TMP/s14"; mkdir -p "$W14"
+printf '%s\n' \
+    "remote: Write access to repository not granted." \
+    "fatal: unable to access 'https://github.com/org/private-repo.git/': The requested URL returned error: 403" \
+    > "$TMP/auth403.err"
+printf '%s\n' \
+    "remote: Invalid username or password." \
+    "fatal: Authentication failed for 'https://github.com/org/private-repo.git/'" \
+    > "$TMP/auth401.err"
+printf '%s\n' \
+    "remote: Repository not found." \
+    "fatal: unable to access 'https://github.com/org/private-repo.git/': The requested URL returned error: 404" \
+    > "$TMP/anon404.err"
+out=$( GIT_AUTH_TOKEN="SECRETTOKEN123" _git_auth_denied_hint "$TMP/auth403.err" )
+printf '%s' "$out" | grep -q "READ access to this repository" && ok_t "403 not-granted error explains missing token scope" || bad_t "403 not-granted error not explained: $out"
+printf '%s' "$out" | grep -q "SECRETTOKEN123" && bad_t "TOKEN LEAKED in hint" || ok_t "hint prints no token"
+# expired token (401) and anonymous 404 must NOT trigger the 403 hint
+out=$( GIT_AUTH_TOKEN="SECRETTOKEN123" _git_auth_denied_hint "$TMP/auth401.err" )
+[ -z "$out" ] && ok_t "401 invalid-token error gets no 403 hint" || bad_t "401 wrongly hit 403 hint: $out"
+out=$( GIT_AUTH_TOKEN="SECRETTOKEN123" _git_auth_denied_hint "$TMP/anon404.err" )
+[ -z "$out" ] && ok_t "404 anonymous error gets no 403 hint" || bad_t "404 wrongly hit 403 hint: $out"
+# GitHub App wording is also recognized
+printf '%s\n' \
+    "remote: Resource not accessible by integration" \
+    "fatal: unable to access 'https://github.com/org/private-repo.git/': The requested URL returned error: 403" \
+    > "$TMP/app403.err"
+out=$( GIT_AUTH_TOKEN="SECRETTOKEN123" _git_auth_denied_hint "$TMP/app403.err" )
+printf '%s' "$out" | grep -q "READ access to this repository" && ok_t "GitHub App 403 ('not accessible by integration') also explained" || bad_t "GitHub App 403 not explained: $out"
+
 echo
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

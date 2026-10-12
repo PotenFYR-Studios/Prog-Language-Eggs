@@ -415,6 +415,28 @@ _git_fail_reason() {
     fi
 }
 
+# _git_auth_denied_hint <err>: GitHub answers 403 with "Write access to
+# repository not granted" (or "Resource not accessible by integration") when
+# the token AUTHENTICATES but does not grant access to this repository -
+# typically a fine-grained PAT without this repo selected or without
+# "Contents: Read", an organization token not authorized for SSO, or a GitHub
+# App token missing the Contents permission. Say that precisely instead of
+# the generic "check token" hint, which suggests an expiry that is not there.
+_git_auth_denied_hint() {
+    local _txt
+    _txt="$(tr '\n' ' ' < "$1" 2>/dev/null || printf '%s' "$1")"
+    case "${_txt}" in
+        *"Write access to repository not granted"*|\
+*"Read access to repository not granted"*|\
+*"Resource not accessible by integration"*|\
+*"error: 403"*)
+            warn "The token in GIT_AUTH_TOKEN was accepted but does not grant READ access to this repository - git returned 403 'access not granted'. For a fine-grained token: select this repository under 'Repository access' and grant 'Contents: Read'. For an organization: authorize the token for SSO. (An expired/wrong token instead fails with 'Invalid username or password'.)"
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
 # ---------------------------------------------------------------------------
 # GIT_PRESERVE_ENV (default 1): credentials must survive repo updates. `git
 # reset --hard` overwrites every tracked file, so any .env the repo ships
@@ -541,6 +563,7 @@ sync_git_repo() {
             else
                 warn "Git fetch failed - your files were kept unchanged: $(_git_fail_reason "${_err}" "${_auth_err}")"
                 [ -n "${GIT_AUTH_TOKEN}" ] && warn "If the error above mentions authentication or 'not found', check GIT_AUTH_TOKEN in the Startup tab (expiry, repository read access, org SSO)."
+                [ -n "${GIT_AUTH_TOKEN}" ] && _git_auth_denied_hint "${_auth_err:-${_err}}"
                 GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git fetch failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
             fi
@@ -553,6 +576,7 @@ sync_git_repo() {
             else
                 warn "Git clone of branch '${GIT_BRANCH}' failed: $(_git_redact_err "${_err}")"
                 _egg_error_log "launcher" "git clone failed on branch ${GIT_BRANCH} (repo: $(redact_url "${GIT_REPO}")) - check URL, branch name and credentials"
+                cp -f "${_err}" "${_auth_err}" 2>/dev/null || true
                 if [ -n "${GIT_AUTH_TOKEN}" ]; then
                     warn "Retrying without credentials (public repository?)..."
                     if git -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
@@ -575,6 +599,8 @@ sync_git_repo() {
                 fi
                 if [ "${GIT_SYNC_UPDATED}" != "1" ]; then
                     warn "Could not clone repository. Check network, URL and credentials, then restart."
+                    [ -n "${GIT_AUTH_TOKEN}" ] && warn "If the error above mentions authentication or 'not found', check GIT_AUTH_TOKEN in the Startup tab (expiry, repository read access, org SSO)."
+                    [ -n "${GIT_AUTH_TOKEN}" ] && _git_auth_denied_hint "${_auth_err}"
                     GIT_SYNC_FAILED=1
                     _egg_error_log "launcher" "git clone failed entirely (repo: $(redact_url "${GIT_REPO}")) - verify URL, credentials (GIT_AUTH_TOKEN) and network egress"
                 fi
@@ -623,6 +649,7 @@ sync_git_repo() {
         else
             warn "Git fetch failed - keeping installed code: $(_git_fail_reason "${_err}" "${_auth_err}")"
             [ -n "${GIT_AUTH_TOKEN}" ] && warn "If the error above mentions authentication or 'not found', check GIT_AUTH_TOKEN in the Startup tab (expiry, repository read access, org SSO)."
+            [ -n "${GIT_AUTH_TOKEN}" ] && _git_auth_denied_hint "${_auth_err:-${_err}}"
             GIT_SYNC_FAILED=1
             _egg_error_log "launcher" "git fetch failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
         fi
@@ -2808,6 +2835,13 @@ run_git_update_watcher() {
             # Poll failures are journaled, not printed: a flaky upstream must
             # not spam the console every cycle.
             _egg_error_log "launcher" "git auto-update poll failed (branch ${GIT_BRANCH}): $(_git_fail_reason "${_werr}" "${_werr_auth}" | cut -c1-200)"
+            # A token that authenticates but lacks read access (HTTP 403 "not
+            # granted") never heals on its own - surface it once instead of
+            # silently polling-until-forever with the same dead permissions.
+            if [ -n "${GIT_AUTH_TOKEN}" ] && [ -z "${_pf_denied_hinted:-}" ] \
+                && _git_auth_denied_hint "${_werr_auth:-${_werr}}"; then
+                _pf_denied_hinted=1
+            fi
         fi
         rm -f "${_werr}" "${_werr_auth}" 2>/dev/null || true
     done
