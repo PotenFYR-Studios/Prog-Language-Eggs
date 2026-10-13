@@ -387,11 +387,14 @@ _git_archive_workspace() {
     mkdir -p "${arch_dir}" 2>/dev/null || return 0
     stamp="$(date +%Y%m%d-%H%M%S)"
     arch="${arch_dir}/codebase-${stamp}.tar.gz"
-    tar -czf "${arch}" \
+    # GZIP=-1: fastest compression (the default -6 is several times slower for
+    # a few percent smaller output). Rebuildable trees are skipped entirely.
+    GZIP=-1 tar -czf "${arch}" \
         --exclude='./.git' --exclude='./.logs' --exclude='./.runtimes' \
         --exclude='./.npm' --exclude='./.cache' --exclude='./.environments' \
         --exclude='./.potenfyr' --exclude='./.multi-prog.conf' \
-        --exclude='./node_modules' \
+        --exclude='./node_modules' --exclude='./.venv' --exclude='./venv' \
+        --exclude='__pycache__' \
         -C "${WORK_DIR}" . 2>/dev/null || { rm -f "${arch}"; return 0; }
     # Keep only the 5 newest archives.
     ls -1t "${arch_dir}"/codebase-*.tar.gz 2>/dev/null | tail -n +6 \
@@ -627,7 +630,13 @@ sync_git_repo() {
             fi
         fi
         if [ "${_fetch_ok}" = "1" ]; then
-            _git_archive_workspace
+            # Archive only when the commit actually changes: a no-op boot or
+            # poll must not gzip the whole codebase every time.
+            _new_full="$(git rev-parse FETCH_HEAD 2>/dev/null || true)"
+            _old_full="$(git rev-parse HEAD 2>/dev/null || true)"
+            if [ -n "${_new_full}" ] && [ "${_new_full}" != "${_old_full}" ]; then
+                _git_archive_workspace
+            fi
             _git_snapshot_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
             if git reset --hard FETCH_HEAD 2>"${_err}"; then
                 _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
