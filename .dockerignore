@@ -56,3 +56,6 @@ coverage/
 *~
 .DS_Store
 Thumbs.db
+
+# Launcher scratch space (swept on every boot)
+.scratch/

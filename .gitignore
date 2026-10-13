@@ -141,3 +141,6 @@ tmp/
 CLAUDE.md
 .rtk
 .plan
+
+# Launcher scratch space (swept on every boot)
+.scratch/

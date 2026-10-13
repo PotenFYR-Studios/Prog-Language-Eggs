@@ -483,7 +483,8 @@ Three browsers are **pre-installed in the image**: **Chromium** + chromedriver (
 
 | Variable | Default | Editable | Description |
 |---|---|:---:|---|
-| `BROWSER_SUPPORT` | `1` | ✅ | Prepare the baked browser stack: writable profile + browser caches, container-safe flags, version banner at boot. |
+| `BROWSER` | `none` | ✅ | Browser automation to enable: `none` (default), `all`, or a comma-separated list of `chromium`, `firefox`, `edge` - each optionally with a version that must match the baked build (`chromium@130`, `firefox,edge`). Only the selected browsers are configured; writable profile and caches are created only when one is enabled. |
+| `BROWSER_SUPPORT` | - | - | Legacy: `1` means `BROWSER=all` when `BROWSER` is not set at all. |
 | `BROWSER_EXTRA_ARGS` | `--no-sandbox --disable-dev-shm-usage` | ✅ | Flags exported as `CHROMIUM_FLAGS` - every Chromium-family launch (Chromium, Edge, Playwright/Puppeteer Chromium builds) applies them. |
 | `BROWSER_HEADFUL` | `0` | ✅ | Start a virtual Xvfb display (`DISPLAY=:99`) so headed (non-headless) automation works for **every** browser inside the container. |
 | `BROWSER_PROFILE_DIR` | `/home/container/.browser-profile` | ✅ | Writable browser user-data-dir / profile root your automation can use as its profile. |

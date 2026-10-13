@@ -33,7 +33,16 @@ C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
 C_CYAN=$'\033[36m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'
 C_BLUE=$'\033[34m'; C_DIM=$'\033[2m'
 
-LOG_DIR="${WORK_DIR:-$PWD}/.logs"; mkdir -p "${LOG_DIR}" 2>/dev/null || LOG_DIR="/tmp/potenfyr-logs"
+# Scratch lives in the server directory, never /tmp; each run removes its own
+# directory on exit (success, failure or signal).
+POTENFYR_SCRATCH="${POTENFYR_SCRATCH:-${WORK_DIR:-$PWD}/.scratch}"
+mkdir -p "${POTENFYR_SCRATCH}" 2>/dev/null || true
+RUN_SCRATCH="$(mktemp -d -p "${POTENFYR_SCRATCH}" resolve.XXXXXX 2>/dev/null)" || RUN_SCRATCH="${POTENFYR_SCRATCH}/resolve.$$"
+mkdir -p "${RUN_SCRATCH}" 2>/dev/null || true
+trap 'rm -rf "${RUN_SCRATCH}"' EXIT
+trap 'exit 130' INT TERM HUP
+
+LOG_DIR="${WORK_DIR:-$PWD}/.logs"; mkdir -p "${LOG_DIR}" 2>/dev/null || LOG_DIR="${RUN_SCRATCH}"
 LOG_FILE="${LOG_DIR}/version-resolver.log"
 
 _vlog() { printf '%s [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" >>"${LOG_FILE}" 2>/dev/null || true; }
@@ -118,7 +127,7 @@ fetch_json() { # fetch_json <url> <dest>
 
 norm_lang() {
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]._-')" in
-        node|nodejs|nodejsjavascript|javascript|js|ts|typescript|tsx|tsnode) echo "nodejs" ;;
+        node|nodejs|javascript|js|ts|typescript|tsx|tsnode) echo "nodejs" ;;
         bun)      echo "bun" ;;
         deno)     echo "deno" ;;
         py|python|python3) echo "python" ;;
@@ -140,7 +149,7 @@ strip_bun() { echo "$1" | sed -E 's/^bun-v?//'; }
 # =============================================================================
 
 resolve_nodejs() {
-    local idx="/tmp/potenfyr-node-index.json"
+    local idx="${RUN_SCRATCH}/potenfyr-node-index.json"
     if [ "${REQ}" = "nightly" ] || [ "${REQ}" = "dev" ]; then
         fetch_json "https://nodejs.org/download/nightly/index.json" "${idx}" || fail_unresolved "nightly feed unreachable"
         jq_get() { jq -r "$1 // empty" "${idx}" 2>>"${LOG_FILE}" || true; }
@@ -173,7 +182,7 @@ resolve_nodejs() {
 }
 
 resolve_bun() {
-    local rel="/tmp/potenfyr-bun-rel.json"
+    local rel="${RUN_SCRATCH}/potenfyr-bun-rel.json"
     if fetch_json "https://api.github.com/repos/oven-sh/bun/releases/latest" "${rel}"; then
         local tag
         tag=$(jq -r '.tag_name // empty' "${rel}" 2>>"${LOG_FILE}")
@@ -183,7 +192,7 @@ resolve_bun() {
     fi
     if is_pre "${REQ}" || [ "${REQ}" = "nightly" ] || [ "${REQ}" = "canary" ]; then
         # Canary/pre-release line (best effort)
-        local list="/tmp/potenfyr-bun-list.json"
+        local list="${RUN_SCRATCH}/potenfyr-bun-list.json"
         fetch_json "https://api.github.com/repos/oven-sh/bun/releases?per_page=30" "${list}" || true
         local tag
         tag=$(jq -r '[.[] | select(.prerelease == true)][0].tag_name // empty' "${list}" 2>>"${LOG_FILE}")
@@ -199,7 +208,7 @@ resolve_bun() {
 }
 
 resolve_deno() {
-    local list="/tmp/potenfyr-deno-list.json"
+    local list="${RUN_SCRATCH}/potenfyr-deno-list.json"
     fetch_json "https://api.github.com/repos/denoland/deno/releases?per_page=40" "${list}" || fail_unresolved "Deno GitHub feed unreachable"
     case "${REQ}" in
         latest|stable|current|default|lts)
@@ -222,7 +231,7 @@ resolve_deno() {
 }
 
 resolve_python() {
-    local eol="/tmp/potenfyr-python-eol.json"
+    local eol="${RUN_SCRATCH}/potenfyr-python-eol.json"
     fetch_json "https://endoflife.date/api/python.json" "${eol}" || fail_unresolved "endoflife.date python feed unreachable"
     case "${REQ}" in
         latest|stable|current|default)
@@ -247,7 +256,7 @@ resolve_python() {
 }
 
 resolve_go() {
-    local idx="/tmp/potenfyr-go-index.json"
+    local idx="${RUN_SCRATCH}/potenfyr-go-index.json"
     fetch_json "https://go.dev/dl/?mode=json&include=all" "${idx}" || fail_unresolved "go.dev download feed unreachable"
     case "${REQ}" in
         latest|stable|current|default|lts)
@@ -280,7 +289,7 @@ resolve_rust() {
 }
 
 resolve_java() {
-    local rel="/tmp/potenfyr-java-rel.json"
+    local rel="${RUN_SCRATCH}/potenfyr-java-rel.json"
     fetch_json "https://api.adoptium.net/v3/info/available_releases" "${rel}" || fail_unresolved "Adoptium release feed unreachable"
     local newest_lts newest_feature tip
     newest_lts=$(jq -r '.most_recent_lts // empty' "${rel}" 2>>"${LOG_FILE}")
@@ -322,7 +331,7 @@ resolve_dotnet() {
 }
 
 resolve_zig() {
-    local idx="/tmp/potenfyr-zig-index.json"
+    local idx="${RUN_SCRATCH}/potenfyr-zig-index.json"
     fetch_json "https://ziglang.org/download/index.json" "${idx}" || fail_unresolved "ziglang.org index unreachable"
     case "${REQ}" in
         nightly|dev|tip|edge|master) echo "master"; return 0 ;;
@@ -351,7 +360,7 @@ resolve_dart() {
             echo "__EXACT__${r}"; return 0 ;;
     esac
     ver_url="https://storage.googleapis.com/dart-archive/channels/${channel}/release/latest/VERSION"
-    local f="/tmp/potenfyr-dart-ver.json"
+    local f="${RUN_SCRATCH}/potenfyr-dart-ver.json"
     fetch_json "${ver_url}" "${f}" || fail_unresolved "dart-archive ${channel} channel unreachable"
     local v
     v=$(jq -r '.version // empty' "${f}" 2>>"${LOG_FILE}")
@@ -386,11 +395,11 @@ case "${LANG_NORM}" in
         # Previously-pinned languages now resolve dynamically too. Anything not
         # covered below stays passthrough (validated) and the installer reports
         # exactly what it can and cannot honor.
-        local eol="/tmp/potenfyr-eol-generic.json"
+        local eol="${RUN_SCRATCH}/potenfyr-eol-generic.json"
         case "${LANG_NORM}" in
             julia|nim|swift)
                 # Different upstream feeds per language (endoflife lacks nim/swift)
-                jf="/tmp/potenfyr-${LANG_NORM}-ver.json"
+                jf="${RUN_SCRATCH}/potenfyr-${LANG_NORM}-ver.json"
                 if [ "${LANG_NORM}" = "julia" ]; then
                     fetch_json "https://endoflife.date/api/julia.json" "${jf}" || { RESOLVED="${REQ}"; }
                 elif [ "${LANG_NORM}" = "nim" ]; then
@@ -445,9 +454,9 @@ case "${LANG_NORM}" in
                 fi
                 ;;
             gleam)
-                fetch_json "https://api.github.com/repos/gleam-lang/gleam/releases/latest" "/tmp/potenfyr-gleam.json" || \
+                fetch_json "https://api.github.com/repos/gleam-lang/gleam/releases/latest" "${RUN_SCRATCH}/potenfyr-gleam.json" || \
                     fail_unresolved "GitHub feed unreachable"
-                RESOLVED=$(jq -r '.tag_name // empty' "/tmp/potenfyr-gleam.json" 2>>"${LOG_FILE}" | sed 's/^v//')
+                RESOLVED=$(jq -r '.tag_name // empty' "${RUN_SCRATCH}/potenfyr-gleam.json" 2>>"${LOG_FILE}" | sed 's/^v//')
                 [ -z "${RESOLVED}" ] && fail_unresolved "could not read latest gleam tag"
                 [[ "${REQ}" =~ ^[0-9] ]] && RESOLVED="${REQ#v}"
                 ;;

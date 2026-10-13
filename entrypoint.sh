@@ -12,6 +12,103 @@
 #    - Standalone Docker & Kubernetes (Helm / Pods / Compose)
 # =============================================================================
 
+# --- Startup variable rules (shared with run.sh / entrypoint.sh) -------------
+# The panel stores what the user typed. Booleans are checked by the egg against
+# "boolean" (which also allows true/false/yes/no), enums and numbers are not
+# checked at all. Every value is normalized here, once, so the rest of the
+# launcher only ever compares against 1/0 and known enum words. An invalid
+# value is never silently treated as "off": it is reported and the documented
+# default is used instead.
+_pf_lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'; }
+_pf_bad() { printf '[PotenFYR][!] %s\n' "$*" >&2; }
+
+normalize_flag() { # normalize_flag NAME DEFAULT   (DEFAULT is 1 or 0)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on|enabled)   v=1 ;;
+        0|false|no|off|disabled) v=0 ;;
+        "")                      v="$2" ;;
+        *) _pf_bad "$1='${v}' is not a boolean (use 1 or 0) - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+normalize_enum() { # normalize_enum NAME DEFAULT ALLOWED...
+    local name="$1" def="$2" v a
+    shift 2
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    [ -n "${v}" ] || { export "${name}=${def}"; return 0; }
+    for a in "$@"; do
+        [ "${v}" = "${a}" ] && { export "${name}=${v}"; return 0; }
+    done
+    _pf_bad "${name}='${v}' is not one of: $* - using ${def}."
+    export "${name}=${def}"
+}
+
+normalize_int() { # normalize_int NAME DEFAULT MIN MAX
+    local name="$1" def="$2" min="$3" max="$4" v
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        "") v="${def}" ;;
+        *[!0-9]*) _pf_bad "${name}='${v}' is not a number - using ${def}."; v="${def}" ;;
+        *)
+            if [ $((10#${v})) -lt "${min}" ] || [ $((10#${v})) -gt "${max}" ]; then
+                _pf_bad "${name}=${v} is outside ${min}-${max} - using ${def}."
+                v="${def}"
+            else
+                v=$((10#${v}))
+            fi
+            ;;
+    esac
+    export "${name}=${v}"
+}
+
+normalize_settings() {
+    local pair
+    for pair in MEMORY_AUTO_TUNE:1 DEV_MODE:0 AUTO_INSTALL_DEPS:1 CLEAN_BUILD_CACHE:1 \
+                AUTO_ENV_INJECT:1 GIT_AUTO_UPDATE:1 GIT_PRESERVE_ENV:1 NODE_GYP_SUPPORT:1 \
+                SKIP_PYTHON:0 DEBUG:0 AUTO_RESTART:0 PROCFILE_RESTART:1 PROCFILE_LOGS:0 \
+                HEALTH_STRICT:0 AUTO_UPDATE_EGG:1 BROWSER_HEADFUL:0; do
+        normalize_flag "${pair%%:*}" "${pair#*:}"
+    done
+    normalize_enum SUPERVISOR auto auto procfile multi all single none
+    normalize_enum CLI_THEME prog prog minecraft classic
+    normalize_enum PANEL_STOP_WATCHER auto auto 0 1 false true off on no yes disabled enabled
+    normalize_enum CLI_BANNER_GRADIENT auto auto citrus aurora sunset ocean candy spectrum none off plain
+    normalize_int RESTART_DELAY 3 1 60
+}
+
+# canonical runtime name, so SKIP_RUNTIMES=node also skips EXTRA_RUNTIMES=nodejs
+_runtime_canon() {
+    case "$(_pf_lc "$1")" in
+        node|nodejs|javascript|js|typescript|ts) echo node ;;
+        py|python|python3)                      echo python ;;
+        golang|go)                              echo go ;;
+        rs|rust|cargo|rustc)                    echo rust ;;
+        *)                                      _pf_lc "$1" ;;
+    esac
+}
+
+# runtime_skipped <name>: success when SKIP_RUNTIMES (or SKIP_PYTHON) excludes it
+runtime_skipped() {
+    local want item
+    want="$(_runtime_canon "$1")"
+    if [ "${want}" = "python" ] && [ "${SKIP_PYTHON:-0}" = "1" ]; then
+        return 0
+    fi
+    for item in $(printf '%s' "${SKIP_RUNTIMES:-}" | tr ',' ' '); do
+        case "$(_pf_lc "${item}")" in ""|none|auto) continue ;; esac
+        [ "$(_runtime_canon "${item}")" = "${want}" ] && return 0
+    done
+    return 1
+}
+
+normalize_settings
+
 # --- Visual theme -------------------------------------------------------------
 # Default: Prog-Language Eggs agent theme (Hermes-agent style console output).
 # Restore the previous PotenFYR theme with CLI_THEME=classic.
@@ -78,7 +175,7 @@ _egg_error_log() {
         if mkdir -p "${d}" 2>/dev/null && [ -w "${d}" ]; then
             ERROR_LOG="${d}/launcher-errors.log"
         else
-            ERROR_LOG="/tmp/potenfyr-errors.log"
+            ERROR_LOG="/dev/stderr"
         fi
     fi
     printf '[%s] [%s] [panel=%s] %s\n' \
@@ -120,6 +217,14 @@ fi
 
 export WORK_DIR="${ACTIVE_WORK_DIR}"
 
+# Scratch space lives in the server directory, never /tmp. Anything in it was
+# left by a previous boot or install that was killed before its cleanup ran.
+# Nothing is running yet, so it is removed now, before any install or download.
+export POTENFYR_SCRATCH="${WORK_DIR}/.scratch"
+rm -rf "${POTENFYR_SCRATCH}" 2>/dev/null || true
+mkdir -p "${POTENFYR_SCRATCH}" 2>/dev/null || true
+export POTENFYR_SWEPT=1
+
 # -----------------------------------------------------------------------------
 # 2. Multi-Panel Port & Network Resolution
 # -----------------------------------------------------------------------------
@@ -128,7 +233,24 @@ export WORK_DIR="${ACTIVE_WORK_DIR}"
 # unset SERVER_PORT; our exports below would otherwise always poison it).
 ORIGINAL_SERVER_PORT="${SERVER_PORT:-}"
 
-ACTIVE_PORT="${SERVER_PORT:-${PORT:-${FEATHER_PORT:-${PUFFER_PORT:-${ALLOCATED_PORT:-${HTTP_PORT:-8080}}}}}}"
+# A candidate must be a whole port number. Unsubstituted panel placeholders
+# (e.g. {{server.build.default.port}}) and typos are reported and skipped, so
+# the next source in the chain is used instead of binding to nonsense.
+_valid_port() {
+    case "$1" in ''|*[!0-9]*) return 1 ;; esac
+    [ $((10#$1)) -ge 1 ] && [ $((10#$1)) -le 65535 ]
+}
+ACTIVE_PORT=""
+for _p in "${SERVER_PORT:-}" "${PORT:-}" "${FEATHER_PORT:-}" "${PUFFER_PORT:-}" "${ALLOCATED_PORT:-}" "${HTTP_PORT:-}"; do
+    if _valid_port "${_p}"; then
+        ACTIVE_PORT="$((10#${_p}))"
+        break
+    elif [ -n "${_p}" ]; then
+        _pf_bad "Ignoring invalid port '${_p}' (must be 1-65535)."
+    fi
+done
+ACTIVE_PORT="${ACTIVE_PORT:-8080}"
+unset _p
 export PORT="${ACTIVE_PORT}"
 export SERVER_PORT="${ACTIVE_PORT}"
 export APP_PORT="${ACTIVE_PORT}"
@@ -310,8 +432,8 @@ if [ -w "${ACTIVE_WORK_DIR}" ]; then
     export NPM_CONFIG_CACHE="${ACTIVE_WORK_DIR}/.npm"
     export PIP_CACHE_DIR="${ACTIVE_WORK_DIR}/.cache/pip"
 else
-    export NPM_CONFIG_CACHE="/tmp/.npm"
-    export PIP_CACHE_DIR="/tmp/.cache/pip"
+    export NPM_CONFIG_CACHE="${POTENFYR_SCRATCH}/npm-cache"
+    export PIP_CACHE_DIR="${POTENFYR_SCRATCH}/pip-cache"
 fi
 
 # -----------------------------------------------------------------------------
@@ -347,6 +469,7 @@ for _key in LANGUAGE RUNNER MAIN_FILE PACKAGE_MANAGER BUILD_COMMAND \
     apply_conf "${_key}"
 done
 unset _key
+normalize_settings
 
 # --- Resolved Startup Value Pinning ---------------------------------------------
 # The panel cannot be modified from inside the container, so after a boot with
@@ -437,7 +560,7 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
                 _egg_hashfile="${_egg_state}/egg-hash"
                 _egg_lhash="${_egg_state}/launcher-hash"
             fi
-            _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
+            _egg_tmp="$(mktemp -p "${POTENFYR_SCRATCH}" 2>/dev/null || echo "${POTENFYR_SCRATCH}/potenfyr-egg.$$")"
             if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
                 _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
                 _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
@@ -458,11 +581,11 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
                             # egg JSON changed -> refresh launcher from same branch
                             _base="${EGG_UPDATE_URL%/*}"
                             _launcher_ok=0
-                            if curl -fsSL --retry 1 --max-time 15 "${_base}/run.sh" -o /tmp/potenfyr-run.sh 2>/dev/null && [ -s /tmp/potenfyr-run.sh ] && grep -q "PotenFYR Studios" /tmp/potenfyr-run.sh 2>/dev/null; then
-                                if head -c 2 /tmp/potenfyr-run.sh | grep -q $'\r'; then
-                                    sed -i 's/\r$//' /tmp/potenfyr-run.sh 2>/dev/null || true
+                            if curl -fsSL --retry 1 --max-time 15 "${_base}/run.sh" -o ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null && [ -s ${POTENFYR_SCRATCH}/potenfyr-run.sh ] && grep -q "PotenFYR Studios" ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null; then
+                                if head -c 2 ${POTENFYR_SCRATCH}/potenfyr-run.sh | grep -q $'\r'; then
+                                    sed -i 's/\r$//' ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null || true
                                 fi
-                                if cp /tmp/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
+                                if cp ${POTENFYR_SCRATCH}/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
                                     chmod +x "${_egg_target}" 2>/dev/null || true
                                     _launcher_ok=1
                                 fi
@@ -474,7 +597,7 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
                             else
                                 warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
                             fi
-                            rm -f /tmp/potenfyr-run.sh 2>/dev/null || true
+                            rm -f ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null || true
                             ;;
                     esac
                 else
@@ -709,11 +832,11 @@ if [ "${REQ_LANG}" != "auto" ] && [ "${REQ_LANG}" != "" ] && [ "${REQ_LANG}" != 
 fi
 
 # Ensure specific engine/runner toolchain is provisioned if chosen (e.g. bun, deno)
-if [ "${RUNNER:-auto}" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
+if [ "${RUNNER:-auto}" = "bun" ] && ! command -v bun >/dev/null 2>&1 && ! runtime_skipped bun; then
     if [ -f /usr/local/bin/install-runtime.sh ]; then
         /usr/local/bin/install-runtime.sh "bun" "latest" /opt/runtimes || true
     fi
-elif [ "${RUNNER:-auto}" = "deno" ] && ! command -v deno >/dev/null 2>&1; then
+elif [ "${RUNNER:-auto}" = "deno" ] && ! command -v deno >/dev/null 2>&1 && ! runtime_skipped deno; then
     if [ -f /usr/local/bin/install-runtime.sh ]; then
         /usr/local/bin/install-runtime.sh "deno" "latest" /opt/runtimes || true
     fi
@@ -741,7 +864,8 @@ if [ -n "${EXTRA_RUNTIMES:-}" ] && [ "${EXTRA_RUNTIMES}" != "none" ] && [ "${EXT
         [ "${extra_ver}" = "${extra_full}" ] && extra_ver="latest"
         extra_r=$(echo "${extra_r}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 
-        if [ "${SKIP_PYTHON:-0}" = "1" ] && [ "${extra_r}" = "python" ]; then
+        if runtime_skipped "${extra_r}"; then
+            info "Skipping companion runtime '${extra_r}' (SKIP_RUNTIMES / SKIP_PYTHON)."
             continue
         fi
 
@@ -862,12 +986,12 @@ if [ -f "${_POT_DIR}/run.sh" ]; then
 fi
 unset _POT_DIR _staged_hash _rec_hash
 if [ ! -f "${LAUNCHER_SCRIPT}" ]; then
-    mkdir -p /tmp/potenfyr 2>/dev/null || true
-    if [ ! -f "/tmp/potenfyr/run.sh" ]; then
-        curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/run.sh -o /tmp/potenfyr/run.sh 2>/dev/null || true
-        chmod +x /tmp/potenfyr/run.sh 2>/dev/null || true
+    mkdir -p ${POTENFYR_SCRATCH}/launcher 2>/dev/null || true
+    if [ ! -f "${POTENFYR_SCRATCH}/launcher/run.sh" ]; then
+        curl -fsSL --retry 3 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/run.sh -o ${POTENFYR_SCRATCH}/launcher/run.sh 2>/dev/null || true
+        chmod +x ${POTENFYR_SCRATCH}/launcher/run.sh 2>/dev/null || true
     fi
-    LAUNCHER_SCRIPT="/tmp/potenfyr/run.sh"
+    LAUNCHER_SCRIPT="${POTENFYR_SCRATCH}/launcher/run.sh"
 fi
 
 # 1. Normalize any variation of run.sh invocation across old/new/foreign configs.

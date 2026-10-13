@@ -163,12 +163,39 @@ if [ ! -w "${TARGET_BASE}" ] && [ ! -w "$(dirname "${TARGET_BASE}")" ]; then
     elif [ -d "/server" ] && [ -w "/server" ]; then
         TARGET_BASE="/server/.runtimes"
     else
-        TARGET_BASE="/tmp/runtimes"
+        TARGET_BASE="${WORK_DIR:-$PWD}/.runtimes"
     fi
 fi
 mkdir -p "${TARGET_BASE}" 2>/dev/null || true
 
+# Scratch lives in the server directory, never /tmp. Every run gets its own
+# directory, removed by the EXIT trap on success, failure or signal; directories
+# left by a killed run are swept at the next boot by the entrypoint.
+POTENFYR_SCRATCH="${POTENFYR_SCRATCH:-${WORK_DIR:-${TARGET_BASE}}/.scratch}"
+mkdir -p "${POTENFYR_SCRATCH}" "${WORK_DIR:-${TARGET_BASE}}/.logs" 2>/dev/null || true
+RUN_SCRATCH="$(mktemp -d -p "${POTENFYR_SCRATCH}" "install-${LANG_REQ:-x}.XXXXXX" 2>/dev/null)" \
+    || RUN_SCRATCH="${POTENFYR_SCRATCH}/install-${LANG_REQ:-x}.$$"
+mkdir -p "${RUN_SCRATCH}" 2>/dev/null || true
+trap 'rm -rf "${RUN_SCRATCH}"' EXIT
+trap 'exit 130' INT TERM HUP
+
 LANG_LOWER=$(echo "${LANG_REQ}" | tr '[:upper:]' '[:lower:]')
+
+# Node-family aliases all install the same engine (Node.js dist + npm tools).
+# Canonicalize first so they share one install, one lock and one destination.
+# typescript/ts previously matched nothing and installed no runtime at all.
+case "${LANG_LOWER}" in
+    nodejs|javascript|js|typescript|ts) LANG_LOWER="node" ;;
+esac
+
+# One install per engine at a time. EXTRA_RUNTIMES entries (and the main
+# language) run in parallel, so duplicates such as node + nodejs race on the
+# same download, extract directory and npm -g prefix. The second caller waits
+# here and then finds the runtime already installed.
+mkdir -p "${TARGET_BASE}/.locks" 2>/dev/null || true
+if { exec 9>"${TARGET_BASE}/.locks/${LANG_LOWER}.lock"; } 2>/dev/null && command -v flock >/dev/null 2>&1; then
+    flock -w 900 9 || warn "Waited 15 min for another '${LANG_LOWER}' install to finish - continuing anyway."
+fi
 
 # -----------------------------------------------------------------------------
 # Dynamic version resolution & validation (fail-fast, live feeds)
@@ -181,15 +208,17 @@ RESOLVER_SCRIPT="/usr/local/bin/resolve-version.sh"
 [ -f "${RESOLVER_SCRIPT}" ] || RESOLVER_SCRIPT="/resolve-version.sh"
 if [ -f "${RESOLVER_SCRIPT}" ]; then
     log "Validating & resolving version request '${VERSION_REQ}' for '${LANG_LOWER}'..."
-    if bash "${RESOLVER_SCRIPT}" "${LANG_LOWER}" "${VERSION_REQ}" > /tmp/potenfyr-resolved.ver; then
-        RESOLVED_VERSION=$(cat /tmp/potenfyr-resolved.ver 2>/dev/null)
-        rm -f /tmp/potenfyr-resolved.ver
+    # Unique file: resolves for different engines run in parallel at boot.
+    RESOLVED_TMP="${RUN_SCRATCH}/resolved.ver"
+    if bash "${RESOLVER_SCRIPT}" "${LANG_LOWER}" "${VERSION_REQ}" > "${RESOLVED_TMP}"; then
+        RESOLVED_VERSION=$(cat "${RESOLVED_TMP}" 2>/dev/null)
+        rm -f "${RESOLVED_TMP}"
         if [ -n "${RESOLVED_VERSION}" ]; then
             VERSION_REQ="${RESOLVED_VERSION}"
             ok "Using ${LANG_LOWER} version: ${VERSION_REQ}"
         fi
     else
-        rm -f /tmp/potenfyr-resolved.ver
+        rm -f "${RESOLVED_TMP}"
         # Resolver already printed a detailed, user-facing explanation on console
         fail "Invalid or unresolvable version request for '${LANG_LOWER}'. Nothing was downloaded."
     fi
@@ -216,6 +245,12 @@ case "${LANG_LOWER}" in
             [[ "${VERSION_REQ}" =~ ^v ]] && NODE_VER="${VERSION_REQ}" || NODE_VER="v${VERSION_REQ}"
         fi
 
+        # jq prints the literal "null" (exit 0) when no release matches, which
+        # would otherwise be downloaded as dist/null/... - refuse it here.
+        if [ -z "${NODE_VER}" ] || [ "${NODE_VER}" = "null" ]; then
+            fail "No Node.js release matches '${VERSION_REQ}'. Check the version (e.g. 22, 20, lts, latest)."
+        fi
+
         # Nightly builds live on a separate CDN path (resolver emits them for 'nightly')
         NODE_BASE="https://nodejs.org/dist"
         [[ "${NODE_VER}" == *nightly* ]] && NODE_BASE="https://nodejs.org/download/nightly"
@@ -226,7 +261,7 @@ case "${LANG_LOWER}" in
         else
             log "Downloading Node.js ${NODE_VER} for ${ARCH_NODE}..."
             TAR_URL="${NODE_BASE}/${NODE_VER}/node-${NODE_VER}-linux-${ARCH_NODE}.tar.xz"
-            TMP_TAR="/tmp/node.tar.xz"
+            TMP_TAR="${RUN_SCRATCH}/node.tar.xz"
             download "${TAR_URL}" "${TMP_TAR}"
             # Verify against the official SHASUMS256.txt published beside the tarball
             NODE_SHA=$(curl -fsSL --max-time 30 "${NODE_BASE}/${NODE_VER}/SHASUMS256.txt" 2>/dev/null \
@@ -265,20 +300,20 @@ case "${LANG_LOWER}" in
         else
             BUN_URL="https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${BUN_ARCH}.zip"
         fi
-        TMP_ZIP="/tmp/bun.zip"
+        TMP_ZIP="${RUN_SCRATCH}/bun.zip"
         download "${BUN_URL}" "${TMP_ZIP}"
-        rm -rf /tmp/bun-extract && mkdir -p /tmp/bun-extract
-        unzip -qo "${TMP_ZIP}" -d /tmp/bun-extract
-        if [ -f "/tmp/bun-extract/bun-linux-${BUN_ARCH}/bun" ]; then
-            mv -f "/tmp/bun-extract/bun-linux-${BUN_ARCH}/bun" "${DEST_DIR}/bin/bun"
-        elif [ -f "/tmp/bun-extract/bun" ]; then
-            mv -f "/tmp/bun-extract/bun" "${DEST_DIR}/bin/bun"
+        rm -rf ${RUN_SCRATCH}/bun-extract && mkdir -p ${RUN_SCRATCH}/bun-extract
+        unzip -qo "${TMP_ZIP}" -d ${RUN_SCRATCH}/bun-extract
+        if [ -f "${RUN_SCRATCH}/bun-extract/bun-linux-${BUN_ARCH}/bun" ]; then
+            mv -f "${RUN_SCRATCH}/bun-extract/bun-linux-${BUN_ARCH}/bun" "${DEST_DIR}/bin/bun"
+        elif [ -f "${RUN_SCRATCH}/bun-extract/bun" ]; then
+            mv -f "${RUN_SCRATCH}/bun-extract/bun" "${DEST_DIR}/bin/bun"
         else
-            find /tmp/bun-extract -type f -name "bun" -exec mv -f {} "${DEST_DIR}/bin/bun" \;
+            find ${RUN_SCRATCH}/bun-extract -type f -name "bun" -exec mv -f {} "${DEST_DIR}/bin/bun" \;
         fi
         chmod +x "${DEST_DIR}/bin/bun" 2>/dev/null || true
         ln -sf "${DEST_DIR}/bin/bun" "${DEST_DIR}/bin/bunx" 2>/dev/null || true
-        rm -rf "${TMP_ZIP}" /tmp/bun-extract
+        rm -rf "${TMP_ZIP}" ${RUN_SCRATCH}/bun-extract
         ok "Installed Bun to ${DEST_DIR}/bin/bun"
         ;;
 
@@ -301,7 +336,7 @@ case "${LANG_LOWER}" in
         else
             DENO_URL="https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-unknown-linux-gnu.zip"
         fi
-        TMP_ZIP="/tmp/deno.zip"
+        TMP_ZIP="${RUN_SCRATCH}/deno.zip"
         download "${DENO_URL}" "${TMP_ZIP}"
         unzip -qo "${TMP_ZIP}" -d "${DEST_DIR}/bin"
         chmod +x "${DEST_DIR}/bin/deno" 2>/dev/null || true
@@ -326,21 +361,21 @@ case "${LANG_LOWER}" in
         UV_ARCH="${ARCH}"
         [ "${UV_ARCH}" = "arm64" ] && UV_ARCH="aarch64"
         UV_URL="https://github.com/astral-sh/uv/releases/latest/download/uv-${UV_ARCH}-unknown-linux-gnu.tar.gz"
-        TMP_TAR="/tmp/uv.tar.gz"
+        TMP_TAR="${RUN_SCRATCH}/uv.tar.gz"
         if curl -fsSL -o "${TMP_TAR}" "${UV_URL}"; then
-            tar -xzf "${TMP_TAR}" -C /tmp
-            mv /tmp/uv-*/uv /tmp/uv-*/uvx "${DEST_DIR}/bin/" 2>/dev/null || true
+            tar -xzf "${TMP_TAR}" -C "${RUN_SCRATCH}"
+            mv ${RUN_SCRATCH}/uv-*/uv ${RUN_SCRATCH}/uv-*/uvx "${DEST_DIR}/bin/" 2>/dev/null || true
             chmod +x "${DEST_DIR}/bin/uv" "${DEST_DIR}/bin/uvx" 2>/dev/null || true
-            rm -rf "${TMP_TAR}" /tmp/uv-*
+            rm -rf "${TMP_TAR}" ${RUN_SCRATCH}/uv-*
             ok "Installed uv & uvx toolchain"
         fi
         # Respect a concrete Python version request via uv (e.g. RUNTIME_VERSION=3.12)
         if [[ "${VERSION_REQ}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
             log "Installing Python ${VERSION_REQ} toolchain via uv..."
-            if "${DEST_DIR}/bin/uv" python install "${VERSION_REQ}" >>/tmp/potenfyr-uv-python.log 2>&1; then
+            if "${DEST_DIR}/bin/uv" python install "${VERSION_REQ}" >>${WORK_DIR:-$PWD}/.logs/runtime-uv-python.log 2>&1; then
                 ok "Python ${VERSION_REQ} installed (managed by uv)"
             else
-                warn "Could not install Python ${VERSION_REQ} via uv (see /tmp/potenfyr-uv-python.log); system python3 stays active."
+                warn "Could not install Python ${VERSION_REQ} via uv (see ${WORK_DIR:-$PWD}/.logs/runtime-uv-python.log); system python3 stays active."
             fi
         fi
         ;;
@@ -368,7 +403,7 @@ case "${LANG_LOWER}" in
         else
             log "Downloading Adoptium OpenJDK ${JV} (${JAVA_RELEASE_TYPE}) for ${ARCH_JAVA}..."
             API_URL="https://api.adoptium.net/v3/binary/latest/${JV}/${JAVA_RELEASE_TYPE}/linux/${ARCH_JAVA}/jdk/hotspot/normal/eclipse?project=jdk"
-            TMP_TAR="/tmp/jdk${JV}.tar.gz"
+            TMP_TAR="${RUN_SCRATCH}/jdk${JV}.tar.gz"
             download "${API_URL}" "${TMP_TAR}"
             mkdir -p "${DEST_DIR}"
             tar -xzf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
@@ -394,7 +429,7 @@ case "${LANG_LOWER}" in
             ok "Go ${GO_VER} already installed at ${DEST_DIR}"
         else
             GO_URL="https://go.dev/dl/${GO_VER}.linux-${ARCH_GO}.tar.gz"
-            TMP_TAR="/tmp/go.tar.gz"
+            TMP_TAR="${RUN_SCRATCH}/go.tar.gz"
             download "${GO_URL}" "${TMP_TAR}"
             mkdir -p "${DEST_DIR}"
             tar -xzf "${TMP_TAR}" --strip-components=1 -C "${DEST_DIR}"
@@ -440,7 +475,7 @@ case "${LANG_LOWER}" in
         fi
 
         DEST_DIR="${TARGET_BASE}/zig"
-        TMP_TAR="/tmp/zig.tar.xz"
+        TMP_TAR="${RUN_SCRATCH}/zig.tar.xz"
         download "${ZIG_URL}" "${TMP_TAR}"
         verify_sha256 "${TMP_TAR}" "${ZIG_SUM}" "Zig ${VERSION_REQ}"
         mkdir -p "${DEST_DIR}"
@@ -458,7 +493,7 @@ case "${LANG_LOWER}" in
         log "Setting up .NET SDK (channel: ${VERSION_REQ:-LTS})..."
         DEST_DIR="${TARGET_BASE}/dotnet"
         mkdir -p "${DEST_DIR}"
-        TMP_SH="/tmp/dotnet-install.sh"
+        TMP_SH="${RUN_SCRATCH}/dotnet-install.sh"
         download "https://dot.net/v1/dotnet-install.sh" "${TMP_SH}"
         chmod +x "${TMP_SH}"
         # Resolver emits: LTS | STS:preview | STS:daily | <major.minor>
@@ -485,7 +520,7 @@ case "${LANG_LOWER}" in
         DEST_DIR="${TARGET_BASE}/swift"
         SWIFT_ARCH="${ARCH}"
         [ "${SWIFT_ARCH}" = "arm64" ] && SWIFT_ARCH="aarch64"
-        TMP_TAR="/tmp/swift.tar.gz"
+        TMP_TAR="${RUN_SCRATCH}/swift.tar.gz"
         SWIFT_CANDIDATES=()
         if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             SWIFT_BASE="${VERSION_REQ%.*}"
@@ -520,7 +555,7 @@ case "${LANG_LOWER}" in
             ppc64le)       JDIR="ppc64le"; JFILE="powerpc64le" ;;
             *)             JDIR="x64";     JFILE="x86_64" ;;
         esac
-        TMP_TAR="/tmp/julia.tar.gz"
+        TMP_TAR="${RUN_SCRATCH}/julia.tar.gz"
         JULIA_CANDIDATES=()
         if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             JSERIES="${VERSION_REQ%.*}"
@@ -551,7 +586,7 @@ case "${LANG_LOWER}" in
         DART_ARCH="${ARCH}"
         [ "${DART_ARCH}" = "amd64" ] || [ "${DART_ARCH}" = "x86_64" ] && DART_ARCH="x64"
         DART_URL="https://storage.googleapis.com/dart-archive/channels/stable/release/latest/sdk/dartsdk-linux-${DART_ARCH}-release.zip"
-        TMP_ZIP="/tmp/dart.zip"
+        TMP_ZIP="${RUN_SCRATCH}/dart.zip"
         download "${DART_URL}" "${TMP_ZIP}"
         unzip -qo "${TMP_ZIP}" -d "${TARGET_BASE}"
         rm -f "${TMP_ZIP}"
@@ -567,7 +602,7 @@ case "${LANG_LOWER}" in
         mkdir -p "${DEST_DIR}"
         ODIN_URL="https://github.com/odin-lang/Odin/releases/latest/download/odin-linux-amd64.tar.gz"
         if [ "${ARCH_DEB}" = "amd64" ]; then
-            TMP_TAR="/tmp/odin.tar.gz"
+            TMP_TAR="${RUN_SCRATCH}/odin.tar.gz"
             download "${ODIN_URL}" "${TMP_TAR}"
             tar -xzf "${TMP_TAR}" -C "${DEST_DIR}"
             rm -f "${TMP_TAR}"
@@ -584,7 +619,7 @@ case "${LANG_LOWER}" in
         DEST_DIR="${TARGET_BASE}/gleam/bin"
         mkdir -p "${DEST_DIR}"
         GLEAM_ARCH="${ARCH_RUST}"
-        TMP_TAR="/tmp/gleam.tar.gz"
+        TMP_TAR="${RUN_SCRATCH}/gleam.tar.gz"
         GLEAM_CANDIDATES=()
         if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             GLEAM_CANDIDATES+=("https://github.com/gleam-lang/gleam/releases/download/v${VERSION_REQ}/gleam-v${VERSION_REQ}-${GLEAM_ARCH}.tar.gz")
@@ -611,7 +646,7 @@ case "${LANG_LOWER}" in
         log "Setting up Nim (version: ${VERSION_REQ:-latest})..."
         DEST_DIR="${TARGET_BASE}/nim"
         NIM_ARCH="${ARCH_ALT}"
-        TMP_TAR="/tmp/nim.tar.xz"
+        TMP_TAR="${RUN_SCRATCH}/nim.tar.xz"
         NIM_CANDIDATES=()
         if [[ "${VERSION_REQ:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             NIM_CANDIDATES+=("https://nim-lang.org/download/nim-${VERSION_REQ}-linux_${NIM_ARCH}.tar.xz")
@@ -639,7 +674,7 @@ case "${LANG_LOWER}" in
         log "Downloading custom runtime archive from ${VERSION_REQ}..."
         DEST_DIR="${TARGET_BASE}/custom"
         mkdir -p "${DEST_DIR}"
-        TMP_ARCHIVE="/tmp/custom-runtime"
+        TMP_ARCHIVE="${RUN_SCRATCH}/custom-runtime"
         download "${VERSION_REQ}" "${TMP_ARCHIVE}"
         case "${VERSION_REQ}" in
             *.tar.gz|*.tgz)

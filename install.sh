@@ -27,6 +27,35 @@ fi
 
 cd "${INSTALL_DIR}" 2>/dev/null || { mkdir -p "${INSTALL_DIR}" && cd "${INSTALL_DIR}"; }
 
+# Scratch files live in the server directory, never /tmp. They are removed as
+# soon as each step is done; the entrypoint sweeps any left behind by a failed
+# install on the next boot.
+POTENFYR_SCRATCH="${INSTALL_DIR}/.scratch"
+mkdir -p "${POTENFYR_SCRATCH}" 2>/dev/null || true
+
+# git clone refuses a non-empty target, and the workspace always holds helper
+# directories (.logs, .scratch, .runtimes) by the time the first sync runs. So
+# clone into a staging directory under scratch, then move only the repository
+# (.git) into the workspace and check out HEAD. Args: git arguments, the last
+# one being the destination ("."), which is replaced by the staging path.
+_git_clone_into_ws() {
+    local _stage _rc=0 _n=$# _args
+    _stage="$(mktemp -d -p "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}" clone.XXXXXX 2>/dev/null)" || return 1
+    _args=("${@:1:$((_n-1))}")
+    if git "${_args[@]}" "${_stage}/repo"; then
+        if mv "${_stage}/repo/.git" ./.git && git reset -q --hard HEAD; then
+            _rc=0
+        else
+            _rc=1
+        fi
+    else
+        _rc=1
+    fi
+    rm -rf "${_stage}" 2>/dev/null || true
+    return ${_rc}
+}
+
+
 # --- Visual formatting ---
 C_RESET=$'\033[0m'
 C_BOLD=$'\033[1m'
@@ -107,7 +136,7 @@ if [ -n "${GIT_REPO}" ]; then
         esac
     }
 
-    _gitcfg="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitconfig.$$")"
+    _gitcfg="$(mktemp -p "${POTENFYR_SCRATCH}" 2>/dev/null || echo "${POTENFYR_SCRATCH}/potenfyr-gitconfig.$$")"
     {
         [ -f "${HOME}/.gitconfig" ] && cat "${HOME}/.gitconfig" 2>/dev/null
         printf '[safe]\n\tdirectory = *\n'
@@ -121,7 +150,7 @@ if [ -n "${GIT_REPO}" ]; then
     } > "${_gitcfg}" 2>/dev/null || true
     export GIT_CONFIG_GLOBAL="${_gitcfg}"
 
-    _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
+    _err="$(mktemp -p "${POTENFYR_SCRATCH}" 2>/dev/null || echo "${POTENFYR_SCRATCH}/potenfyr-git-$$")"
     _err_auth="${_err}.auth"
     log "Syncing source code from Git repository: ${GIT_REPO} (branch: ${GIT_BRANCH})..."
 
@@ -173,15 +202,15 @@ if [ -n "${GIT_REPO}" ]; then
             [ -n "${GIT_AUTH_TOKEN}" ] && _git_auth_denied_hint "${_err_auth:-${_err}}"
         fi
     else
-        if ! git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+        if ! _git_clone_into_ws clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
             warn "Cloning branch ${GIT_BRANCH} failed: $(redact_err_git "${_err}")."
             cp -f "${_err}" "${_err_auth}" 2>/dev/null || true
             if [ -n "${GIT_AUTH_TOKEN}" ] \
-                    && git -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                    && _git_clone_into_ws -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                 ok "Cloned anonymously (public repository)."
-            elif ! git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+            elif ! _git_clone_into_ws clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                 if [ -n "${GIT_AUTH_TOKEN}" ] \
-                        && git -c credential.helper= clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                        && _git_clone_into_ws -c credential.helper= clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                     ok "Cloned anonymously (default branch)."
                 else
                     warn "Git clone failed: $(redact_err_git "${_err}")"

@@ -44,7 +44,7 @@ _egg_error_log() {
         if mkdir -p "${d}" 2>/dev/null && [ -w "${d}" ]; then
             ERROR_LOG="${d}/launcher-errors.log"
         else
-            ERROR_LOG="/tmp/potenfyr-errors.log"
+            ERROR_LOG="/dev/stderr"
         fi
     fi
     printf '[%s] [%s] [panel=%s] %s\n' \
@@ -303,6 +303,15 @@ if [ ! -d "${WORK_DIR}" ]; then
     fi
 fi
 
+# Scratch lives in the server directory, never /tmp (see entrypoint.sh). When
+# run without the entrypoint, sweep orphans from earlier runs here instead.
+export POTENFYR_SCRATCH="${WORK_DIR}/.scratch"
+if [ "${POTENFYR_SWEPT:-0}" != "1" ]; then
+    rm -rf "${POTENFYR_SCRATCH}" 2>/dev/null || true
+    export POTENFYR_SWEPT=1
+fi
+mkdir -p "${POTENFYR_SCRATCH}" 2>/dev/null || true
+
 cd "${WORK_DIR}" 2>/dev/null || true
 
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
@@ -376,7 +385,7 @@ _git_ws_has_files() {
     find . -mindepth 1 -maxdepth 1 \
         -not -name '.git' -not -name '.logs' -not -name '.potenfyr' \
         -not -name '.multi-prog.conf' -not -name '.runtimes' \
-        -not -name '.npm' -not -name '.cache' -not -name '.environments' \
+        -not -name '.npm' -not -name '.cache' -not -name '.environments' -not -name '.scratch' \
         2>/dev/null | grep -q .
 }
 
@@ -392,7 +401,7 @@ _git_archive_workspace() {
     GZIP=-1 tar -czf "${arch}" \
         --exclude='./.git' --exclude='./.logs' --exclude='./.runtimes' \
         --exclude='./.npm' --exclude='./.cache' --exclude='./.environments' \
-        --exclude='./.potenfyr' --exclude='./.multi-prog.conf' \
+        --exclude='./.potenfyr' --exclude='./.multi-prog.conf' --exclude='./.scratch' \
         --exclude='./node_modules' --exclude='./.venv' --exclude='./venv' \
         --exclude='__pycache__' \
         -C "${WORK_DIR}" . 2>/dev/null || { rm -f "${arch}"; return 0; }
@@ -464,7 +473,7 @@ _git_snapshot_env() { # _git_snapshot_env <backup-dir>
     ( cd "${WORK_DIR}" 2>/dev/null || exit 0
       find . -type f -name .env -not -path './archive/*' -not -path './.logs/*' \
              -not -path './.runtimes/*' -not -path './.git/*' -not -path './node_modules/*' \
-             -not -path './.potenfyr/*' 2>/dev/null | sed 's#^\./##'
+             -not -path './.potenfyr/*' -not -path './.scratch/*' 2>/dev/null | sed 's#^\./##'
     ) 2>/dev/null | while IFS= read -r _rel; do
         [ -n "${_rel}" ] || continue
         mkdir -p "$1/$(dirname "${_rel}")" 2>/dev/null || true
@@ -496,9 +505,10 @@ _git_restore_env() { # _git_restore_env <backup-dir>
 # point GIT_CONFIG_GLOBAL at a generated file that MERGES the user's real
 # global config with the entries we need.
 _git_env_setup() {
+    mkdir -p "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}" 2>/dev/null || true
     export GIT_TERMINAL_PROMPT=0
     export GIT_ASKPASS=/bin/true
-    local _cfg="${TMPDIR:-/tmp}/potenfyr-gitconfig.$$"
+    local _cfg="${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/potenfyr-gitconfig.$$"
     {
         [ -f "${HOME}/.gitconfig" ] && cat "${HOME}/.gitconfig" 2>/dev/null
         printf '[safe]\n\tdirectory = *\n'
@@ -529,6 +539,28 @@ _git_clear_stale_locks() {
     done
 }
 
+# git clone refuses a non-empty target, and the workspace always holds helper
+# directories (.logs, .scratch, .runtimes) by the time the first sync runs. So
+# clone into a staging directory under scratch, then move only the repository
+# (.git) into the workspace and check out HEAD. Args: git arguments, the last
+# one being the destination ("."), which is replaced by the staging path.
+_git_clone_into_ws() {
+    local _stage _rc=0 _n=$# _args
+    _stage="$(mktemp -d -p "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}" clone.XXXXXX 2>/dev/null)" || return 1
+    _args=("${@:1:$((_n-1))}")
+    if git "${_args[@]}" "${_stage}/repo"; then
+        if mv "${_stage}/repo/.git" ./.git && git reset -q --hard HEAD; then
+            _rc=0
+        else
+            _rc=1
+        fi
+    else
+        _rc=1
+    fi
+    rm -rf "${_stage}" 2>/dev/null || true
+    return ${_rc}
+}
+
 sync_git_repo() {
     GIT_REPO="$(printf '%s' "${GIT_REPO:-}" | tr -d ' \t\r\n')"
     GIT_BRANCH="$(printf '%s' "${GIT_BRANCH:-main}" | tr -d ' \t\r\n')"
@@ -540,7 +572,7 @@ sync_git_repo() {
     _git_prune_archives
 
     local _err _auth_err _old_head _new_head _new_date _new_subj _fetch_ok
-    _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
+    _err="$(mktemp -p "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}" 2>/dev/null || echo "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/potenfyr-git-$$")"
     # The anonymous retry overwrites $_err; keep the authenticated error too,
     # so the real cause (rejected token) is not replaced by "Repository not found".
     _auth_err="${_err}.auth"
@@ -566,7 +598,7 @@ sync_git_repo() {
                     _fetch_ok=1
                 fi
             fi
-            _git_snapshot_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
+            _git_snapshot_env "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/pf-env-backup.$$"
             if [ "${_fetch_ok}" = "1" ] && git reset --hard FETCH_HEAD 2>"${_err}"; then
                 _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
                 _new_subj="$(git log -1 --format=%s 2>/dev/null || true)"
@@ -579,10 +611,10 @@ sync_git_repo() {
                 GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git fetch failed on fresh overlay (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - check URL, branch name and credentials"
             fi
-            _git_restore_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
+            _git_restore_env "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/pf-env-backup.$$"
         else
             log "Cloning repository: $(redact_url "${GIT_REPO}") (branch: ${GIT_BRANCH})..."
-            if git clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+            if _git_clone_into_ws clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                 ok "Repository successfully cloned (commit $(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
                 GIT_SYNC_UPDATED=1
             else
@@ -591,19 +623,19 @@ sync_git_repo() {
                 cp -f "${_err}" "${_auth_err}" 2>/dev/null || true
                 if [ -n "${GIT_AUTH_TOKEN}" ]; then
                     warn "Retrying without credentials (public repository?)..."
-                    if git -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                    if _git_clone_into_ws -c credential.helper= clone --branch "${GIT_BRANCH}" --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                         ok "Repository successfully cloned anonymously (commit $(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
                         GIT_SYNC_UPDATED=1
                     fi
                 fi
                 if [ "${GIT_SYNC_UPDATED}" != "1" ]; then
                     warn "Retrying with the repository's default branch..."
-                    if git clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                    if _git_clone_into_ws clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                         ok "Repository cloned (default branch)"
                         GIT_SYNC_UPDATED=1
                     elif [ -n "${GIT_AUTH_TOKEN}" ]; then
                         warn "Retrying default branch without credentials..."
-                        if git -c credential.helper= clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
+                        if _git_clone_into_ws -c credential.helper= clone --depth 1 "${GIT_REPO}" . 2>"${_err}"; then
                             ok "Repository cloned anonymously (default branch)"
                             GIT_SYNC_UPDATED=1
                         fi
@@ -646,7 +678,7 @@ sync_git_repo() {
             if [ -n "${_new_full}" ] && [ "${_new_full}" != "${_old_full}" ]; then
                 _git_archive_workspace
             fi
-            _git_snapshot_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
+            _git_snapshot_env "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/pf-env-backup.$$"
             if git reset --hard FETCH_HEAD 2>"${_err}"; then
                 _new_head="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
                 _new_date="$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M %Z' 2>/dev/null || true)"
@@ -663,7 +695,7 @@ sync_git_repo() {
                 GIT_SYNC_FAILED=1
                 _egg_error_log "launcher" "git reset --hard FETCH_HEAD failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - restore from .logs/code-archives/ if needed"
             fi
-            _git_restore_env "${TMPDIR:-/tmp}/pf-env-backup.$$"
+            _git_restore_env "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/pf-env-backup.$$"
         else
             warn "Git fetch failed - keeping installed code: $(_git_fail_reason "${_err}" "${_auth_err}")"
             [ -n "${GIT_AUTH_TOKEN}" ] && warn "If the error above mentions authentication or 'not found', check GIT_AUTH_TOKEN in the Startup tab (expiry, repository read access, org SSO)."
@@ -677,23 +709,118 @@ sync_git_repo() {
     unset GIT_CONFIG_GLOBAL
 }
 
-# _git_unpin_stale: the first boot may have pinned LANGUAGE/RUNNER/MAIN_FILE
-# from a scaffold or an earlier snapshot of the repository. When a sync brings
-# in commits and the pinned entry point no longer exists, those pins would
-# force the launcher to run (or stub-create) a file the repository does not
-# have - looking exactly like "commits are not applied". Drop the pins and
-# re-arm auto-detection whenever the pinned entry point vanished upstream.
+# _git_unpin_stale: LANGUAGE/RUNNER/MAIN_FILE pins are derived from detection,
+# and detection reads the repository. When a sync brings in new commits the
+# pins may describe code that no longer exists (a removed entry point, or a
+# project that changed from Python to Node), so they are cleared and detection
+# runs on the new code. A pin is reset only while its variable still holds the
+# pinned value, so a value typed in the panel is never overwritten.
 _git_unpin_stale() {
-    local pinned
-    pinned="$(grep -E '^MAIN_FILE=' "${CONF_FILE}" 2>/dev/null | tail -n1 | cut -d= -f2-)"
-    [ -n "${pinned}" ] || return 0
-    if [ ! -f "${pinned}" ]; then
-        sed -i -e '/^MAIN_FILE=/d' -e '/^LANGUAGE=/d' -e '/^RUNNER=/d' "${CONF_FILE}" 2>/dev/null || true
-        LANGUAGE="auto"
-        RUNNER="auto"
-        MAIN_FILE="auto"
-        warn "Repository update removed the pinned entry point '${pinned}' - re-running auto-detection."
+    local _lang _run _main
+    _lang="$(grep -E '^LANGUAGE=' "${CONF_FILE}" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+    _run="$(grep -E '^RUNNER=' "${CONF_FILE}" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+    _main="$(grep -E '^MAIN_FILE=' "${CONF_FILE}" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+    [ -n "${_lang}${_run}${_main}" ] || return 0
+    sed -i -e '/^MAIN_FILE=/d' -e '/^LANGUAGE=/d' -e '/^RUNNER=/d' "${CONF_FILE}" 2>/dev/null || true
+    [ -n "${_lang}" ] && [ "${LANGUAGE:-}" = "${_lang}" ] && LANGUAGE="auto"
+    [ -n "${_run}" ] && [ "${RUNNER:-}" = "${_run}" ] && RUNNER="auto"
+    [ -n "${_main}" ] && [ "${MAIN_FILE:-}" = "${_main}" ] && MAIN_FILE="auto"
+    log "Repository updated - re-running auto-detection for language and entry point."
+}
+
+# --- Startup variable rules (shared with run.sh / entrypoint.sh) -------------
+# The panel stores what the user typed. Booleans are checked by the egg against
+# "boolean" (which also allows true/false/yes/no), enums and numbers are not
+# checked at all. Every value is normalized here, once, so the rest of the
+# launcher only ever compares against 1/0 and known enum words. An invalid
+# value is never silently treated as "off": it is reported and the documented
+# default is used instead.
+_pf_lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'; }
+_pf_bad() { printf '[PotenFYR][!] %s\n' "$*" >&2; }
+
+normalize_flag() { # normalize_flag NAME DEFAULT   (DEFAULT is 1 or 0)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on|enabled)   v=1 ;;
+        0|false|no|off|disabled) v=0 ;;
+        "")                      v="$2" ;;
+        *) _pf_bad "$1='${v}' is not a boolean (use 1 or 0) - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+normalize_enum() { # normalize_enum NAME DEFAULT ALLOWED...
+    local name="$1" def="$2" v a
+    shift 2
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    [ -n "${v}" ] || { export "${name}=${def}"; return 0; }
+    for a in "$@"; do
+        [ "${v}" = "${a}" ] && { export "${name}=${v}"; return 0; }
+    done
+    _pf_bad "${name}='${v}' is not one of: $* - using ${def}."
+    export "${name}=${def}"
+}
+
+normalize_int() { # normalize_int NAME DEFAULT MIN MAX
+    local name="$1" def="$2" min="$3" max="$4" v
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        "") v="${def}" ;;
+        *[!0-9]*) _pf_bad "${name}='${v}' is not a number - using ${def}."; v="${def}" ;;
+        *)
+            if [ $((10#${v})) -lt "${min}" ] || [ $((10#${v})) -gt "${max}" ]; then
+                _pf_bad "${name}=${v} is outside ${min}-${max} - using ${def}."
+                v="${def}"
+            else
+                v=$((10#${v}))
+            fi
+            ;;
+    esac
+    export "${name}=${v}"
+}
+
+normalize_settings() {
+    local pair
+    for pair in MEMORY_AUTO_TUNE:1 DEV_MODE:0 AUTO_INSTALL_DEPS:1 CLEAN_BUILD_CACHE:1 \
+                AUTO_ENV_INJECT:1 GIT_AUTO_UPDATE:1 GIT_PRESERVE_ENV:1 NODE_GYP_SUPPORT:1 \
+                SKIP_PYTHON:0 DEBUG:0 AUTO_RESTART:0 PROCFILE_RESTART:1 PROCFILE_LOGS:0 \
+                HEALTH_STRICT:0 AUTO_UPDATE_EGG:1 BROWSER_HEADFUL:0; do
+        normalize_flag "${pair%%:*}" "${pair#*:}"
+    done
+    normalize_enum SUPERVISOR auto auto procfile multi all single none
+    normalize_enum CLI_THEME prog prog minecraft classic
+    normalize_enum PANEL_STOP_WATCHER auto auto 0 1 false true off on no yes disabled enabled
+    normalize_enum CLI_BANNER_GRADIENT auto auto citrus aurora sunset ocean candy spectrum none off plain
+    normalize_int RESTART_DELAY 3 1 60
+}
+
+# canonical runtime name, so SKIP_RUNTIMES=node also skips EXTRA_RUNTIMES=nodejs
+_runtime_canon() {
+    case "$(_pf_lc "$1")" in
+        node|nodejs|javascript|js|typescript|ts) echo node ;;
+        py|python|python3)                      echo python ;;
+        golang|go)                              echo go ;;
+        rs|rust|cargo|rustc)                    echo rust ;;
+        *)                                      _pf_lc "$1" ;;
+    esac
+}
+
+# runtime_skipped <name>: success when SKIP_RUNTIMES (or SKIP_PYTHON) excludes it
+runtime_skipped() {
+    local want item
+    want="$(_runtime_canon "$1")"
+    if [ "${want}" = "python" ] && [ "${SKIP_PYTHON:-0}" = "1" ]; then
+        return 0
     fi
+    for item in $(printf '%s' "${SKIP_RUNTIMES:-}" | tr ',' ' '); do
+        case "$(_pf_lc "${item}")" in ""|none|auto) continue ;; esac
+        [ "$(_runtime_canon "${item}")" = "${want}" ] && return 0
+    done
+    return 1
 }
 
 # --- Variables with defaults ---
@@ -740,6 +867,7 @@ if [ -n "${LANGUAGE_VERSION:-}" ]; then
     export RUNTIME_VERSION
 fi
 
+normalize_settings
 [ "${DEBUG}" = "1" ] && set -x
 # Route the verbose trace to a log file instead of spamming the panel console
 if [ "${DEBUG}" = "1" ] && [ -z "${_POTENFYR_TRACE_FD:-}" ]; then
@@ -799,7 +927,7 @@ if [ "${EGG_UPDATE_CHECKED:-0}" != "1" ]; then
             _egg_stage="${_egg_state}/run.sh.update"
             _egg_hashfile="${_egg_state}/egg-hash"
             _egg_lhash="${_egg_state}/launcher-hash"
-            _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
+            _egg_tmp="$(mktemp -p "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}" 2>/dev/null || echo "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/potenfyr-egg.$$")"
             if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
                 _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
                 _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
@@ -866,33 +994,160 @@ if [ -n "${GIT_REPO}" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 1.2 Browser Automation Environment (Playwright / Puppeteer / nodriver / ...)
+# 1.2 Browser Automation (optional, selected with the BROWSER startup variable)
 # -----------------------------------------------------------------------------
-# Chromium (+chromedriver), Firefox ESR (+geckodriver) and Microsoft Edge ship
-# in the image; this pre-flight makes them immediately usable from the
-# container user: writable profile/cache dirs, container-safe default flags
-# per engine, and an optional virtual display for headful automation of every
-# browser. Startup variables (egg JSON): BROWSER_SUPPORT (default 1),
-# BROWSER_EXTRA_ARGS, BROWSER_HEADFUL (default 0), BROWSER_PROFILE_DIR.
+# The image bakes Chromium (+chromedriver), Firefox ESR (+geckodriver) and
+# Microsoft Edge, but a server only uses the ones it asks for. BROWSER accepts:
+#   none (or empty)        no browser setup (default)
+#   all                    chromium, firefox and edge
+#   chromium               one browser by name (aliases: chrome, firefox-esr,
+#                          edge, microsoft-edge)
+#   chromium@130           a name with a version; must match the baked build
+#   chromium,firefox@128   several, separated by commas or spaces
+# Only the selected browsers are configured: the baked default paths of the
+# others are unset, so applications do not see them. A path the user typed in
+# as a custom binary is never removed. A version the image does not carry is
+# refused rather than silently replaced, because the baked binaries are fixed.
+# Also read: BROWSER_EXTRA_ARGS, BROWSER_HEADFUL (default 0), BROWSER_PROFILE_DIR.
+
+# _browser_canon <name>: canonical browser name, or nothing when unknown.
+_browser_canon() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        chromium|chrome|chromium-browser)           echo chromium ;;
+        firefox|firefox-esr|ff)                     echo firefox ;;
+        edge|microsoft-edge|msedge)                 echo edge ;;
+    esac
+}
+
+# _browser_bin <canonical>: path of the baked binary, or nothing when absent.
+_browser_bin() {
+    local c
+    case "$1" in
+        chromium) for c in /usr/bin/chromium "$(command -v chromium 2>/dev/null)"; do [ -n "${c}" ] && [ -x "${c}" ] && { echo "${c}"; return; }; done ;;
+        firefox)  for c in /usr/bin/firefox-esr "$(command -v firefox-esr 2>/dev/null)" "$(command -v firefox 2>/dev/null)"; do [ -n "${c}" ] && [ -x "${c}" ] && { echo "${c}"; return; }; done ;;
+        edge)     for c in /usr/bin/microsoft-edge /usr/bin/microsoft-edge-stable; do [ -x "${c}" ] && { echo "${c}"; return; }; done ;;
+    esac
+}
+
+# _browser_version <binary>: dotted version reported by the binary.
+_browser_version() {
+    "$1" --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1
+}
+
+# _browser_default_path <VAR> <canonical>: the baked default for each variable.
+_browser_default_path() {
+    case "$1" in
+        CHROME_PATH|CHROMIUM_PATH|PUPPETEER_EXECUTABLE_PATH|SE_BROWSER_PATH) echo /usr/bin/chromium ;;
+        CHROMEDRIVER_PATH)                                                 echo /usr/bin/chromedriver ;;
+        FIREFOX_PATH|SE_FIREFOX_BINARY)                                    echo /usr/bin/firefox-esr ;;
+        GECKODRIVER_PATH|SE_FIREFOX_DRIVER)                                echo /usr/local/bin/geckodriver ;;
+        EDGE_PATH)                                                         echo /usr/bin/microsoft-edge ;;
+    esac
+}
+
+# _browser_set_vars <canonical> <on|off>: enable or hide one browser's variables.
+# A variable that holds a non-default value (a custom binary) is left alone.
+_browser_set_vars() {
+    local vars v cur
+    case "$1" in
+        chromium) vars="CHROME_PATH CHROMIUM_PATH CHROMEDRIVER_PATH PUPPETEER_EXECUTABLE_PATH SE_BROWSER_PATH" ;;
+        firefox)  vars="FIREFOX_PATH GECKODRIVER_PATH SE_FIREFOX_BINARY SE_FIREFOX_DRIVER" ;;
+        edge)     vars="EDGE_PATH" ;;
+    esac
+    for v in ${vars}; do
+        cur="$(eval "printf '%s' \"\${${v}-}\"")"
+        if [ "$2" = "on" ]; then
+            [ -n "${cur}" ] || export "${v}=$(_browser_default_path "${v}")"
+        elif [ "${cur}" = "$(_browser_default_path "${v}")" ]; then
+            unset "${v}"
+        fi
+    done
+}
+
 browser_preflight() {
-    [ "${BROWSER_SUPPORT:-1}" = "1" ] || return 0
+    local spec="" enabled="" entry name ver bin inst tok
+    local all_names="chromium firefox edge"
+    if [ -n "${BROWSER+x}" ]; then
+        spec="${BROWSER}"
+    elif [ "${BROWSER_SUPPORT:-0}" = "1" ]; then
+        spec="all"   # legacy switch from before BROWSER existed
+    fi
+    spec="$(printf '%s' "${spec}" | tr ',' ' ' | tr '[:upper:]' '[:lower:]')"
+
+    local wanted=""
+    for tok in ${spec}; do
+        case "${tok}" in
+            none|off|false|0) ;;
+            all) wanted="${wanted} chromium firefox edge" ;;
+            *)
+                name="${tok%%@*}"; ver=""
+                [ "${tok}" != "${name}" ] && ver="${tok#*@}"
+                name="$(_browser_canon "${name}")"
+                if [ -z "${name}" ]; then
+                    warn "BROWSER: unknown browser '${tok}' - valid names: chromium, firefox, edge, all (optional @version)."
+                    continue
+                fi
+                wanted="${wanted} ${name}@${ver}"
+                ;;
+        esac
+    done
+
+    # Validate each request against the baked binary before enabling anything.
+    for entry in ${wanted}; do
+        name="${entry%%@*}"; ver="${entry#*@}"
+        [ "${entry}" = "${name}" ] && ver=""
+        case " ${enabled} " in *" ${name} "*) continue ;; esac
+        bin="$(_browser_bin "${name}")"
+        if [ -z "${bin}" ]; then
+            warn "BROWSER=${name} is not available in this image - skipped."
+            continue
+        fi
+        inst="$(_browser_version "${bin}")"
+        if [ -n "${ver}" ]; then
+            case "${inst}" in
+                "${ver}"|"${ver}".*) ;;
+                *)
+                    warn "BROWSER=${name}@${ver} requested, but this image carries ${name} ${inst:-(unknown version)}. Use a matching image, or drop the version."
+                    continue ;;
+            esac
+        fi
+        enabled="${enabled} ${name}"
+    done
+
+    # Hide the browsers that are not selected, enable the ones that are.
+    local b
+    for b in ${all_names}; do
+        case " ${enabled} " in
+            *" ${b} "*) _browser_set_vars "${b}" on ;;
+            *)          _browser_set_vars "${b}" off ;;
+        esac
+    done
+
+    enabled="${enabled# }"
+    if [ -z "${enabled}" ]; then
+        info "Browser automation: off (set BROWSER to chromium, firefox, edge or all to enable)."
+        export BROWSER_ENABLED=""
+        return 0
+    fi
+    export BROWSER_ENABLED="${enabled}"
+
     export BROWSER_PROFILE_DIR="${BROWSER_PROFILE_DIR:-/home/container/.browser-profile}"
     mkdir -p "${BROWSER_PROFILE_DIR}" "${HOME}/.cache/ms-playwright" "${HOME}/.cache/puppeteer" 2>/dev/null || true
 
-    # A non-root container user cannot use the Chrome sandbox under the
-    # default Docker seccomp profile, so bake container-safe flags into the
-    # environment (users can extend/override via BROWSER_EXTRA_ARGS).
-    # Chromium-family launchers honor CHROMIUM_FLAGS via the distro wrapper;
-    # CHROME_DEVEL_SANDBOX redirects every Chrome/Chromium/Edge binary to the
-    # setuid sandbox helper it can actually use in-container.
-    local extra="${BROWSER_EXTRA_ARGS:---no-sandbox --disable-dev-shm-usage}"
-    export CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-} ${extra}"
-    if [ -x /usr/lib/chromium/chromium-sandbox ] || [ -x /usr/lib/chromium-sandbox/chromium-sandbox ] || find /usr/lib -maxdepth 3 -name 'chrome-sandbox' 2>/dev/null | grep -q .; then
-        export CHROME_DEVEL_SANDBOX="$(find /usr/lib -maxdepth 3 \( -name 'chrome-sandbox' -o -name 'chromium-sandbox' \) 2>/dev/null | head -n1)"
-    fi
+    # A non-root container user cannot use the Chrome sandbox under the default
+    # Docker seccomp profile, so container-safe flags are exported for the
+    # Chromium family (Chromium and Edge) via CHROMIUM_FLAGS.
+    case " ${enabled} " in
+        *" chromium "*|*" edge "*)
+            local extra="${BROWSER_EXTRA_ARGS:---no-sandbox --disable-dev-shm-usage}"
+            export CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-} ${extra}"
+            if [ -x /usr/lib/chromium/chromium-sandbox ] || [ -x /usr/lib/chromium-sandbox/chromium-sandbox ] || find /usr/lib -maxdepth 3 -name 'chrome-sandbox' 2>/dev/null | grep -q .; then
+                export CHROME_DEVEL_SANDBOX="$(find /usr/lib -maxdepth 3 \( -name 'chrome-sandbox' -o -name 'chromium-sandbox' \) 2>/dev/null | head -n1)"
+            fi
+            ;;
+    esac
 
-    # Headful mode: one virtual display serves every browser (chromium,
-    # firefox-esr, edge all attach to DISPLAY=:99).
+    # Headful mode: one virtual display serves every enabled browser.
     if [ "${BROWSER_HEADFUL:-0}" = "1" ] && command -v Xvfb >/dev/null 2>&1 && [ -z "${DISPLAY:-}" ]; then
         Xvfb :99 -screen 0 1280x720x24 >/dev/null 2>&1 &
         sleep 1
@@ -902,24 +1157,14 @@ browser_preflight() {
     fi
 
     local found=""
-    if command -v chromium >/dev/null 2>&1; then
-        found="chromium $(chromium --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
-    fi
-    if command -v firefox-esr >/dev/null 2>&1 || command -v firefox >/dev/null 2>&1; then
-        local ffver; ffver="$( (command -v firefox-esr >/dev/null 2>&1 && firefox-esr --version || firefox --version) 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
-        found="${found:+${found} · }firefox ${ffver:-esr}"
-    fi
-    if [ -x /usr/bin/microsoft-edge ] || [ -x /usr/bin/microsoft-edge-stable ]; then
-        local edge_bin; edge_bin="$(command -v microsoft-edge || command -v microsoft-edge-stable)"
-        found="${found:+${found} · }edge $(${edge_bin} --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
-    fi
-    if [ -z "${found}" ]; then
-        warn "Browser automation requested but no browser binary found - skipping browser setup."
-        return 0
-    fi
+    for b in ${enabled}; do
+        bin="$(_browser_bin "${b}")"
+        inst="$(_browser_version "${bin}")"
+        found="${found:+${found} · }${b} ${inst:-?}"
+    done
     local drv=""
-    command -v chromedriver >/dev/null 2>&1 && drv="chromedriver $(chromedriver --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
-    command -v geckodriver >/dev/null 2>&1 && drv="${drv:+${drv} · }geckodriver $(geckodriver --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+    case " ${enabled} " in *" chromium "*|*" edge "*) command -v chromedriver >/dev/null 2>&1 && drv="chromedriver $(chromedriver --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)" ;; esac
+    case " ${enabled} " in *" firefox "*) command -v geckodriver >/dev/null 2>&1 && drv="${drv:+${drv} · }geckodriver $(geckodriver --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)" ;; esac
     ok "Browser automation ready: ${found} · ${drv:-no webdriver} · profile ${BROWSER_PROFILE_DIR}"
 }
 
@@ -1435,6 +1680,59 @@ esac
 # -----------------------------------------------------------------------------
 # 5. Project & Language Auto-Detection Engine
 # -----------------------------------------------------------------------------
+# Language detection scores every candidate from the project's own files and
+# the highest score wins:
+#   +4  the language's entry file exists (the file the launcher will run)
+#   +2  its manifest exists (package.json, requirements.txt, go.mod, ...)
+#   +1  a secondary marker (tsconfig.json, a loose source file)
+# Entry files outweigh manifests, so a Python app with a package.json for
+# tooling runs as Python, and a Node app with a stray main.py runs as Node.
+# Equal scores go to the earlier language in the order list below. Explicit runtime
+# lockfiles (bun, deno) and static sites are decided first.
+_lang_score() { # _lang_score <language> -> prints score
+    local s=0 f
+    case "$1" in
+        python)
+            for f in main.py app.py server.py manage.py bot.py src/main.py src/app.py; do [ -f "$f" ] && s=$((s+4)) && break; done
+            for f in requirements.txt pyproject.toml Pipfile setup.py; do [ -f "$f" ] && s=$((s+2)) && break; done ;;
+        nodejs)
+            for f in index.js app.js server.js main.js src/index.js src/app.js src/server.js src/main.js; do [ -f "$f" ] && s=$((s+4)) && break; done
+            [ -f package.json ] && s=$((s+2))
+            ls ./*.js >/dev/null 2>&1 && s=$((s+1)) ;;
+        typescript)
+            for f in src/index.ts index.ts src/app.ts app.ts src/server.ts server.ts src/main.ts main.ts; do [ -f "$f" ] && s=$((s+4)) && break; done
+            if [ -f package.json ] && grep -qE '"typescript"|"ts-node"|"tsx"' package.json 2>/dev/null; then s=$((s+2)); fi
+            [ -f tsconfig.json ] && s=$((s+1))
+            ls ./*.ts >/dev/null 2>&1 && s=$((s+1)) ;;
+        golang)
+            for f in main.go cmd/server/main.go cmd/main.go; do [ -f "$f" ] && s=$((s+4)) && break; done
+            [ -f go.mod ] && s=$((s+2)) ;;
+        rust)     [ -f Cargo.toml ] && s=$((s+2)) ;;
+        java)     { [ -f pom.xml ] || [ -f build.gradle ] || [ -f build.gradle.kts ]; } && s=$((s+2))
+                  ls ./*.jar >/dev/null 2>&1 && s=$((s+2)) ;;
+        dotnet)   { ls ./*.csproj ./*.sln >/dev/null 2>&1 || [ -f Program.cs ]; } && s=$((s+2)) ;;
+        php)      [ -f index.php ] && s=$((s+4))
+                  [ -f composer.json ] && s=$((s+2)) ;;
+        ruby)     for f in app.rb main.rb server.rb config.ru; do [ -f "$f" ] && s=$((s+4)) && break; done
+                  [ -f Gemfile ] && s=$((s+2)) ;;
+        c-cpp)    { [ -f Makefile ] || [ -f CMakeLists.txt ]; } && s=$((s+2))
+                  ls ./*.c ./*.cpp >/dev/null 2>&1 && s=$((s+1)) ;;
+        zig)      [ -f build.zig ] && s=$((s+2))
+                  ls ./*.zig >/dev/null 2>&1 && s=$((s+1)) ;;
+        swift)    [ -f Package.swift ] && s=$((s+2))
+                  ls ./*.swift >/dev/null 2>&1 && s=$((s+1)) ;;
+        dart)     [ -f pubspec.yaml ] && s=$((s+2))
+                  ls ./*.dart >/dev/null 2>&1 && s=$((s+1)) ;;
+        elixir)   [ -f mix.exs ] && s=$((s+2))
+                  ls ./*.ex >/dev/null 2>&1 && s=$((s+1)) ;;
+        lua)      ls ./*.lua >/dev/null 2>&1 && s=$((s+1)) ;;
+        bash)     for f in ./*.sh; do
+                      case "${f#./}" in entrypoint.sh|run.sh|install.sh|install-runtime.sh) ;; *) [ -f "$f" ] && s=$((s+1)) && break ;; esac
+                  done ;;
+    esac
+    echo "${s}"
+}
+
 detect_language() {
     if [ "${LANGUAGE}" != "auto" ] && [ -n "${LANGUAGE}" ]; then
         echo "${LANGUAGE}" | tr '[:upper:]' '[:lower:]'
@@ -1453,70 +1751,52 @@ detect_language() {
     if [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
         echo "deno"; return
     fi
-    if [ -f "package.json" ]; then
-        if grep -qE '"typescript"|"ts-node"|"tsx"' package.json 2>/dev/null; then
-            echo "typescript"; return
+
+    local lang best="" best_score=0 score
+    local order="python nodejs typescript golang rust java dotnet php ruby c-cpp zig swift dart elixir lua bash"
+    for lang in ${order}; do
+        score="$(_lang_score "${lang}")"
+        if [ "${score}" -gt "${best_score}" ]; then
+            best="${lang}"; best_score="${score}"
         fi
-        echo "nodejs"; return
-    fi
-    if [ -f "requirements.txt" ] || [ -f "Pipfile" ] || [ -f "pyproject.toml" ] || [ -f "main.py" ] || [ -f "app.py" ]; then
-        echo "python"; return
-    fi
-    if [ -f "go.mod" ] || [ -f "main.go" ]; then
-        echo "golang"; return
-    fi
-    if [ -f "Cargo.toml" ]; then
-        echo "rust"; return
-    fi
-    if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ] || ls *.jar 1>/dev/null 2>&1; then
-        echo "java"; return
-    fi
-    if ls *.csproj 1>/dev/null 2>&1 || ls *.sln 1>/dev/null 2>&1 || [ -f "Program.cs" ]; then
-        echo "dotnet"; return
-    fi
-    if [ -f "composer.json" ] || [ -f "index.php" ]; then
-        echo "php"; return
-    fi
-    if [ -f "Gemfile" ] || ls *.rb 1>/dev/null 2>&1; then
-        echo "ruby"; return
-    fi
-    if [ -f "Makefile" ] || [ -f "CMakeLists.txt" ] || ls *.cpp 1>/dev/null 2>&1 || ls *.c 1>/dev/null 2>&1; then
-        echo "c-cpp"; return
-    fi
-    if [ -f "build.zig" ] || ls *.zig 1>/dev/null 2>&1; then
-        echo "zig"; return
-    fi
-    if [ -f "Package.swift" ] || ls *.swift 1>/dev/null 2>&1; then
-        echo "swift"; return
-    fi
-    if [ -f "pubspec.yaml" ] || ls *.dart 1>/dev/null 2>&1; then
-        echo "dart"; return
-    fi
-    if [ -f "mix.exs" ] || ls *.ex 1>/dev/null 2>&1; then
-        echo "elixir"; return
-    fi
-    if ls *.lua 1>/dev/null 2>&1; then
-        echo "lua"; return
-    fi
-    if ls *.ts 1>/dev/null 2>&1; then
-        echo "typescript"; return
-    fi
-    if ls *.js 1>/dev/null 2>&1; then
-        echo "nodejs"; return
-    fi
-
-    # User shell scripts (skip system egg runner scripts)
-    for sh_file in $(ls *.sh 2>/dev/null || true); do
-        case "${sh_file}" in
-            entrypoint.sh|run.sh|install.sh|install-runtime.sh) ;;
-            *) echo "bash"; return ;;
-        esac
     done
+    echo "${best:-nodejs}"
+}
 
-    echo "nodejs"
+# _main_fits_lang <main-file> <language>: does the entry file's extension belong
+# to the language? JavaScript and TypeScript entries are interchangeable.
+_main_fits_lang() {
+    case "$2" in
+        python|py)                  case "$1" in *.py) return 0 ;; esac ;;
+        nodejs|javascript|js|typescript|ts|bun|deno)
+                                    case "$1" in *.js|*.mjs|*.cjs|*.jsx|*.ts|*.tsx|*.mts|*.cts) return 0 ;; esac ;;
+        golang|go)                  case "$1" in *.go) return 0 ;; esac ;;
+        rust|rs)                    case "$1" in *.rs) return 0 ;; esac ;;
+        php)                        case "$1" in *.php) return 0 ;; esac ;;
+        ruby)                       case "$1" in *.rb|*.ru) return 0 ;; esac ;;
+        bash|sh)                    case "$1" in *.sh) return 0 ;; esac ;;
+        static)                     case "$1" in *.html) return 0 ;; esac ;;
+        *)                          return 0 ;;
+    esac
+    return 1
 }
 
 DETECTED_LANG=$(detect_language)
+
+# A pinned entry point must belong to the language in effect. Pins written by an
+# earlier detection can disagree with the current language (LANGUAGE=nodejs with
+# MAIN_FILE=main.py would run "node main.py"), so drop the pins and detect again.
+# Only values from .multi-prog.conf are touched; a value typed in the panel is
+# never written there.
+_pinned_main="$(grep -E '^MAIN_FILE=' "${CONF_FILE}" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+if [ -n "${_pinned_main}" ] && [ "${MAIN_FILE}" = "${_pinned_main}" ] \
+        && ! _main_fits_lang "${_pinned_main}" "${DETECTED_LANG}"; then
+    warn "Pinned entry point '${_pinned_main}' does not match language '${DETECTED_LANG}' - re-running auto-detection."
+    sed -i -e '/^MAIN_FILE=/d' -e '/^LANGUAGE=/d' -e '/^RUNNER=/d' "${CONF_FILE}" 2>/dev/null || true
+    LANGUAGE="auto"; RUNNER="auto"; MAIN_FILE="auto"
+    DETECTED_LANG=$(detect_language)
+fi
+unset _pinned_main
 log "Target Language / Runtime: ${C_BOLD}${DETECTED_LANG}${C_RESET}"
 
 # -----------------------------------------------------------------------------
@@ -1553,11 +1833,11 @@ resolve_runtime_version() {
     local resolver="/usr/local/bin/resolve-version.sh"
     [ -f "${resolver}" ] || resolver="/resolve-version.sh"
     if [ ! -f "${resolver}" ]; then
-        mkdir -p /tmp/potenfyr 2>/dev/null || true
+        mkdir -p ${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/launcher 2>/dev/null || true
         curl -fsSL --retry 3 --connect-timeout 10 \
             "https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/resolve-version.sh" \
-            -o /tmp/potenfyr/resolve-version.sh 2>/dev/null || true
-        resolver="/tmp/potenfyr/resolve-version.sh"
+            -o ${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/launcher/resolve-version.sh 2>/dev/null || true
+        resolver="${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/launcher/resolve-version.sh"
     fi
     [ -f "${resolver}" ] || { warn "Version resolver unavailable; continuing with raw request '${req}'."; echo "${req}"; return 0; }
 
@@ -1803,7 +2083,7 @@ ensure_local_runtime() {
     build_isolated_environment
 
     # Check runner requirements (e.g. user selected bun or deno engine)
-    if [ "${runner}" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
+    if [ "${runner}" = "bun" ] && ! command -v bun >/dev/null 2>&1 && ! runtime_skipped bun; then
         log "Runner 'bun' selected but not found in PATH. Installing Bun locally..."
         local inst_script=""
         [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
@@ -1812,7 +2092,7 @@ ensure_local_runtime() {
             bash "${inst_script}" "bun" "latest" "${WORK_DIR}/.runtimes" || true
             export PATH="${WORK_DIR}/.runtimes/bin:${WORK_DIR}/.runtimes/bun/bin:/opt/runtimes/bun/bin:${PATH}"
         fi
-    elif [ "${runner}" = "deno" ] && ! command -v deno >/dev/null 2>&1; then
+    elif [ "${runner}" = "deno" ] && ! command -v deno >/dev/null 2>&1 && ! runtime_skipped deno; then
         log "Runner 'deno' selected but not found in PATH. Installing Deno locally..."
         local inst_script=""
         [ -f "/usr/local/bin/install-runtime.sh" ] && inst_script="/usr/local/bin/install-runtime.sh"
@@ -1869,10 +2149,10 @@ ensure_local_runtime() {
         elif [ -f "/install-runtime.sh" ]; then
             inst_script="/install-runtime.sh"
         else
-            mkdir -p /tmp/potenfyr 2>/dev/null || true
-            curl -fsSL --retry 3 --connect-timeout 10 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/install-runtime.sh -o /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
-            chmod +x /tmp/potenfyr/install-runtime.sh 2>/dev/null || true
-            inst_script="/tmp/potenfyr/install-runtime.sh"
+            mkdir -p ${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/launcher 2>/dev/null || true
+            curl -fsSL --retry 3 --connect-timeout 10 https://raw.githubusercontent.com/PotenFYR-Studios/Prog-Language-Eggs/master/install-runtime.sh -o ${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/launcher/install-runtime.sh 2>/dev/null || true
+            chmod +x ${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/launcher/install-runtime.sh 2>/dev/null || true
+            inst_script="${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/launcher/install-runtime.sh"
         fi
 
         if [ -f "${inst_script}" ]; then
@@ -1946,7 +2226,7 @@ fi
 
 if [ "${NODE_GYP_SUPPORT:-1}" = "1" ] && [ -f "package.json" ]; then
     if grep -qiE '("node-gyp"|"bindings"|"node-addon-api"|"canvas"|"sqlite3"|"bcrypt"|"sharp")' package.json 2>/dev/null; then
-        if ! command -v python3 >/dev/null 2>&1; then
+        if ! command -v python3 >/dev/null 2>&1 && ! runtime_skipped python; then
             log "Native C++/Python dependencies detected in package.json. Installing Python companion toolchain..."
             if [ -f /usr/local/bin/install-runtime.sh ]; then
                 bash /usr/local/bin/install-runtime.sh "python" "latest" "${WORK_DIR}/.runtimes" >/dev/null 2>&1 || true
@@ -2182,7 +2462,7 @@ if [ -n "${BUILD_COMMAND}" ]; then
 fi
 
 if [ "${CLEAN_BUILD_CACHE}" = "1" ]; then
-    rm -rf /tmp/.npm /tmp/.cargo /tmp/.cache /root/.cache ~/.npm/_cacache /tmp/pip* /tmp/*.tar.* /tmp/*.zip 2>/dev/null || true
+    rm -rf "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/npm-cache" "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/pip-cache" /root/.cache ~/.npm/_cacache 2>/dev/null || true
 fi
 
 # -----------------------------------------------------------------------------
@@ -2881,7 +3161,7 @@ run_git_update_watcher() {
         sleep "${GIT_POLL_SECONDS}" 2>/dev/null || sleep 300
         cd "${WORK_DIR}" 2>/dev/null || return 0
         [ -d ".git" ] || return 0
-        _werr="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitwatch-$$")"
+        _werr="$(mktemp -p "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}" 2>/dev/null || echo "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/potenfyr-gitwatch-$$")"
         _werr_auth="${_werr}.auth"
         rm -f "${_werr_auth}" 2>/dev/null || true
         _wok=0
