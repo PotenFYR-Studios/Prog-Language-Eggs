@@ -735,8 +735,12 @@ _git_unpin_stale() {
 # launcher only ever compares against 1/0 and known enum words. An invalid
 # value is never silently treated as "off": it is reported and the documented
 # default is used instead.
-_pf_lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'; }
-_pf_bad() { printf '[PotenFYR][!] %s\n' "$*" >&2; }
+_pf_lc() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
+}
+_pf_bad() {
+    printf '[PotenFYR][!] %s\n' "$*" >&2
+}
 
 normalize_flag() { # normalize_flag NAME DEFAULT   (DEFAULT is 1 or 0)
     local v
