@@ -396,10 +396,18 @@ _git_archive_workspace() {
         --exclude='./node_modules' --exclude='./.venv' --exclude='./venv' \
         --exclude='__pycache__' \
         -C "${WORK_DIR}" . 2>/dev/null || { rm -f "${arch}"; return 0; }
-    # Keep only the 5 newest archives.
+    _git_prune_archives
+    info "Codebase archived before git sync: .logs/code-archives/$(basename "${arch}")"
+}
+
+# Keep only the 5 newest archives. Runs on every sync, not only when a new
+# archive is written, so leftovers from earlier boots are still capped.
+_git_prune_archives() {
+    local arch_dir="${WORK_DIR}/.logs/code-archives" _old
+    [ -d "${arch_dir}" ] || return 0
     ls -1t "${arch_dir}"/codebase-*.tar.gz 2>/dev/null | tail -n +6 \
         | while IFS= read -r _old; do rm -f "${_old}" 2>/dev/null || true; done
-    info "Codebase archived before git sync: .logs/code-archives/$(basename "${arch}")"
+    return 0
 }
 
 _git_redact_err() {
@@ -529,6 +537,7 @@ sync_git_repo() {
     GIT_SYNC_UPDATED=0
     GIT_SYNC_FAILED=0
     _git_env_setup
+    _git_prune_archives
 
     local _err _auth_err _old_head _new_head _new_date _new_subj _fetch_ok
     _err="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-git-$$")"
