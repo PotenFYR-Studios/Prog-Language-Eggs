@@ -421,7 +421,7 @@ graph LR
 | `LANGUAGE` | `auto` | ✅ | Target language or auto-detect; pins exact stack on first boot. Set `auto-detect` to re-run. |
 | `RUNNER` | `auto` | ✅ | Engine override (`bun`, `deno`, `tsx`, `uvicorn`, `pm2`, etc.). |
 | `MAIN_FILE` | `auto` | ✅ | Explicit entry point file; auto-detection applies if empty. |
-| `PACKAGE_MANAGER` | `auto` | ✅ | Package manager override (`npm`, `pnpm`, `yarn`, `poetry`, `uv`, etc.). |
+| `PACKAGE_MANAGER` | `auto` | ✅ | Package manager override (`npm`, `pnpm`, `yarn`, `bun`, or for Python `pip`, `uv`, `poetry`, `pipenv`). pip/uv install `requirements.txt` into a project `.venv`. |
 | `RUNTIME_VERSION` | `latest` | ✅ | Version or keyword (`latest`, `lts`, `stable`, `beta`, `nightly`, or concrete `22`, `3.12`). |
 | `CUSTOM_COMMAND` | *empty* | ✅ | Completely replaces the launcher command. |
 | `CUSTOM_INSTALL_COMMAND` | *empty* | ✅ | Replaces automatic dependency installation step (logged to `.logs/dependency-install.log`). |

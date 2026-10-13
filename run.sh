@@ -1740,6 +1740,9 @@ build_isolated_environment() {
             ;;
         python|py)
             ISO_PATH="/opt/runtimes/uv/bin:/opt/runtimes/python/bin:${ISO_PATH}"
+            # Project venv (created by the dependency sync) must win over the
+            # runtime prefix above so python3/uvicorn resolve to its packages.
+            [ -x "${WORK_DIR}/.venv/bin/python" ] && ISO_PATH="${WORK_DIR}/.venv/bin:${ISO_PATH}"
             ;;
         rust)
             ISO_PATH="/opt/cargo/bin:${ISO_PATH}"
@@ -2021,20 +2024,86 @@ if [ "${AUTO_INSTALL_DEPS}" = "1" ]; then
                 ;;
 
             python|py)
-                if [ -f "requirements.txt" ]; then
-                    log "Installing Python packages from requirements.txt..."
-                    if command -v uv >/dev/null 2>&1; then
-                        { uv pip install -r requirements.txt --system || pip3 install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
-                            || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip/uv install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                # PACKAGE_MANAGER selects the tool (pip|uv|poetry|pipenv); auto
+                # picks from the project files. pip and uv install into a
+                # project-local .venv: system Pythons (PEP 668, e.g. Debian/Ubuntu)
+                # refuse global pip installs with "externally-managed-environment".
+                _py_pm="$(printf '%s' "${PACKAGE_MANAGER:-auto}" | tr '[:upper:]' '[:lower:]')"
+                case "${_py_pm}" in
+                    auto|""|pip|pip3|uv|poetry|pipenv) ;;
+                    *) warn "PACKAGE_MANAGER='${PACKAGE_MANAGER}' is not a Python package manager - using auto (pip, uv, poetry, pipenv)."
+                       _py_pm="auto" ;;
+                esac
+                if [ "${_py_pm}" = "auto" ] || [ -z "${_py_pm}" ]; then
+                    if [ -f "Pipfile" ] && command -v pipenv >/dev/null 2>&1; then
+                        _py_pm="pipenv"
+                    elif [ -f "pyproject.toml" ] && grep -q '^\[tool\.poetry' pyproject.toml && command -v poetry >/dev/null 2>&1; then
+                        _py_pm="poetry"
+                    elif command -v uv >/dev/null 2>&1; then
+                        _py_pm="uv"
                     else
-                        { pip3 install -r requirements.txt --no-warn-script-location || pip install -r requirements.txt; } >>"${_dep_log}" 2>&1 \
-                            || { warn "Python dependency install failed - see .logs/dependency-install.log"; _egg_error_log "launcher" "pip install failed - see .logs/dependency-install.log"; _DEP_FAILED=1; }
+                        _py_pm="pip"
                     fi
-                elif [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
-                    poetry install --no-interaction 2>/dev/null || true
-                elif [ -f "Pipfile" ] && command -v pipenv >/dev/null 2>&1; then
-                    pipenv install --deploy 2>/dev/null || pipenv install || true
                 fi
+                if [ "${_py_pm}" = "uv" ] && ! command -v uv >/dev/null 2>&1; then
+                    warn "PACKAGE_MANAGER=uv but uv is not installed - using pip."
+                    _py_pm="pip"
+                fi
+                if [ "${_py_pm}" = "poetry" ] && ! command -v poetry >/dev/null 2>&1; then
+                    warn "PACKAGE_MANAGER=poetry but poetry is not installed - using pip."
+                    _py_pm="pip"
+                fi
+                if [ "${_py_pm}" = "pipenv" ] && ! command -v pipenv >/dev/null 2>&1; then
+                    warn "PACKAGE_MANAGER=pipenv but pipenv is not installed - using pip."
+                    _py_pm="pip"
+                fi
+                _py_fail() {
+                    warn "Python dependency install failed (${_py_pm}) - see .logs/dependency-install.log"
+                    _egg_error_log "launcher" "${_py_pm} install failed - see .logs/dependency-install.log"
+                    _DEP_FAILED=1
+                }
+                case "${_py_pm}" in
+                    pip|uv)
+                        if [ ! -f "requirements.txt" ]; then
+                            log "No requirements.txt found - nothing to install for ${_py_pm}."
+                        else
+                            _py_venv="${WORK_DIR}/.venv"
+                            if [ ! -x "${_py_venv}/bin/python" ]; then
+                                log "Creating project virtualenv (.venv) for ${_py_pm}..."
+                                if [ "${_py_pm}" = "uv" ]; then
+                                    uv venv "${_py_venv}" >>"${_dep_log}" 2>&1 || python3 -m venv "${_py_venv}" >>"${_dep_log}" 2>&1
+                                else
+                                    python3 -m venv "${_py_venv}" >>"${_dep_log}" 2>&1
+                                fi
+                            fi
+                            if [ -x "${_py_venv}/bin/python" ]; then
+                                # Put the venv first on PATH so the app's python3/uvicorn/gunicorn use these packages.
+                                export VIRTUAL_ENV="${_py_venv}"
+                                export PATH="${_py_venv}/bin:${PATH}"
+                                log "Installing Python packages from requirements.txt (${_py_pm})..."
+                                if [ "${_py_pm}" = "uv" ]; then
+                                    uv pip install --python "${_py_venv}/bin/python" -r requirements.txt >>"${_dep_log}" 2>&1 || _py_fail
+                                else
+                                    "${_py_venv}/bin/python" -m pip install --no-warn-script-location -r requirements.txt >>"${_dep_log}" 2>&1 || _py_fail
+                                fi
+                            else
+                                _py_fail
+                            fi
+                        fi
+                        ;;
+                    poetry)
+                        if [ -f "pyproject.toml" ]; then
+                            log "Installing Python packages via poetry..."
+                            poetry install --no-interaction >>"${_dep_log}" 2>&1 || _py_fail
+                        fi
+                        ;;
+                    pipenv)
+                        if [ -f "Pipfile" ]; then
+                            log "Installing Python packages via pipenv..."
+                            pipenv install --deploy >>"${_dep_log}" 2>&1 || pipenv install >>"${_dep_log}" 2>&1 || _py_fail
+                        fi
+                        ;;
+                esac
                 ;;
 
             bun)
