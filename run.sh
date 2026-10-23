@@ -365,7 +365,7 @@ valid_git_url() {
 #   * origin is re-pointed at the CURRENT GIT_REPO/token every boot so repo or
 #     credential edits in the Startup tab take effect on the next restart.
 #   * Before any overwrite the existing codebase is archived to
-#     .logs/code-archives/ (5 newest kept) so a bad sync can be rolled back.
+#     .archives/ (5 newest kept) so a bad sync can be rolled back.
 #   * A workspace that already holds files (no .git) gets the repository
 #     fetched OVER it instead of failing the clone ("directory not empty").
 #   * An isolated global git config (GIT_CONFIG_GLOBAL) marks the workspace
@@ -383,7 +383,7 @@ valid_git_url() {
 # -----------------------------------------------------------------------------
 _git_ws_has_files() {
     find . -mindepth 1 -maxdepth 1 \
-        -not -name '.git' -not -name '.logs' -not -name '.potenfyr' \
+        -not -name '.git' -not -name '.logs' -not -name '.archives' -not -name '.potenfyr' \
         -not -name '.multi-prog.conf' -not -name '.runtimes' \
         -not -name '.npm' -not -name '.cache' -not -name '.environments' -not -name '.scratch' \
         2>/dev/null | grep -q .
@@ -391,28 +391,51 @@ _git_ws_has_files() {
 
 _git_archive_workspace() {
     # Safety-net snapshot; never fatal (a failed backup must not block the boot).
-    local arch_dir="${WORK_DIR}/.logs/code-archives"
+    local arch_dir="${WORK_DIR}/.archives"
     local stamp arch _old
     mkdir -p "${arch_dir}" 2>/dev/null || return 0
     stamp="$(date +%Y%m%d-%H%M%S)"
     arch="${arch_dir}/codebase-${stamp}.tar.gz"
     # GZIP=-1: fastest compression (the default -6 is several times slower for
-    # a few percent smaller output). Rebuildable trees are skipped entirely.
-    GZIP=-1 tar -czf "${arch}" \
-        --exclude='./.git' --exclude='./.logs' --exclude='./.runtimes' \
-        --exclude='./.npm' --exclude='./.cache' --exclude='./.environments' \
-        --exclude='./.potenfyr' --exclude='./.multi-prog.conf' --exclude='./.scratch' \
-        --exclude='./node_modules' --exclude='./.venv' --exclude='./venv' \
-        --exclude='__pycache__' \
-        -C "${WORK_DIR}" . 2>/dev/null || { rm -f "${arch}"; return 0; }
+    # a few percent smaller output).
+    # What to archive follows the workspace's own .gitignore (nested ones and
+    # .git/info/exclude included): git lists tracked + untracked-but-not-ignored
+    # files, so node_modules, venvs, build output etc. are skipped exactly as the
+    # project declares. Launcher internals are always skipped.
+    local -a _ex=() _px=()
+    local _p
+    for _p in .git .logs .archives .runtimes .npm .cache .environments .potenfyr .multi-prog.conf .scratch; do
+        _ex+=("--exclude=./${_p}")
+        _px+=(":(exclude,top)${_p}")
+    done
+    if git -C "${WORK_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git -C "${WORK_DIR}" ls-files -z --cached --others --exclude-standard -- . "${_px[@]}" 2>/dev/null \
+            | GZIP=-1 tar -czf "${arch}" --null --ignore-failed-read -C "${WORK_DIR}" -T - 2>/dev/null \
+            || { rm -f "${arch}"; return 0; }
+    else
+        # No git metadata (existing files, not yet a checkout): fall back to a
+        # built-in list of installed / generated / cache trees, skipped at any
+        # depth; names too generic for that only at the top level.
+        for _p in node_modules bower_components jspm_packages .pnpm-store .yarn/cache .yarn/unplugged \
+                  .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox .nox .eggs '*.egg-info' '*.pyc' \
+                  .next .nuxt .svelte-kit .turbo .parcel-cache .angular .expo \
+                  .gradle .m2 .dart_tool .pub-cache .stack-work dist-newstyle .zig-cache zig-cache \
+                  .terraform .bundle Pods .nyc_output .DS_Store; do
+            _ex+=("--exclude=${_p}")
+        done
+        for _p in target build dist out vendor deps _build obj bin/Debug bin/Release coverage .cargo packrat; do
+            _ex+=("--exclude=./${_p}")
+        done
+        GZIP=-1 tar -czf "${arch}" "${_ex[@]}" -C "${WORK_DIR}" . 2>/dev/null || { rm -f "${arch}"; return 0; }
+    fi
     _git_prune_archives
-    info "Codebase archived before git sync: .logs/code-archives/$(basename "${arch}")"
+    info "Codebase archived before git sync: .archives/$(basename "${arch}")"
 }
 
 # Keep only the 5 newest archives. Runs on every sync, not only when a new
 # archive is written, so leftovers from earlier boots are still capped.
 _git_prune_archives() {
-    local arch_dir="${WORK_DIR}/.logs/code-archives" _old
+    local arch_dir="${WORK_DIR}/.archives" _old
     [ -d "${arch_dir}" ] || return 0
     ls -1t "${arch_dir}"/codebase-*.tar.gz 2>/dev/null | tail -n +6 \
         | while IFS= read -r _old; do rm -f "${_old}" 2>/dev/null || true; done
@@ -693,7 +716,7 @@ sync_git_repo() {
             else
                 warn "Could not apply fetched commits - code left unchanged: $(_git_redact_err "${_err}")"
                 GIT_SYNC_FAILED=1
-                _egg_error_log "launcher" "git reset --hard FETCH_HEAD failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - restore from .logs/code-archives/ if needed"
+                _egg_error_log "launcher" "git reset --hard FETCH_HEAD failed (repo: $(redact_url "${GIT_REPO}"), branch ${GIT_BRANCH}) - restore from .archives/ if needed"
             fi
             _git_restore_env "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/pf-env-backup.$$"
         else
@@ -932,50 +955,39 @@ if [ "${EGG_UPDATE_CHECKED:-0}" != "1" ]; then
             _egg_hashfile="${_egg_state}/egg-hash"
             _egg_lhash="${_egg_state}/launcher-hash"
             _egg_tmp="$(mktemp -p "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}" 2>/dev/null || echo "${POTENFYR_SCRATCH:-${WORK_DIR:-${PWD}}/.scratch}/potenfyr-egg.$$")"
-            if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+            case "${EGG_UPDATE_URL}" in
+                *.sh) _egg_probe="${EGG_UPDATE_URL}" ;;
+                *)    _egg_probe="${EGG_UPDATE_URL%/*}/run.sh" ;;
+            esac
+            # Compare the launcher itself, not the egg JSON: a run.sh-only
+            # commit leaves the JSON untouched and used to be missed forever.
+            if curl -fsSL --retry 1 --max-time 15 "${_egg_probe}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ] && grep -q "PotenFYR Studios" "${_egg_tmp}" 2>/dev/null; then
+                sed -i 's/$//' "${_egg_tmp}" 2>/dev/null || true
                 _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
-                _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
+                _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || sha256sum /usr/local/bin/run.sh 2>/dev/null | cut -d' ' -f1)"
                 if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
-                    case "${EGG_UPDATE_URL}" in
-                        *.sh)
-                            _egg_src="${_egg_tmp}"
-                            ;;
-                        *)
-                            _base="${EGG_UPDATE_URL%/*}"
-                            _egg_src=""
-                            if curl -fsSL --retry 1 --max-time 15 "${_base}/run.sh" -o "${_egg_tmp}.run" 2>/dev/null && [ -s "${_egg_tmp}.run" ] && grep -q "PotenFYR Studios" "${_egg_tmp}.run" 2>/dev/null; then
-                                sed -i 's/\r$//' "${_egg_tmp}.run" 2>/dev/null || true
-                                _egg_src="${_egg_tmp}.run"
-                            else
-                                warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
-                            fi
-                            ;;
-                    esac
-                    if [ -n "${_egg_src:-}" ]; then
-                        # Never overwrite the launcher file we are executing.
-                        if [ "${_self}" = "$(readlink -f "${_egg_target}" 2>/dev/null || echo "${_egg_target}")" ]; then
-                            _egg_target="${_egg_stage}"
-                        fi
-                        if cp "${_egg_src}" "${_egg_target}" 2>/dev/null; then
-                            chmod +x "${_egg_target}" 2>/dev/null || true
-                            echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
-                            # Record the launcher's own sha256 so the entrypoint
-                            # can verify integrity before ever executing it.
-                            sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
-                            ok "Egg updated from EGG_UPDATE_URL - new launcher becomes active on next start."
-                        else
-                            warn "Egg self-update failed (target not writable): ${_egg_target}"
-                        fi
+                    # Never overwrite the launcher file we are executing.
+                    if [ "${_self}" = "$(readlink -f "${_egg_target}" 2>/dev/null || echo "${_egg_target}")" ]; then
+                        _egg_target="${_egg_stage}"
                     fi
-                    rm -f "${_egg_tmp}.run" 2>/dev/null || true
+                    if cp "${_egg_tmp}" "${_egg_target}" 2>/dev/null; then
+                        chmod +x "${_egg_target}" 2>/dev/null || true
+                        echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                        # Record the launcher's own sha256 so the entrypoint
+                        # can verify integrity before ever executing it.
+                        sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
+                        ok "Egg updated from ${_egg_probe} - new launcher becomes active on next start."
+                    else
+                        warn "Egg self-update failed (target not writable): ${_egg_target}"
+                    fi
                 else
                     info "Egg is up to date."
                 fi
             else
-                warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+                warn "EGG_UPDATE_URL fetch failed (${_egg_probe}) - continuing with installed launcher."
             fi
             rm -f "${_egg_tmp}" 2>/dev/null || true
-            unset _egg_tmp _egg_src _egg_hash_new _egg_hash_old _egg_target _egg_stage _egg_hashfile _egg_lhash _egg_state _base _self
+            unset _egg_tmp _egg_probe _egg_hash_new _egg_hash_old _egg_target _egg_stage _egg_hashfile _egg_lhash _egg_state _self
         else
             warn "EGG_UPDATE_URL must be an https:// URL - self-update disabled for safety."
         fi

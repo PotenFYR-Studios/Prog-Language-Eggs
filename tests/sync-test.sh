@@ -81,7 +81,7 @@ commit alpha index.js 'console.log(3)' 'alpha c3'
 GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W"
 [ "$(head_of "$W")" = "$(head_of "$TMP/alpha-wt")" ] && ok_t "synced to new commit" || bad_t "stuck on old commit"
 grep -q "Git updated" "$TMP/out.log" && ok_t "reports old->new commit" || bad_t "no update message"
-[ -d "$W/.logs/code-archives" ] && [ -n "$(find "$W/.logs/code-archives" -name '*.tar.gz' -print -quit)" ] \
+[ -d "$W/.archives" ] && [ -n "$(find "$W/.archives" -name '*.tar.gz' -print -quit)" ] \
     && ok_t "codebase archive created before overwrite" || bad_t "no archive created"
 grep -q "alpha c3" "$TMP/out.log" && ok_t "prints latest commit subject" || bad_t "no commit subject"
 
@@ -117,7 +117,7 @@ echo "my-local-file" > "$W5/local.txt"
 GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W5"
 grep -q "my-local-file" "$W5/local.txt" && ok_t "pre-existing user file kept (no wipe)" || bad_t "user files wiped"
 grep -q "console.log(3)" "$W5/index.js" && ok_t "repo files fetched over existing workspace" || bad_t "repo not applied"
-[ -n "$(find "$W5/.logs/code-archives" -name '*.tar.gz' -print -quit)" ] && ok_t "workspace archived before overlay" || bad_t "no archive before overlay"
+[ -n "$(find "$W5/.archives" -name '*.tar.gz' -print -quit)" ] && ok_t "workspace archived before overlay" || bad_t "no archive before overlay"
 
 # ---------------------------------------------------------------- S6
 echo "S6: unreachable repo + token -> loud error, code kept, no leak"
@@ -136,11 +136,11 @@ grep -qE "\[warn\] .*Could not clone repository" "$TMP/out.log" && ok_t "fresh-c
 
 # ---------------------------------------------------------------- S7
 echo "S7: archive rotation keeps newest 5"
-mkdir -p "$W/.logs/code-archives"
-for i in 1 2 3 4 5 6 7; do touch "$W/.logs/code-archives/codebase-2026010$i-000000.tar.gz"; done
-touch -d "2026-01-01" "$W"/.logs/code-archives/*.tar.gz
+mkdir -p "$W/.archives"
+for i in 1 2 3 4 5 6 7; do touch "$W/.archives/codebase-2026010$i-000000.tar.gz"; done
+touch -d "2026-01-01" "$W"/.archives/*.tar.gz
 GIT_REPO="$TMP/alpha.git" GIT_BRANCH=main GIT_AUTH_TOKEN="" run_sync_in "$W"
-n=$(find "$W/.logs/code-archives" -name '*.tar.gz' | wc -l)
+n=$(find "$W/.archives" -name '*.tar.gz' | wc -l)
 [ "$n" -le 6 ] && ok_t "archives capped ($n present incl. new one)" || bad_t "archives not pruned ($n)"
 
 # ---------------------------------------------------------------- S8

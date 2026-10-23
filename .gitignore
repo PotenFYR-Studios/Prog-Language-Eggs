@@ -98,6 +98,7 @@ _build/
 .environments/
 .runtimes/
 .logs/
+.archives/
 .local/
 .cache/
 bin/

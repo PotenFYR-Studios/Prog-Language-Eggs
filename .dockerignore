@@ -39,6 +39,7 @@ build/
 .next/
 coverage/
 .logs/
+.archives/
 .environments/
 .runtimes/
 .local/

@@ -565,53 +565,33 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ]; then
                 _egg_lhash="${_egg_state}/launcher-hash"
             fi
             _egg_tmp="$(mktemp -p "${POTENFYR_SCRATCH}" 2>/dev/null || echo "${POTENFYR_SCRATCH}/potenfyr-egg.$$")"
-            if curl -fsSL --retry 1 --max-time 15 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+            # The launcher itself is what gets compared: hashing the egg JSON
+            # missed every run.sh-only commit, so such fixes never arrived.
+            case "${EGG_UPDATE_URL}" in
+                *.sh) _egg_probe="${EGG_UPDATE_URL}" ;;
+                *)    _egg_probe="${EGG_UPDATE_URL%/*}/run.sh" ;;
+            esac
+            if curl -fsSL --retry 1 --max-time 15 "${_egg_probe}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ] && grep -q "PotenFYR Studios" "${_egg_tmp}" 2>/dev/null; then
+                sed -i 's/$//' "${_egg_tmp}" 2>/dev/null || true
                 _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
-                _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
+                _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || sha256sum /usr/local/bin/run.sh 2>/dev/null | cut -d' ' -f1)"
                 if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
-                    case "${EGG_UPDATE_URL}" in
-                        *.sh)
-                            # Direct launcher replacement
-                            if cp "${_egg_tmp}" "${_egg_target}" 2>/dev/null; then
-                                chmod +x "${_egg_target}" 2>/dev/null || true
-                                echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
-                                [ -n "${_egg_lhash}" ] && sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
-                                ok "Launcher self-updated from EGG_UPDATE_URL."
-                            else
-                                warn "Launcher self-update failed (target not writable): ${_egg_target}"
-                            fi
-                            ;;
-                        *)
-                            # egg JSON changed -> refresh launcher from same branch
-                            _base="${EGG_UPDATE_URL%/*}"
-                            _launcher_ok=0
-                            if curl -fsSL --retry 1 --max-time 15 "${_base}/run.sh" -o ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null && [ -s ${POTENFYR_SCRATCH}/potenfyr-run.sh ] && grep -q "PotenFYR Studios" ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null; then
-                                if head -c 2 ${POTENFYR_SCRATCH}/potenfyr-run.sh | grep -q $'\r'; then
-                                    sed -i 's/\r$//' ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null || true
-                                fi
-                                if cp ${POTENFYR_SCRATCH}/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
-                                    chmod +x "${_egg_target}" 2>/dev/null || true
-                                    _launcher_ok=1
-                                fi
-                            fi
-                            if [ "${_launcher_ok}" = "1" ]; then
-                                echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
-                                [ -n "${_egg_lhash}" ] && sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
-                                ok "Egg update detected - launcher refreshed from ${_base}."
-                            else
-                                warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
-                            fi
-                            rm -f ${POTENFYR_SCRATCH}/potenfyr-run.sh 2>/dev/null || true
-                            ;;
-                    esac
+                    if cp "${_egg_tmp}" "${_egg_target}" 2>/dev/null; then
+                        chmod +x "${_egg_target}" 2>/dev/null || true
+                        echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                        [ -n "${_egg_lhash}" ] && sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
+                        ok "Launcher self-updated from ${_egg_probe}."
+                    else
+                        warn "Launcher self-update failed (target not writable): ${_egg_target}"
+                    fi
                 else
                     info "Egg is up to date."
                 fi
             else
-                warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+                warn "EGG_UPDATE_URL fetch failed (${_egg_probe}) - continuing with installed launcher."
             fi
             rm -f "${_egg_tmp}" 2>/dev/null || true
-            unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_lhash _egg_state _base _launcher_ok
+            unset _egg_tmp _egg_probe _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_lhash _egg_state
         else
             warn "EGG_UPDATE_URL must be an https:// URL - self-update disabled for safety."
         fi
